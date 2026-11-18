@@ -7,75 +7,125 @@ function chatApp() {
         isLoading: false,
         showSettings: false,
         activeTab: 'persona',
+        availableProviders: [],
+        availableModels: [],
+        modelsLoading: false,
+        modelsError: '',
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
             active_provider: 'ollama',
-            routing_mode: 'auto',
-            providers_config: { openrouter: { api_key: '' } }
+            routing_mode: 'manual',
+            providers_config: {
+                ollama: { base_url: 'http://localhost:11434', model: '' },
+                openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' }
+            }
         },
 
         async init() {
             await this.loadSettings();
+            await this.loadProviders();
+            await this.refreshModels();
             await this.loadSessions();
-            if (this.sessions.length === 0) {
-                await this.createNewSession();
-            } else {
-                await this.selectSession(this.sessions[0].id);
-            }
+            if (this.sessions.length === 0) await this.createNewSession();
+            else await this.selectSession(this.sessions[0].id);
         },
 
         async loadSettings() {
-            const res = await fetch('/api/settings');
-            this.settings = await res.json();
+            const response = await fetch('/api/settings');
+            if (!response.ok) throw new Error('بارگذاری تنظیمات ناموفق بود.');
+            this.settings = await response.json();
+            this.settings.providers_config ||= {};
+            this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
+            this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
+        },
+
+        async loadProviders() {
+            const response = await fetch('/api/providers');
+            if (response.ok) this.availableProviders = await response.json();
+        },
+
+        async onProviderChange() {
+            await this.refreshModels();
+        },
+
+        async refreshModels() {
+            this.modelsLoading = true;
+            this.modelsError = '';
+            this.availableModels = [];
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/models`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
+                this.availableModels = data.models || [];
+                const config = this.settings.providers_config[provider] ||= {};
+                if (!config.model && this.availableModels.length) {
+                    config.model = provider === 'openrouter' ? 'openrouter/free' : this.availableModels[0];
+                }
+                if (config.model && !this.availableModels.includes(config.model)) {
+                    this.availableModels.unshift(config.model);
+                }
+            } catch (error) {
+                this.modelsError = error.message;
+            } finally {
+                this.modelsLoading = false;
+            }
         },
 
         async saveSettings() {
-            await fetch('/api/settings', {
+            const response = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(this.settings)
             });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.detail || 'ذخیره تنظیمات ناموفق بود.');
+                return;
+            }
+            this.settings = data.config;
             this.showSettings = false;
+            await this.refreshModels();
         },
 
         async loadSessions() {
-            const res = await fetch('/api/sessions');
-            this.sessions = await res.json();
+            const response = await fetch('/api/sessions');
+            this.sessions = await response.json();
         },
 
         async createNewSession() {
-            const res = await fetch('/api/sessions', { method: 'POST' });
-            const newSession = await res.json();
+            const response = await fetch('/api/sessions', { method: 'POST' });
+            const newSession = await response.json();
             this.sessions.unshift(newSession);
             await this.selectSession(newSession.id);
         },
 
         async selectSession(id) {
             this.currentSessionId = id;
-            const res = await fetch(`/api/sessions/${id}/messages`);
-            this.messages = await res.json();
+            const response = await fetch(`/api/sessions/${id}/messages`);
+            this.messages = await response.json();
             this.scrollToBottom();
         },
 
         renderMarkdown(text) {
-            return marked.parse(text || '');
+            // Escape raw HTML before Markdown parsing to avoid rendering model/user HTML.
+            const safeText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return marked.parse(safeText);
         },
 
         scrollToBottom() {
             setTimeout(() => {
                 const container = document.getElementById('chat-container');
-                container.scrollTop = container.scrollHeight;
+                if (container) container.scrollTop = container.scrollHeight;
             }, 50);
         },
 
         async sendMessage() {
             if (!this.inputMessage.trim() || this.isLoading) return;
-
             const userText = this.inputMessage;
             this.inputMessage = '';
             this.isLoading = true;
-
             this.messages.push({ role: 'user', content: userText });
             const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: 'در حال انتخاب مدل...' }) - 1;
             this.scrollToBottom();
@@ -86,37 +136,42 @@ function chatApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_id: this.currentSessionId, message: userText })
                 });
-
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'درخواست چت ناموفق بود.');
+                }
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-
+                let buffer = '';
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
-                    const chunkStr = decoder.decode(value);
-                    const lines = chunkStr.split('\n\n');
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.type === 'meta') {
-                                this.messages[aiMsgIndex].model = data.model;
-                            } else if (data.type === 'chunk') {
-                                this.messages[aiMsgIndex].content += data.content;
-                                this.scrollToBottom();
-                            } else if (data.type === 'error') {
-                                this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
-                            }
+                    buffer += decoder.decode(value, { stream: true });
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop() || '';
+                    for (const event of events) {
+                        const line = event.split('\n').find(part => part.startsWith('data:'));
+                        if (!line) continue;
+                        const data = JSON.parse(line.slice(5).trim());
+                        if (data.type === 'meta') this.messages[aiMsgIndex].model = data.model;
+                        else if (data.type === 'chunk') {
+                            this.messages[aiMsgIndex].content += data.content;
+                            this.scrollToBottom();
+                        } else if (data.type === 'error') {
+                            this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                         }
                     }
                 }
-                await this.loadSessions(); // به‌روزرسانی عنوان چت در سایدبار
-            } catch (err) {
-                this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${err.message}`;
+                if (buffer.trim().startsWith('data:')) {
+                    const data = JSON.parse(buffer.trim().slice(5).trim());
+                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                }
+                await this.loadSessions();
+            } catch (error) {
+                this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
             } finally {
                 this.isLoading = false;
             }
         }
-    }
+    };
 }
