@@ -94,6 +94,10 @@
                                             class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">↗️ اشتراک‌گذاری / خروجی گرفتن</button>
                                     <button type="button" disabled title="به‌زودی فعال می‌شود"
                                             class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">🔗 کپی شناسه / URL نشست</button>
+                                    <div class="my-1 border-t border-slate-800"></div>
+                                    <button @click="deleteSession(session)" type="button"
+                                            :disabled="streamingSessionId === session.id"
+                                            class="w-full px-3 py-2 text-right text-sm text-rose-400 hover:bg-rose-950/50 disabled:cursor-not-allowed disabled:opacity-50">🗑️ حذف نشست</button>
                                 </div>
                             </div>
                         </div>

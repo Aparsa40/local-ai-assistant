@@ -190,6 +190,17 @@ async def create_session(db: Session = Depends(get_db)):
     return {"id": new_session.id, "title": new_session.title}
 
 
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: int, db: Session = Depends(get_db)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="نشست یافت نشد")
+
+    db.delete(session)
+    db.commit()
+    return {"status": "success", "deleted_session_id": session_id}
+
+
 @app.patch("/api/sessions/{session_id}")
 async def rename_session(
     session_id: int,

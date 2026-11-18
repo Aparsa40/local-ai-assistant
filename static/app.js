@@ -5,6 +5,7 @@ function chatApp() {
         messages: [],
         inputMessage: '',
         isLoading: false,
+        streamingSessionId: null,
         showSettings: false,
         activeTab: 'persona',
         sidebarCollapsed: localStorage.getItem('wiz-sidebar-collapsed') === 'true',
@@ -290,6 +291,34 @@ function chatApp() {
             }
         },
 
+        async deleteSession(session) {
+            if (!session || this.streamingSessionId === session.id) return;
+            const confirmed = confirm(`نشست «${session.title}» و تمام پیام‌های آن برای همیشه حذف شود؟`);
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`/api/sessions/${session.id}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'حذف نشست ناموفق بود.');
+
+                this.sessions = this.sessions.filter(item => item.id !== session.id);
+                this.openSessionMenuId = null;
+                if (this.editingSessionId === session.id) this.cancelSessionRename();
+
+                if (this.currentSessionId === session.id) {
+                    this.currentSessionId = null;
+                    this.messages = [];
+                    if (this.sessions.length > 0) {
+                        await this.selectSession(this.sessions[0].id);
+                    } else {
+                        await this.createNewSession();
+                    }
+                }
+            } catch (error) {
+                alert(error.message);
+            }
+        },
+
         renderMarkdown(text) {
             // Escape raw HTML before Markdown parsing to avoid rendering model/user HTML.
             const safeText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -322,6 +351,7 @@ function chatApp() {
             const userText = this.inputMessage;
             this.inputMessage = '';
             this.isLoading = true;
+            this.streamingSessionId = this.currentSessionId;
             this.messages.push({ role: 'user', content: userText });
             const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: 'در حال انتخاب مدل...' }) - 1;
             this.scrollToBottom();
@@ -367,6 +397,7 @@ function chatApp() {
                 this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
             } finally {
                 this.isLoading = false;
+                this.streamingSessionId = null;
             }
         }
     };
