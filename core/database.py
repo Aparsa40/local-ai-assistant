@@ -9,6 +9,7 @@ try:
         DateTime,
         ForeignKey,
         Integer,
+        LargeBinary,
         String,
         Text,
         create_engine,
@@ -46,6 +47,16 @@ class ChatMessage(Base):
     model_used = Column(String(100), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     session = relationship("ChatSession", back_populates="messages")
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profile"
+    id = Column(Integer, primary_key=True, default=1)
+    display_name = Column(String(100), nullable=False, default="کاربر")
+    username = Column(String(50), nullable=False, default="user")
+    email = Column(String(254), nullable=False, default="")
+    avatar_data = Column(LargeBinary, nullable=True)
+    avatar_mime = Column(String(50), nullable=True)
 
 
 def init_db():
