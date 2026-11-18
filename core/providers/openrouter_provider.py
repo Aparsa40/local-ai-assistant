@@ -63,13 +63,38 @@ class OpenRouterProvider(BaseLLMProvider):
                         data = json.loads(payload_line)
                     except json.JSONDecodeError:
                         continue
-                    choices = data.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    content = delta.get("content")
-                    if isinstance(content, str) and content:
+                    content = self._extract_stream_content(data)
+                    if content:
                         yield content
+
+    @staticmethod
+    def _extract_stream_content(data: Dict) -> str:
+        """Extract a text delta or raise when OpenRouter reports an in-stream error."""
+        error = data.get("error")
+        if error:
+            if isinstance(error, dict):
+                message = error.get("message") or json.dumps(error, ensure_ascii=False)
+                code = error.get("code")
+                detail = f" (code: {code})" if code is not None else ""
+            else:
+                message = str(error)
+                detail = ""
+            raise RuntimeError(f"OpenRouter streaming error: {message}{detail}")
+
+        choices = data.get("choices") or []
+        if not choices:
+            return ""
+
+        choice = choices[0] or {}
+        if choice.get("finish_reason") == "error":
+            error_detail = choice.get("error") or data.get("message") or "The provider ended the stream with an error."
+            if isinstance(error_detail, dict):
+                error_detail = error_detail.get("message") or json.dumps(error_detail, ensure_ascii=False)
+            raise RuntimeError(f"OpenRouter streaming error: {error_detail}")
+
+        delta = choice.get("delta") or {}
+        content = delta.get("content")
+        return content if isinstance(content, str) else ""
 
     async def list_models(self) -> List[str]:
         """Return the currently available free chat models plus the free router."""
