@@ -20,6 +20,7 @@
         .theme-light .border-slate-800, .theme-light .border-slate-700 { border-color: #cbd5e1 !important; }
         .theme-light .text-slate-100, .theme-light .text-white { color: #0f172a !important; }
         .theme-light .text-slate-400, .theme-light .text-slate-500 { color: #475569 !important; }
+        .theme-light .bg-sky-600, .theme-light .bg-sky-700, .theme-light .bg-emerald-700, .theme-light .bg-rose-900\\/70 { color: #fff !important; }
         .theme-light input, .theme-light textarea, .theme-light select { color: #0f172a; }
         .theme-light .prose { color: #1e293b; }
         .sidebar-transition { transition: width 180ms ease; }
@@ -110,6 +111,10 @@
                 <span>🧠</span><span x-show="!sidebarCollapsed">تنظیمات مدل‌ها</span>
             </button>
             <div class="flex items-center gap-1">
+                <button @click="toggleAppSettings('general')" type="button"
+                        :aria-expanded="showSettings && activeTab === 'general'"
+                        title="تنظیمات برنامه" aria-label="تنظیمات برنامه"
+                        class="shrink-0 rounded-lg bg-slate-800 hover:bg-slate-700 p-3 text-slate-200">⚙️</button>
                 <button @click="openAppSettings('profile')" type="button"
                         class="min-w-0 flex-1 flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 p-2 text-right"
                         :title="profile.username">
@@ -119,10 +124,6 @@
                     </div>
                     <span x-show="!sidebarCollapsed" class="min-w-0 truncate text-xs text-slate-200" x-text="profile.username"></span>
                 </button>
-                <button @click="toggleAppSettings('general')" type="button"
-                        :aria-expanded="showSettings && activeTab === 'general'"
-                        title="تنظیمات برنامه" aria-label="تنظیمات برنامه"
-                        class="shrink-0 rounded-lg bg-slate-800 hover:bg-slate-700 p-3 text-slate-200">⚙️</button>
             </div>
         </div>
     </aside>
@@ -183,6 +184,10 @@
                         class="rounded px-3 py-2">عمومی</button>
                 <button @click="activeTab = 'support'" :class="activeTab === 'support' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
                         class="rounded px-3 py-2">پشتیبانی</button>
+                <button @click="activeTab = 'privacy'" :class="activeTab === 'privacy' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">حریم خصوصی</button>
+                <button @click="activeTab = 'about'" :class="activeTab === 'about' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">درباره برنامه</button>
                 <button @click="activeTab = 'persona'" :class="activeTab === 'persona' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
                         class="rounded px-3 py-2">شخصیت و پرامپت</button>
                 <button @click="activeTab = 'providers'" :class="activeTab === 'providers' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
@@ -273,6 +278,17 @@
                     <div class="text-2xl">💬</div>
                     <h3 class="font-semibold">ارتباط با ما / پشتیبانی</h3>
                     <p class="text-xs text-slate-500">این بخش در مرحله بعد به سیستم پشتیبانی متصل خواهد شد.</p>
+                </div>
+
+                <div x-show="activeTab === 'privacy'" class="space-y-2">
+                    <h3 class="font-semibold">حریم خصوصی و داده‌ها</h3>
+                    <p class="text-xs text-slate-500">در نسخه فعلی، تاریخچه گفتگوها و تصویر پروفایل در فایل پایگاه داده SQLite روی همین سیستم ذخیره می‌شوند. کلیدهای API در فایل تنظیمات محلی نگهداری می‌شوند و نباید در خروجی‌های عمومی قرار بگیرند.</p>
+                </div>
+
+                <div x-show="activeTab === 'about'" class="space-y-2">
+                    <h3 class="font-semibold">درباره دستیار هوشمند لوکال</h3>
+                    <p class="text-xs text-slate-500">رابط چندسرویس‌دهنده برای گفتگو با مدل‌های هوش مصنوعی محلی و ابری.</p>
+                    <p class="text-xs text-slate-500">نسخه توسعه‌ای — قابلیت‌های احراز هویت، مدیریت گذرواژه و پشتیبانی آنلاین هنوز در برنامه توسعه هستند.</p>
                 </div>
 
                 <div x-show="activeTab === 'persona'" class="space-y-4">
