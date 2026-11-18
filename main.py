@@ -5,7 +5,7 @@ from typing import Any, Dict
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.config_manager import ConfigManager
@@ -29,6 +29,10 @@ def get_db():
 class ChatRequest(BaseModel):
     session_id: int
     message: str
+
+
+class SessionTitleUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
 
 
 @app.get("/")
@@ -83,8 +87,32 @@ async def create_session(db: Session = Depends(get_db)):
     return {"id": new_session.id, "title": new_session.title}
 
 
+@app.patch("/api/sessions/{session_id}")
+async def rename_session(
+    session_id: int,
+    data: SessionTitleUpdate,
+    db: Session = Depends(get_db),
+):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="نشست یافت نشد")
+
+    title = data.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="عنوان نشست نمی‌تواند خالی باشد")
+
+    session.title = title
+    session.title_is_custom = True
+    db.commit()
+    db.refresh(session)
+    return {"id": session.id, "title": session.title}
+
+
 @app.get("/api/sessions/{session_id}/messages")
 async def get_messages(session_id: int, db: Session = Depends(get_db)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="نشست یافت نشد")
     messages = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).all()
     return [{"role": message.role, "content": message.content, "model": message.model_used} for message in messages]
 
@@ -94,7 +122,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == req.session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="نشست یافت نشد")
-    if session.title == "گفتگوی جدید":
+    if session.title == "گفتگوی جدید" and not session.title_is_custom:
         session.title = req.message[:35] + ("..." if len(req.message) > 35 else "")
         db.commit()
 
