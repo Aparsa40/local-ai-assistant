@@ -48,6 +48,23 @@ function chatApp() {
             this.settings.providers_config ||= {};
             this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
+            this.updateOpenRouterKeyHint();
+        },
+
+        updateOpenRouterKeyHint() {
+            const openrouter = this.settings.providers_config.openrouter || {};
+            const keyInput = document.querySelector('input[x-model="settings.providers_config.openrouter.api_key"]');
+            const keyStatus = document.querySelector('p[x-show="settings.providers_config.openrouter.api_key_configured"]');
+
+            // The API never sends the real key to the browser. Show only a harmless service URL.
+            if (keyInput) {
+                keyInput.placeholder = openrouter.api_key_configured
+                    ? 'https://openrouter.ai'
+                    : 'کلید API را وارد کنید';
+            }
+            if (keyStatus) {
+                keyStatus.textContent = 'کلید API در تنظیمات محلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید. لینک سرویس: https://openrouter.ai';
+            }
         },
 
         async loadProviders() {
@@ -96,6 +113,7 @@ function chatApp() {
                 return;
             }
             this.settings = data.config;
+            this.updateOpenRouterKeyHint();
             this.showSettings = false;
             await this.refreshModels();
         },
