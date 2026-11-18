@@ -67,7 +67,7 @@ function chatApp() {
                 this.modelsError = error.message;
                 if (provider === 'openrouter') {
                     this.availableModels = ['openrouter/free'];
-                    this.settings.providers_config.openrouter.model ||= 'openrouter/free';
+                    this.settings.providers_config.openrouter.model = 'openrouter/free';
                 }
             } finally {
                 this.modelsLoading = false;
