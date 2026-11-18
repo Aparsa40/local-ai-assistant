@@ -60,3 +60,21 @@ def test_session_rename_returns_404_for_unknown_session(client):
     response = client.patch("/api/sessions/999999", json={"title": "نام جدید"})
 
     assert response.status_code == 404
+
+
+def test_session_can_be_deleted_and_is_removed_from_history(client):
+    created = client.post("/api/sessions")
+    session_id = created.json()["id"]
+
+    response = client.delete(f"/api/sessions/{session_id}")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "success", "deleted_session_id": session_id}
+    assert all(item["id"] != session_id for item in client.get("/api/sessions").json())
+    assert client.get(f"/api/sessions/{session_id}/messages").status_code == 404
+
+
+def test_session_delete_returns_404_for_unknown_session(client):
+    response = client.delete("/api/sessions/999999")
+
+    assert response.status_code == 404
