@@ -1,7 +1,5 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
-<!DOCTYPE html>
-<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -115,24 +113,46 @@
                 <div x-show="activeTab === 'providers'" class="space-y-4">
                     <div>
                         <label class="block text-slate-400 mb-1">سرویس‌دهنده فعال (Provider):</label>
-                        <select x-model="settings.active_provider" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
-                            <option value="ollama">Ollama (لوکال)</option>
-                            <option value="openrouter">OpenRouter (مدل‌های آنلاین)</option>
+                        <select x-model="settings.active_provider" @change="onProviderChange()" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+                            <template x-for="provider in availableProviders" :key="provider.id">
+                                <option :value="provider.id" x-text="provider.name"></option>
+                            </template>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-slate-400 mb-1">کلید API برای OpenRouter (در صورت انتخاب):</label>
-                        <input type="password" x-model="settings.providers_config.openrouter.api_key" placeholder="sk-or-..." class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+
+                    <div x-show="settings.active_provider === 'ollama'" class="space-y-2">
+                        <label class="block text-slate-400 mb-1">مدل نصب‌شده در Ollama:</label>
+                        <div class="flex gap-2">
+                            <select x-model="settings.providers_config.ollama.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
+                                <option value="">انتخاب مدل محلی</option>
+                                <template x-for="model in availableModels" :key="model">
+                                    <option :value="model" x-text="model"></option>
+                                </template>
+                            </select>
+                            <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
+                        </div>
+                        <p class="text-xs text-slate-500">فهرست مستقیماً از Ollama دریافت می‌شود. ابتدا مدل را با دستور ollama pull نصب کنید.</p>
                     </div>
-                    <div>
-                        <label class="block text-slate-400 mb-1">حالت انتخاب مدل:</label>
-                        <select x-model="settings.routing_mode" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
-                            <option value="auto">هوشمند (انتخاب خودکار بین Qwen, DeepSeek, Llama)</option>
-                            <option value="general">فقط مدل عمومی (Llama 3.2)</option>
-                            <option value="coder">فقط مدل کدنویسی (Qwen 2.5 Coder)</option>
-                            <option value="reasoning">فقط مدل تحلیلگر (DeepSeek R1)</option>
-                        </select>
+
+                    <div x-show="settings.active_provider === 'openrouter'" class="space-y-2">
+                        <label class="block text-slate-400 mb-1">کلید API برای OpenRouter:</label>
+                        <input type="password" x-model="settings.providers_config.openrouter.api_key" placeholder="sk-or-v1-..." autocomplete="off" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+                        <p class="text-xs text-slate-500" x-show="settings.providers_config.openrouter.api_key_configured">کلید API قبلی ذخیره شده است؛ برای حفظ آن، این فیلد را خالی بگذارید.</p>
+                        <label class="block text-slate-400 mb-1">مدل رایگان OpenRouter:</label>
+                        <div class="flex gap-2">
+                            <select x-model="settings.providers_config.openrouter.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
+                                <template x-for="model in availableModels" :key="model">
+                                    <option :value="model" x-text="model === 'openrouter/free' ? 'انتخاب مدل با OpenRouter (رایگان)' : model"></option>
+                                </template>
+                            </select>
+                            <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
+                        </div>
+                        <p class="text-xs text-slate-500">گزینه انتخاب خودکار، مدل رایگان مناسب را در هر درخواست از طرف OpenRouter انتخاب می‌کند.</p>
                     </div>
+
+                    <p x-show="modelsLoading" class="text-xs text-sky-400">در حال دریافت فهرست مدل‌ها...</p>
+                    <p x-show="modelsError" class="text-xs text-rose-400" x-text="modelsError"></p>
+                    <p class="text-xs text-slate-500">مدل انتخاب‌شده فقط برای Provider فعال استفاده می‌شود؛ تنظیمات Ollama و OpenRouter از هم مستقل‌اند.</p>
                 </div>
 
                 <!-- تب ۳: اسناد (آماده برای توسعه) -->
