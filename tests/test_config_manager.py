@@ -49,6 +49,7 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
         "providers_config": {
             "custom-cloud": {
                 "api_key": "custom-secret",
+                "token": "generic-token-secret",
                 "nested": {"access_token": "nested-secret"},
                 "model": "custom-model",
             }
@@ -64,6 +65,8 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
     custom = public["providers_config"]["custom-cloud"]
     assert custom["api_key"] == ""
     assert custom["api_key_configured"] is True
+    assert custom["token"] == ""
+    assert custom["token_configured"] is True
     assert custom["nested"]["access_token"] == ""
     assert custom["nested"]["access_token_configured"] is True
 
@@ -72,6 +75,7 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
         "providers_config": {
             "custom-cloud": {
                 "api_key": "",
+                "token": "",
                 "nested": {"access_token": ""},
                 "model": "updated-model",
             }
@@ -80,6 +84,7 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
     saved = json.loads(config_path.read_text(encoding="utf-8"))
     custom_saved = saved["providers_config"]["custom-cloud"]
     assert custom_saved["api_key"] == "custom-secret"
+    assert custom_saved["token"] == "generic-token-secret"
     assert custom_saved["nested"]["access_token"] == "nested-secret"
     assert custom_saved["model"] == "updated-model"
 
