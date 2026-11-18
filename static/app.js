@@ -121,7 +121,7 @@ function chatApp() {
         },
 
         toggleAppSettings(tab = 'profile') {
-            if (this.showSettings && this.activeTab === tab) {
+            if (this.showSettings) {
                 this.showSettings = false;
                 return;
             }
