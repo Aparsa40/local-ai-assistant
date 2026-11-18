@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>دستیار هوشمند لوکال</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://w3.org viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
-    
     <script src="/static/tailwind.js"></script>
     <script defer src="/static/alpine.js"></script>
     <script src="/static/marked.js"></script>
-    
     <style>
         body { font-family: Tahoma, system-ui, sans-serif; }
         .prose pre { background: #1e293b; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; direction: ltr; text-align: left; }
@@ -27,11 +25,58 @@
 
         <div class="flex-1 overflow-y-auto p-2 space-y-1">
             <template x-for="session in sessions" :key="session.id">
-                <button @click="selectSession(session.id)"
-                        :class="currentSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900'"
-                        class="w-full text-right px-3 py-2 rounded text-sm truncate transition">
-                    <span x-text="session.title"></span>
-                </button>
+                <div class="relative flex items-center gap-1 rounded transition"
+                     :class="currentSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900'">
+                    <template x-if="editingSessionId === session.id">
+                        <div class="flex-1 flex items-center gap-1 px-2 py-1">
+                            <input type="text" x-model="editingSessionTitle"
+                                   @keydown.enter.prevent="saveSessionRename()"
+                                   @keydown.escape.stop="cancelSessionRename()"
+                                   maxlength="200" aria-label="عنوان جدید نشست"
+                                   class="min-w-0 w-full bg-slate-950 border border-sky-600 rounded px-2 py-1 text-sm text-white focus:outline-none">
+                            <button @click="saveSessionRename()" type="button" title="ذخیره نام" aria-label="ذخیره نام نشست"
+                                    class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white">✓</button>
+                            <button @click="cancelSessionRename()" type="button" title="لغو" aria-label="لغو تغییر نام"
+                                    class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white">×</button>
+                        </div>
+                    </template>
+                    <template x-if="editingSessionId !== session.id">
+                        <div class="flex-1 min-w-0 flex items-center">
+                            <button @click="selectSession(session.id)"
+                                    :class="currentSessionId === session.id ? 'text-white' : 'text-slate-400 hover:text-white'"
+                                    class="flex-1 min-w-0 text-right px-3 py-2 text-sm truncate"
+                                    :title="session.title">
+                                <span x-text="session.title"></span>
+                            </button>
+                            <div class="relative shrink-0">
+                                <button @click.stop="toggleSessionMenu(session.id)" type="button"
+                                        :aria-expanded="openSessionMenuId === session.id"
+                                        :aria-label="'عملیات نشست ' + session.title"
+                                        title="عملیات نشست"
+                                        class="px-2 py-2 text-slate-500 hover:text-white rounded">
+                                    ⋯
+                                </button>
+                                <div x-show="openSessionMenuId === session.id" @click.outside="openSessionMenuId = null"
+                                     x-cloak
+                                     class="absolute left-0 top-full z-30 mt-1 w-48 rounded-lg border border-slate-700 bg-slate-900 py-1 shadow-xl">
+                                    <button @click="startSessionRename(session)" type="button"
+                                            class="w-full px-3 py-2 text-right text-sm text-slate-200 hover:bg-slate-800">
+                                        ✏️ تغییر نام
+                                    </button>
+                                    <div class="my-1 border-t border-slate-800"></div>
+                                    <button type="button" disabled title="به‌زودی فعال می‌شود"
+                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">
+                                        ↗️ اشتراک‌گذاری / خروجی گرفتن
+                                    </button>
+                                    <button type="button" disabled title="به‌زودی فعال می‌شود"
+                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">
+                                        🔗 کپی شناسه / URL نشست
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
             </template>
         </div>
 
@@ -44,13 +89,11 @@
 
     <!-- بخش اصلی چت -->
     <main class="flex-1 flex flex-col bg-slate-900">
-        <!-- هدر وضعیت -->
         <header class="h-14 border-b border-slate-800 px-6 flex items-center justify-between text-xs text-slate-400">
             <div>سرویس‌دهنده فعال: <span class="text-emerald-400 font-bold uppercase" x-text="settings.active_provider"></span></div>
             <div>مدل انتخاب‌شده: <span class="text-sky-400" x-text="settings.providers_config[settings.active_provider]?.model || 'انتخاب نشده'"></span></div>
         </header>
 
-        <!-- لیست پیام‌ها -->
         <div id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6">
             <template x-for="(msg, index) in messages" :key="index">
                 <div :class="msg.role === 'user' ? 'flex justify-start' : 'flex justify-end'">
@@ -66,7 +109,6 @@
             </template>
         </div>
 
-        <!-- باکس ارسال پیام -->
         <div class="p-4 border-t border-slate-800 bg-slate-950">
             <form @submit.prevent="sendMessage()" class="max-w-4xl mx-auto flex gap-3">
                 <input type="text" x-model="inputMessage" :disabled="isLoading"
@@ -80,15 +122,13 @@
         </div>
     </main>
 
-    <!-- پنجره تنظیمات ماژولار (Settings Modal) -->
+    <!-- پنجره تنظیمات ماژولار -->
     <div x-show="showSettings" class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" style="display: none;">
         <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="p-4 border-b border-slate-800 flex justify-between items-center">
                 <h2 class="font-bold text-lg">تنظیمات سیستم و آداپتورها</h2>
                 <button @click="showSettings = false" class="text-slate-400 hover:text-white">✕</button>
             </div>
-
-            <!-- تب‌های تنظیمات -->
             <div class="flex border-b border-slate-800 text-sm bg-slate-950">
                 <button @click="activeTab = 'persona'" :class="activeTab === 'persona' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">شخصیت و پرامپت</button>
                 <button @click="activeTab = 'providers'" :class="activeTab === 'providers' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">مدل‌ها و آداپتورها</button>
@@ -97,7 +137,6 @@
             </div>
 
             <div class="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
-                <!-- تب ۱: شخصیت -->
                 <div x-show="activeTab === 'persona'" class="space-y-4">
                     <div>
                         <label class="block text-slate-400 mb-1">نام دستیار واحد:</label>
@@ -109,7 +148,6 @@
                     </div>
                 </div>
 
-                <!-- تب ۲: مدل‌ها و آداپتورها -->
                 <div x-show="activeTab === 'providers'" class="space-y-4">
                     <div>
                         <label class="block text-slate-400 mb-1">سرویس‌دهنده فعال (Provider):</label>
@@ -155,13 +193,11 @@
                     <p class="text-xs text-slate-500">مدل انتخاب‌شده فقط برای Provider فعال استفاده می‌شود؛ تنظیمات Ollama و OpenRouter از هم مستقل‌اند.</p>
                 </div>
 
-                <!-- تب ۳: اسناد (آماده برای توسعه) -->
                 <div x-show="activeTab === 'knowledge'" class="text-slate-400 space-y-2">
                     <p>در این بخش اسناد PDF و متنی خود را برای پردازش توسط مدل <code class="text-sky-400">nomic-embed-text</code> بارگذاری خواهید کرد.</p>
                     <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">ماژول ChromaDB در فاز ۳ به این بخش متصل می‌شود.</div>
                 </div>
 
-                <!-- تب ۴: ابزارها (آماده برای توسعه) -->
                 <div x-show="activeTab === 'tools'" class="text-slate-400 space-y-2">
                     <p>اتصال کانکتورهای خارجی (مانند GitHub Token یا جستجوی وب) در این بخش قرار می‌گیرد.</p>
                     <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">ماژول MCP / Function Calling در فاز ۴ به این بخش متصل می‌شود.</div>
