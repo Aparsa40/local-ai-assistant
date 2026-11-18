@@ -60,14 +60,15 @@ function chatApp() {
                 if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
                 this.availableModels = data.models || [];
                 const config = this.settings.providers_config[provider] ||= {};
-                if (!config.model && this.availableModels.length) {
-                    config.model = provider === 'openrouter' ? 'openrouter/free' : this.availableModels[0];
-                }
-                if (config.model && !this.availableModels.includes(config.model)) {
-                    this.availableModels.unshift(config.model);
+                if (!this.availableModels.includes(config.model)) {
+                    config.model = this.availableModels[0] || '';
                 }
             } catch (error) {
                 this.modelsError = error.message;
+                if (provider === 'openrouter') {
+                    this.availableModels = ['openrouter/free'];
+                    this.settings.providers_config.openrouter.model ||= 'openrouter/free';
+                }
             } finally {
                 this.modelsLoading = false;
             }
