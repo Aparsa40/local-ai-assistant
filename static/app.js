@@ -7,6 +7,9 @@ function chatApp() {
         isLoading: false,
         showSettings: false,
         activeTab: 'persona',
+        openSessionMenuId: null,
+        editingSessionId: null,
+        editingSessionTitle: '',
         availableProviders: [],
         availableModels: [],
         modelsLoading: false,
@@ -103,10 +106,53 @@ function chatApp() {
         },
 
         async selectSession(id) {
+            if (this.editingSessionId !== null) this.cancelSessionRename();
+            this.openSessionMenuId = null;
             this.currentSessionId = id;
             const response = await fetch(`/api/sessions/${id}/messages`);
             this.messages = await response.json();
             this.scrollToBottom();
+        },
+
+        toggleSessionMenu(id) {
+            this.openSessionMenuId = this.openSessionMenuId === id ? null : id;
+        },
+
+        startSessionRename(session) {
+            this.editingSessionId = session.id;
+            this.editingSessionTitle = session.title;
+            this.openSessionMenuId = null;
+        },
+
+        cancelSessionRename() {
+            this.editingSessionId = null;
+            this.editingSessionTitle = '';
+        },
+
+        async saveSessionRename() {
+            if (this.editingSessionId === null) return;
+            const title = this.editingSessionTitle.trim();
+            if (!title) {
+                alert('عنوان نشست نمی‌تواند خالی باشد.');
+                return;
+            }
+
+            const sessionId = this.editingSessionId;
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'تغییر نام نشست ناموفق بود.');
+
+                const session = this.sessions.find(item => item.id === sessionId);
+                if (session) session.title = data.title;
+                this.cancelSessionRename();
+            } catch (error) {
+                alert(error.message);
+            }
         },
 
         renderMarkdown(text) {
@@ -148,10 +194,10 @@ function chatApp() {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
+                    const events = buffer.split('\\n\\n');
                     buffer = events.pop() || '';
                     for (const event of events) {
-                        const line = event.split('\n').find(part => part.startsWith('data:'));
+                        const line = event.split('\\n').find(part => part.startsWith('data:'));
                         if (!line) continue;
                         const data = JSON.parse(line.slice(5).trim());
                         if (data.type === 'meta') this.messages[aiMsgIndex].model = data.model;
@@ -159,13 +205,13 @@ function chatApp() {
                             this.messages[aiMsgIndex].content += data.content;
                             this.scrollToBottom();
                         } else if (data.type === 'error') {
-                            this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                            this.messages[aiMsgIndex].content += `\\n\\n❌ خطا: ${data.content}`;
                         }
                     }
                 }
                 if (buffer.trim().startsWith('data:')) {
                     const data = JSON.parse(buffer.trim().slice(5).trim());
-                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\\n\\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
             } catch (error) {
