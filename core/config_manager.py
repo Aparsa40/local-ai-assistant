@@ -20,6 +20,7 @@ def _deep_merge(target: dict, updates: dict) -> dict:
 _SECRET_KEY_MARKERS = (
     "api_key",
     "access_token",
+    "token",
     "refresh_token",
     "personal_access_token",
     "secret",
