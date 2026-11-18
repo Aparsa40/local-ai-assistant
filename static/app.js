@@ -7,6 +7,11 @@ function chatApp() {
         isLoading: false,
         showSettings: false,
         activeTab: 'persona',
+        sidebarCollapsed: localStorage.getItem('wiz-sidebar-collapsed') === 'true',
+        theme: localStorage.getItem('wiz-theme') || 'dark',
+        profile: { display_name: 'کاربر', username: 'user', email: '', avatar_url: '' },
+        profileDraft: { display_name: '', username: '', email: '' },
+        profileSaving: false,
         openSessionMenuId: null,
         editingSessionId: null,
         editingSessionTitle: '',
@@ -26,6 +31,8 @@ function chatApp() {
         },
 
         async init() {
+            this.applyTheme();
+            await this.loadProfile();
             await this.loadSettings();
             await this.loadProviders();
             await this.refreshModels();
@@ -91,6 +98,113 @@ function chatApp() {
             this.settings = data.config;
             this.showSettings = false;
             await this.refreshModels();
+        },
+
+        async loadProfile() {
+            try {
+                const response = await fetch('/api/profile');
+                if (!response.ok) throw new Error('بارگذاری پروفایل ناموفق بود.');
+                this.profile = await response.json();
+                this.profileDraft = {
+                    display_name: this.profile.display_name,
+                    username: this.profile.username,
+                    email: this.profile.email
+                };
+            } catch (error) {
+                console.error(error);
+            }
+        },
+
+        openAppSettings(tab = 'profile') {
+            this.activeTab = tab;
+            this.showSettings = true;
+        },
+
+        toggleAppSettings(tab = 'profile') {
+            if (this.showSettings && this.activeTab === tab) {
+                this.showSettings = false;
+                return;
+            }
+            this.openAppSettings(tab);
+        },
+
+        toggleSidebar() {
+            this.sidebarCollapsed = !this.sidebarCollapsed;
+            localStorage.setItem('wiz-sidebar-collapsed', String(this.sidebarCollapsed));
+        },
+
+        applyTheme() {
+            document.body.classList.toggle('theme-light', this.theme === 'light');
+            localStorage.setItem('wiz-theme', this.theme);
+        },
+
+        setTheme(theme) {
+            this.theme = theme;
+            this.applyTheme();
+        },
+
+        cancelProfileEdit() {
+            this.profileDraft = {
+                display_name: this.profile.display_name,
+                username: this.profile.username,
+                email: this.profile.email
+            };
+        },
+
+        async saveProfile() {
+            this.profileSaving = true;
+            try {
+                const response = await fetch('/api/profile', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.profileDraft)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'ذخیره پروفایل ناموفق بود.');
+                this.profile = { ...this.profile, ...data };
+                this.cancelProfileEdit();
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                this.profileSaving = false;
+            }
+        },
+
+        async uploadAvatar(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            event.target.value = '';
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                alert('فقط فایل PNG، JPG یا WebP مجاز است.');
+                return;
+            }
+            if (file.size > 2 * 1024 * 1024) {
+                alert('حجم تصویر نباید بیشتر از ۲ مگابایت باشد.');
+                return;
+            }
+            try {
+                const response = await fetch('/api/profile/avatar', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': file.type },
+                    body: file
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'بارگذاری تصویر ناموفق بود.');
+                this.profile = { ...this.profile, ...data, avatar_url: data.avatar_url + '?v=' + Date.now() };
+            } catch (error) {
+                alert(error.message);
+            }
+        },
+
+        async removeAvatar() {
+            if (!confirm('تصویر پروفایل حذف شود؟')) return;
+            const response = await fetch('/api/profile/avatar', { method: 'DELETE' });
+            const data = await response.json();
+            if (!response.ok) {
+                alert(data.detail || 'حذف تصویر ناموفق بود.');
+                return;
+            }
+            this.profile = { ...this.profile, ...data };
         },
 
         async loadSessions() {
