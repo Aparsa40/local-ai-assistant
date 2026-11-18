@@ -1,13 +1,16 @@
+from abc import abstractmethod
 import importlib
 import json
 from typing import List, Dict, AsyncGenerator
 from .base import BaseLLMProvider
 
 class OpenRouterProvider(BaseLLMProvider):
-    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai"):
+    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1"):
+
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
 
+    @abstractmethod
     async def chat_stream(
         self,
         messages: List[Dict[str, str]],
