@@ -20,7 +20,6 @@ def _deep_merge(target: dict, updates: dict) -> dict:
 _SECRET_KEY_MARKERS = (
     "api_key",
     "access_token",
-    "token",
     "refresh_token",
     "personal_access_token",
     "secret",
@@ -33,7 +32,16 @@ _SECRET_KEY_MARKERS = (
 
 def _is_secret_key(key: str) -> bool:
     normalized = key.lower().replace("-", "_")
-    return any(marker in normalized for marker in _SECRET_KEY_MARKERS)
+    generic_token_fields = {
+        "token",
+        "api_token",
+        "auth_token",
+        "client_token",
+        "id_token",
+    }
+    return normalized in generic_token_fields or any(
+        marker in normalized for marker in _SECRET_KEY_MARKERS
+    )
 
 
 def _redact_secrets(value: Any) -> Any:
