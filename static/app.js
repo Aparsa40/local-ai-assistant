@@ -194,10 +194,10 @@ function chatApp() {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\\n\\n');
+                    const events = buffer.split('\n\n');
                     buffer = events.pop() || '';
                     for (const event of events) {
-                        const line = event.split('\\n').find(part => part.startsWith('data:'));
+                        const line = event.split('\n').find(part => part.startsWith('data:'));
                         if (!line) continue;
                         const data = JSON.parse(line.slice(5).trim());
                         if (data.type === 'meta') this.messages[aiMsgIndex].model = data.model;
@@ -205,13 +205,13 @@ function chatApp() {
                             this.messages[aiMsgIndex].content += data.content;
                             this.scrollToBottom();
                         } else if (data.type === 'error') {
-                            this.messages[aiMsgIndex].content += `\\n\\n❌ خطا: ${data.content}`;
+                            this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                         }
                     }
                 }
                 if (buffer.trim().startsWith('data:')) {
                     const data = JSON.parse(buffer.trim().slice(5).trim());
-                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\\n\\n❌ خطا: ${data.content}`;
+                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
             } catch (error) {
