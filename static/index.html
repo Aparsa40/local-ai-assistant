@@ -47,7 +47,7 @@
         <!-- هدر وضعیت -->
         <header class="h-14 border-b border-slate-800 px-6 flex items-center justify-between text-xs text-slate-400">
             <div>سرویس‌دهنده فعال: <span class="text-emerald-400 font-bold uppercase" x-text="settings.active_provider"></span></div>
-            <div>مسیریابی مدل: <span class="text-sky-400" x-text="settings.routing_mode === 'auto' ? 'هوشمند (خودکار)' : settings.routing_mode"></span></div>
+            <div>مدل انتخاب‌شده: <span class="text-sky-400" x-text="settings.providers_config[settings.active_provider]?.model || 'انتخاب نشده'"></span></div>
         </header>
 
         <!-- لیست پیام‌ها -->
