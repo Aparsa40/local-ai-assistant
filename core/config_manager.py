@@ -74,8 +74,10 @@ class ConfigManager:
         config = ConfigManager.load_config()
         incoming = copy.deepcopy(partial_data)
         incoming_openrouter = incoming.get("providers_config", {}).get("openrouter", {})
-        if isinstance(incoming_openrouter, dict) and not incoming_openrouter.get("api_key"):
-            incoming_openrouter.pop("api_key", None)
+        if isinstance(incoming_openrouter, dict):
+            incoming_openrouter.pop("api_key_configured", None)
+            if not incoming_openrouter.get("api_key"):
+                incoming_openrouter.pop("api_key", None)
         incoming_github = incoming.get("tools_config", {}).get("github", {})
         if isinstance(incoming_github, dict) and not incoming_github.get("personal_access_token"):
             incoming_github.pop("personal_access_token", None)
