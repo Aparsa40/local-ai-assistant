@@ -50,6 +50,7 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
             "custom-cloud": {
                 "api_key": "custom-secret",
                 "token": "generic-token-secret",
+                "max_tokens": 8192,
                 "nested": {"access_token": "nested-secret"},
                 "model": "custom-model",
             }
@@ -67,6 +68,7 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
     assert custom["api_key_configured"] is True
     assert custom["token"] == ""
     assert custom["token_configured"] is True
+    assert custom["max_tokens"] == 8192
     assert custom["nested"]["access_token"] == ""
     assert custom["nested"]["access_token_configured"] is True
 
