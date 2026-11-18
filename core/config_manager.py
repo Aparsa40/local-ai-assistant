@@ -17,6 +17,56 @@ def _deep_merge(target: dict, updates: dict) -> dict:
     return target
 
 
+_SECRET_KEY_MARKERS = (
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "personal_access_token",
+    "secret",
+    "password",
+    "credential",
+    "authorization",
+    "private_key",
+)
+
+
+def _is_secret_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    return any(marker in normalized for marker in _SECRET_KEY_MARKERS)
+
+
+def _redact_secrets(value: Any) -> Any:
+    """Recursively redact credential-like fields in provider and tool settings."""
+    if isinstance(value, dict):
+        safe = {}
+        for key, item in value.items():
+            if _is_secret_key(str(key)):
+                safe[f"{key}_configured"] = bool(item)
+                safe[key] = ""
+            else:
+                safe[key] = _redact_secrets(item)
+        return safe
+    if isinstance(value, list):
+        return [_redact_secrets(item) for item in value]
+    return value
+
+
+def _remove_empty_secret_updates(incoming: Any, existing: Any) -> None:
+    """Remove blank secret updates so an omitted/empty UI field keeps its old value."""
+    if not isinstance(incoming, dict) or not isinstance(existing, dict):
+        return
+    for key in list(incoming):
+        value = incoming[key]
+        if key.endswith("_configured"):
+            incoming.pop(key)
+            continue
+        if _is_secret_key(str(key)) and value in (None, ""):
+            incoming.pop(key)
+            continue
+        if isinstance(value, dict):
+            _remove_empty_secret_updates(value, existing.get(key, {}))
+
+
 class ConfigManager:
     @staticmethod
     def _normalize(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -53,15 +103,8 @@ class ConfigManager:
 
     @staticmethod
     def public_config(config: Dict[str, Any] | None = None) -> Dict[str, Any]:
-        safe = copy.deepcopy(config if config is not None else ConfigManager.load_config())
-        openrouter = safe.setdefault("providers_config", {}).setdefault("openrouter", {})
-        openrouter["api_key_configured"] = bool(openrouter.get("api_key"))
-        openrouter["api_key"] = ""
-        github = safe.get("tools_config", {}).get("github", {})
-        if isinstance(github, dict) and "personal_access_token" in github:
-            github["personal_access_token_configured"] = bool(github.get("personal_access_token"))
-            github["personal_access_token"] = ""
-        return safe
+        source = config if config is not None else ConfigManager.load_config()
+        return _redact_secrets(copy.deepcopy(source))
 
     @staticmethod
     def save_config(new_config: Dict[str, Any]) -> None:
@@ -73,17 +116,14 @@ class ConfigManager:
     def update_config(partial_data: Dict[str, Any]) -> Dict[str, Any]:
         config = ConfigManager.load_config()
         incoming = copy.deepcopy(partial_data)
-        incoming_openrouter = incoming.get("providers_config", {}).get("openrouter", {})
-        if isinstance(incoming_openrouter, dict):
-            incoming_openrouter.pop("api_key_configured", None)
-            if not incoming_openrouter.get("api_key"):
-                incoming_openrouter.pop("api_key", None)
-        incoming_github = incoming.get("tools_config", {}).get("github", {})
-        if isinstance(incoming_github, dict) and not incoming_github.get("personal_access_token"):
-            incoming_github.pop("personal_access_token", None)
+        _remove_empty_secret_updates(incoming, config)
         _deep_merge(config, incoming)
         ConfigManager._normalize(config)
-        if config.get("active_provider") not in ("ollama", "openrouter"):
-            raise ValueError(f"Unsupported provider: {config.get('active_provider')}")
+        active_provider = config.get("active_provider")
+        # Import at validation time to keep configuration helpers decoupled from adapters.
+        from core.providers.registry import PROVIDER_FACTORIES
+
+        if active_provider not in PROVIDER_FACTORIES:
+            raise ValueError(f"Unsupported provider: {active_provider}")
         ConfigManager.save_config(config)
         return config
