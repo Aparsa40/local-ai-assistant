@@ -40,7 +40,9 @@ def _redact_secrets(value: Any) -> Any:
     if isinstance(value, dict):
         safe = {}
         for key, item in value.items():
-            if _is_secret_key(str(key)):
+            if str(key).endswith("_configured"):
+                safe[key] = item
+            elif _is_secret_key(str(key)):
                 safe[f"{key}_configured"] = bool(item)
                 safe[key] = ""
             else:
