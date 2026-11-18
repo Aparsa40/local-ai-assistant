@@ -4,6 +4,16 @@ All notable changes are documented here. The project follows Semantic Versioning
 
 ## Unreleased
 
+### Added
+- Collapsible right-hand conversation sidebar with persistent expanded/collapsed preference.
+- Local profile settings with username, display name, email, and SQLite-persisted avatar images.
+- Avatar upload validation (PNG/JPEG/WebP, 2 MB upload limit, 4096×4096 input limit) and 256×256 WebP normalization.
+- Appearance settings with persistent dark/light theme selection and dedicated general/support sections.
+- Frontend JavaScript syntax validation in CI.
+
+### Security and scope
+- Password management remains unavailable until a real authentication and account-session system is implemented.
+
 ### Fixed
 - Removed the accidental abstract-method decorator from the concrete OpenRouter streaming implementation.
 - Normalize OpenRouter base URLs to https://openrouter.ai/api/v1 and expose useful HTTP error response bodies.
