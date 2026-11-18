@@ -3,8 +3,19 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
-    from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+    from sqlalchemy import (
+        Boolean,
+        Column,
+        DateTime,
+        ForeignKey,
+        Integer,
+        String,
+        Text,
+        create_engine,
+        inspect,
+        text,
+    )
+    from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 except ImportError as exc:
     raise ImportError("SQLAlchemy is required. Install it with: pip install sqlalchemy") from exc
 
@@ -21,6 +32,7 @@ class ChatSession(Base):
     __tablename__ = "sessions"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), default="گفتگوی جدید")
+    title_is_custom = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(DateTime, default=datetime.utcnow)
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
 
@@ -39,3 +51,11 @@ class ChatMessage(Base):
 def init_db():
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
+    # create_all does not add columns to existing SQLite tables; migrate this field safely.
+    columns = {column["name"] for column in inspect(engine).get_columns("sessions")}
+    if "title_is_custom" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE sessions ADD COLUMN title_is_custom BOOLEAN NOT NULL DEFAULT 0")
+            )
