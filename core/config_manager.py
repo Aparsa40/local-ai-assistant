@@ -39,8 +39,10 @@ def _is_secret_key(key: str) -> bool:
         "client_token",
         "id_token",
     }
-    return normalized in generic_token_fields or any(
-        marker in normalized for marker in _SECRET_KEY_MARKERS
+    return (
+        normalized in generic_token_fields
+        or (normalized.endswith("_token") and not normalized.endswith("_tokens"))
+        or any(marker in normalized for marker in _SECRET_KEY_MARKERS)
     )
 
 
