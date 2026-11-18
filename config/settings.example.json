@@ -2,30 +2,22 @@
   "assistant_name": "آریا (دستیار هوشمند)",
   "system_prompt": "تو یک دستیار هوشمند شخصی، دقیق و کاربردی هستی. به زبان فارسی روان و حرفه‌ای پاسخ بده. از ارائه توضیحات اضافی و حاشیه‌پردازی پرهیز کن.",
   "active_provider": "ollama",
-  "routing_mode": "auto",
-  "models": {
-    "router": "llama3.2:1b",
-    "general": "llama3.2:1b",
-    "coder": "qwen2.5-coder:0.5b",
-    "reasoning": "deepseek-r1:1.5b",
-    "embedding": "nomic-embed-text:latest"
-  },
+  "routing_mode": "manual",
   "providers_config": {
     "ollama": {
-      "base_url": "http://localhost:11434"
+      "base_url": "http://localhost:11434",
+      "model": "llama3.2:1b"
     },
     "openrouter": {
-      "api_key": "YOUR_OPENROUTER_API_KEY_HERE",
-      "base_url": "https://openrouter.ai"
-    },
-    "gpt4all": {
-      "base_url": "http://localhost:4891/v1"
+      "api_key": "",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model": "openrouter/free"
     }
   },
   "tools_config": {
     "github": {
       "enabled": false,
-      "personal_access_token": "YOUR_GITHUB_PAT_HERE"
+      "personal_access_token": ""
     }
   },
   "enabled_tools": []
