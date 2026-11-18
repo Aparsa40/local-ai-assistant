@@ -57,8 +57,8 @@ def test_custom_provider_secret_is_redacted_and_blank_update_is_preserved(tmp_pa
     monkeypatch.setattr("core.config_manager.CONFIG_PATH", config_path)
     monkeypatch.setattr("core.config_manager.EXAMPLE_CONFIG_PATH", example_path)
 
-    from core.providers.registry import register_provider
-    register_provider("custom-cloud", lambda config: object())
+    from core.providers.registry import PROVIDER_FACTORIES
+    monkeypatch.setitem(PROVIDER_FACTORIES, "custom-cloud", lambda config: object())
 
     public = ConfigManager.public_config()
     custom = public["providers_config"]["custom-cloud"]
