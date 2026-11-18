@@ -26,11 +26,13 @@ function chatApp() {
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
-            active_provider: 'ollama',
+            active_provider: 'openrouter',
             routing_mode: 'manual',
             providers_config: {
                 ollama: { base_url: 'http://localhost:11434', model: '' },
-                openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' }
+                openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' },
+                google_ai_studio: { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' },
+                huggingface: { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' }
             }
         },
 
@@ -41,8 +43,8 @@ function chatApp() {
             await this.loadProviders();
             await this.refreshModels();
             await this.loadSessions();
-            if (this.sessions.length === 0) await this.createNewSession();
-            else await this.selectSession(this.sessions[0].id);
+            // Keep previous conversations in the sidebar, but never reopen one automatically.
+            await this.createNewSession();
         },
 
         async loadSettings() {
@@ -52,22 +54,23 @@ function chatApp() {
             this.settings.providers_config ||= {};
             this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
-            this.updateOpenRouterKeyHint();
+            this.settings.providers_config.google_ai_studio ||= { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' };
+            this.settings.providers_config.huggingface ||= { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' };
+            this.updateProviderKeyHints();
         },
 
-        updateOpenRouterKeyHint() {
-            const openrouter = this.settings.providers_config.openrouter || {};
-            const keyInput = document.querySelector('input[x-model="settings.providers_config.openrouter.api_key"]');
-            const keyStatus = document.querySelector('p[x-show="settings.providers_config.openrouter.api_key_configured"]');
-
-            // The API never sends the real key to the browser. Show only a harmless service URL.
-            if (keyInput) {
-                keyInput.placeholder = openrouter.api_key_configured
-                    ? 'https://openrouter.ai'
-                    : 'کلید API را وارد کنید';
-            }
-            if (keyStatus) {
-                keyStatus.textContent = 'کلید API در تنظیمات محلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید. لینک سرویس: https://openrouter.ai';
+        updateProviderKeyHints() {
+            const providers = [
+                ['openrouter', 'https://openrouter.ai'],
+                ['google_ai_studio', 'https://aistudio.google.com'],
+                ['huggingface', 'https://huggingface.co/settings/tokens']
+            ];
+            for (const [id, url] of providers) {
+                const config = this.settings.providers_config[id] || {};
+                const input = document.querySelector(`input[x-model="settings.providers_config.${id}.api_key"]`);
+                const hint = document.querySelector(`[data-key-hint="${id}"]`);
+                if (input) input.placeholder = config.api_key_configured ? 'کلید ذخیره شده است' : 'کلید API را وارد کنید';
+                if (hint && config.api_key_configured) hint.textContent = `کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید. ${url}`;
             }
         },
 
@@ -98,7 +101,7 @@ function chatApp() {
                 this.modelsError = error.message;
                 if (provider === 'openrouter') {
                     this.availableModels = ['openrouter/free'];
-                    this.settings.providers_config.openrouter.model = 'openrouter/free';
+                    this.settings.providers_config.openrouter.model ||= 'openrouter/free';
                 }
             } finally {
                 this.modelsLoading = false;
@@ -117,7 +120,7 @@ function chatApp() {
                 return;
             }
             this.settings = data.config;
-            this.updateOpenRouterKeyHint();
+            this.updateProviderKeyHints();
             this.showSettings = false;
             await this.refreshModels();
         },

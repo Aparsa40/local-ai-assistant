@@ -35,3 +35,18 @@ def test_ollama_and_openrouter_model_choices_are_independent(monkeypatch):
     assert orchestrator.select_model() == "qwen2.5-coder:0.5b"
     config["active_provider"] = "openrouter"
     assert orchestrator.select_model() == "openrouter/free"
+
+
+
+def test_orchestrator_defaults_to_openrouter_when_provider_is_missing(monkeypatch):
+    config = {
+        "assistant_name": "Test assistant",
+        "system_prompt": "Be helpful.",
+        "providers_config": {
+            "openrouter": {"model": "openrouter/free"},
+        },
+    }
+    monkeypatch.setattr("core.orchestrator.ConfigManager.load_config", lambda: config)
+    orchestrator = Orchestrator()
+
+    assert orchestrator.select_model() == "openrouter/free"

@@ -83,16 +83,31 @@ def _remove_empty_secret_updates(incoming: Any, existing: Any) -> None:
 class ConfigManager:
     @staticmethod
     def _normalize(config: Dict[str, Any]) -> Dict[str, Any]:
-        config.setdefault("active_provider", "ollama")
+        # Migrate legacy installations to OpenRouter once; later user selections are preserved.
+        schema_version = int(config.get("settings_schema_version", 0) or 0)
+        if schema_version < 2:
+            if config.get("active_provider") in (None, "ollama"):
+                config["active_provider"] = "openrouter"
+            config["settings_schema_version"] = 2
+        config.setdefault("active_provider", "openrouter")
         config.setdefault("providers_config", {})
         providers = config["providers_config"]
         providers.setdefault("ollama", {})
         providers.setdefault("openrouter", {})
+        providers.setdefault("google_ai_studio", {})
+        providers.setdefault("huggingface", {})
         providers["ollama"].setdefault("base_url", "http://localhost:11434")
         providers["openrouter"].setdefault("base_url", "https://openrouter.ai/api/v1")
         providers["openrouter"]["base_url"] = providers["openrouter"]["base_url"].rstrip("/")
         if not providers["openrouter"]["base_url"].endswith("/api/v1"):
             providers["openrouter"]["base_url"] += "/api/v1"
+        providers["google_ai_studio"].setdefault("base_url", "https://generativelanguage.googleapis.com/v1beta")
+        providers["google_ai_studio"].setdefault("model", "gemini-3.8-flash")
+        providers["huggingface"].setdefault("base_url", "https://router.huggingface.co/v1")
+        providers["huggingface"]["base_url"] = providers["huggingface"]["base_url"].rstrip("/")
+        if not providers["huggingface"]["base_url"].endswith("/v1"):
+            providers["huggingface"]["base_url"] += "/v1"
+        providers["huggingface"].setdefault("model", "")
         providers["ollama"].setdefault("model", config.get("models", {}).get("general", ""))
         providers["openrouter"].setdefault("model", "openrouter/free")
         config.setdefault("routing_mode", "manual")

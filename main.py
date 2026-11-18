@@ -159,7 +159,16 @@ async def delete_profile_avatar(db: Session = Depends(get_db)):
 
 @app.get("/api/providers")
 async def list_providers():
-    return [{"id": name, "name": name.replace("_", " ").title()} for name in PROVIDER_FACTORIES]
+    display_names = {
+        "ollama": "Ollama",
+        "openrouter": "OpenRouter",
+        "google_ai_studio": "Google AI Studio",
+        "huggingface": "Hugging Face",
+    }
+    return [
+        {"id": name, "name": display_names.get(name, name.replace("_", " ").title())}
+        for name in PROVIDER_FACTORIES
+    ]
 
 
 @app.get("/api/providers/{provider_id}/models")

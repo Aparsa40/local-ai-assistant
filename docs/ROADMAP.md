@@ -9,10 +9,12 @@ Build a reliable, privacy-conscious, multi-provider AI workspace that works offl
 ## Current foundation
 
 - FastAPI backend with a lightweight Alpine.js browser interface.
-- Provider registry and adapters for Ollama (local) and OpenRouter (cloud).
+- Provider registry and adapters for Ollama (local), OpenRouter, Google AI Studio/Gemini, and Hugging Face Inference Providers.
 - Streaming chat responses.
 - SQLite persistence through SQLAlchemy for chat sessions, messages, and the local user profile.
 - Session title editing and session deletion.
+- Fresh chat session on every app launch while retaining prior chat history.
+- Versioned settings migration with OpenRouter as the default for new/legacy installations.
 - Basic profile, appearance, provider, and prompt settings.
 
 ## Phase 1 — Conversation lifecycle and reliability
@@ -71,11 +73,14 @@ The current application does not yet have a dedicated application-cache subsyste
 
 ## Phase 5 — Provider and model ecosystem
 
-- Add provider adapters behind the existing provider contract (for example, Google AI Studio/Gemini and other OpenAI-compatible endpoints).
+**Initial provider integrations implemented:** Ollama, OpenRouter, Google AI Studio/Gemini (Interactions API), and Hugging Face Inference Providers. Provider-specific model IDs are discovered dynamically; Hugging Face model/provider options are limited to live entries marked free by the provider catalog.
+
+Remaining work:
 - Add provider health checks, connection diagnostics, timeout/retry policies, and clearer quota/error reporting.
 - Add model capability metadata (context length, vision, tools, streaming, structured output) instead of assuming all models behave alike.
 - Add per-conversation provider/model selection and optional routing policies.
-- Keep credentials server-side and support environment-based secrets for deployments.
+- Move secrets to environment variables or a managed secret store for hosted deployments.
+- Build the task-based architect/router that classifies each request and chooses the appropriate model/provider. This is a separate phase after provider reliability and capability metadata.
 
 ## Phase 6 — Tools, connectors, and agent workflows
 

@@ -11,13 +11,13 @@ class Orchestrator:
 
     def get_provider(self) -> BaseLLMProvider:
         self.config = ConfigManager.load_config()
-        active = self.config.get("active_provider", "ollama")
+        active = self.config.get("active_provider", "openrouter")
         provider_config = self.config.get("providers_config", {}).get(active, {})
         return get_provider_factory(active)(provider_config)
 
     def select_model(self, user_message: str = "") -> str:
         """Return the model explicitly selected for the active provider."""
-        active = self.config.get("active_provider", "ollama")
+        active = self.config.get("active_provider", "openrouter")
         provider_config = self.config.get("providers_config", {}).get(active, {})
         selected = provider_config.get("model")
         if selected:
