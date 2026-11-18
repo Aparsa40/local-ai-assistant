@@ -126,7 +126,7 @@ async def upload_profile_avatar(request: Request, db: Session = Depends(get_db))
             normalized.save(output, format="WEBP", quality=85, method=6)
     except HTTPException:
         raise
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
         raise HTTPException(status_code=422, detail="فایل تصویر معتبر نیست") from exc
 
     profile = get_or_create_profile(db)
