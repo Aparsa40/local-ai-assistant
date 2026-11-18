@@ -1,17 +1,17 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+The current development line is the only actively maintained version.
 
-## Security Best Practices for Users
+## Security guidance
 
-1. **API Keys & Tokens:** Never commit `config/settings.json` or `.env` files containing live OpenRouter API keys or GitHub Personal Access Tokens. Always use `config/settings.example.json` for version control.
-2. **Local Network Exposure:** By default, the FastAPI server binds to `127.0.0.1` (localhost). Do not expose port `8000` to the public internet (`0.0.0.0`) without adding an authentication layer (e.g., OAuth2, Reverse Proxy with Basic Auth).
-3. **Chat Data Privacy:** All conversations are stored locally in `data/assistant.db`. Ensure appropriate OS-level file permissions are set on the `data/` directory.
+1. Never commit config/settings.json, .env files, API keys, or GitHub tokens.
+2. Stored provider secrets are currently kept as plaintext in the local ignored JSON file. Protect the Windows user account and filesystem.
+3. GET /api/settings redacts secret values, but this does not replace local filesystem protection.
+4. The application does not implement user authentication. Run it on localhost only; do not bind it to 0.0.0.0 or expose port 8000 to an untrusted network.
+5. Chat history is stored locally in data/chat_history.db. Back it up and restrict access as appropriate.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-If you discover a security vulnerability within this project, please do **not** open a public issue. Instead, report it privately via the repository's **Security Advisories** tab or contact the maintainers directly.
+Please do not publish exploitable details in a public issue. Use GitHub's private vulnerability reporting / Security Advisories feature.
