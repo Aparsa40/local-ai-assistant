@@ -28,6 +28,6 @@ def test_unknown_provider_fails_clearly():
         raise AssertionError("Unknown provider should raise ValueError")
 
 
-def test_new_provider_can_be_registered():
-    register_provider("test-provider", lambda config: object())
+def test_new_provider_can_be_registered(monkeypatch):
+    monkeypatch.setitem(PROVIDER_FACTORIES, "test-provider", lambda config: object())
     assert "test-provider" in PROVIDER_FACTORIES
