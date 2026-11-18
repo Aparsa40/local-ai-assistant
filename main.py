@@ -1,15 +1,18 @@
 # pyright: reportMissingImports=false
 import json
+from io import BytesIO
 from typing import Any, Dict
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.config_manager import ConfigManager
-from core.database import ChatMessage, ChatSession, SessionLocal, init_db
+from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
 from core.providers.registry import PROVIDER_FACTORIES, get_provider_factory
 
@@ -35,6 +38,32 @@ class SessionTitleUpdate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+class ProfileUpdate(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+    username: str = Field(min_length=1, max_length=50)
+    email: str = Field(default="", max_length=254)
+
+
+def get_or_create_profile(db: Session) -> UserProfile:
+    profile = db.query(UserProfile).filter(UserProfile.id == 1).first()
+    if profile is None:
+        profile = UserProfile(id=1, display_name="کاربر", username="user", email="")
+        db.add(profile)
+        db.commit()
+        db.refresh(profile)
+    return profile
+
+
+def serialize_profile(profile: UserProfile) -> Dict[str, Any]:
+    return {
+        "display_name": profile.display_name,
+        "username": profile.username,
+        "email": profile.email,
+        "avatar_url": "/api/profile/avatar" if profile.avatar_data else "",
+        "avatar_configured": bool(profile.avatar_data),
+    }
+
+
 @app.get("/")
 async def serve_ui():
     return FileResponse("static/index.html")
@@ -52,6 +81,81 @@ async def update_settings(data: Dict[str, Any]):
     except (ValueError, KeyError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"status": "success", "config": ConfigManager.public_config(updated)}
+
+
+@app.get("/api/profile")
+async def get_profile(db: Session = Depends(get_db)):
+    return serialize_profile(get_or_create_profile(db))
+
+
+@app.patch("/api/profile")
+async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
+    display_name = data.display_name.strip()
+    username = data.username.strip()
+    email = data.email.strip()
+    if not display_name or not username:
+        raise HTTPException(status_code=422, detail="نام نمایشی و نام کاربری نمی‌توانند خالی باشند")
+    if email and ("@" not in email or email.startswith("@") or email.endswith("@")):
+        raise HTTPException(status_code=422, detail="فرمت ایمیل معتبر نیست")
+
+    profile = get_or_create_profile(db)
+    profile.display_name = display_name
+    profile.username = username
+    profile.email = email
+    db.commit()
+    db.refresh(profile)
+    return serialize_profile(profile)
+
+
+@app.put("/api/profile/avatar")
+async def upload_profile_avatar(request: Request, db: Session = Depends(get_db)):
+    image_bytes = await request.body()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="فایلی دریافت نشد")
+    if len(image_bytes) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="حجم تصویر نباید بیشتر از ۲ مگابایت باشد")
+
+    try:
+        with Image.open(BytesIO(image_bytes)) as source:
+            if source.format not in {"PNG", "JPEG", "WEBP"}:
+                raise HTTPException(status_code=415, detail="فقط فرمت‌های PNG، JPG و WebP مجاز هستند")
+            if source.width > 4096 or source.height > 4096:
+                raise HTTPException(status_code=422, detail="ابعاد تصویر نباید از ۴۰۹۶×۴۰۹۶ پیکسل بیشتر باشد")
+            source.load()
+            normalized = ImageOps.fit(source.convert("RGB"), (256, 256))
+            output = BytesIO()
+            normalized.save(output, format="WEBP", quality=85, method=6)
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="فایل تصویر معتبر نیست") from exc
+
+    profile = get_or_create_profile(db)
+    profile.avatar_data = output.getvalue()
+    profile.avatar_mime = "image/webp"
+    db.commit()
+    return {"status": "success", **serialize_profile(profile)}
+
+
+@app.get("/api/profile/avatar")
+async def get_profile_avatar(db: Session = Depends(get_db)):
+    profile = get_or_create_profile(db)
+    if not profile.avatar_data:
+        raise HTTPException(status_code=404, detail="تصویر پروفایل ثبت نشده است")
+    return Response(
+        content=profile.avatar_data,
+        media_type=profile.avatar_mime or "image/webp",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.delete("/api/profile/avatar")
+async def delete_profile_avatar(db: Session = Depends(get_db)):
+    profile = get_or_create_profile(db)
+    profile.avatar_data = None
+    profile.avatar_mime = None
+    db.commit()
+    return {"status": "success", **serialize_profile(profile)}
 
 
 @app.get("/api/providers")
