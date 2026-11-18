@@ -304,6 +304,9 @@ function chatApp() {
         },
 
         handleMessageKeydown(event) {
+            // Do not submit while an IME (including Persian input) is composing text.
+            if (event.isComposing || event.keyCode === 229) return;
+
             // Shift+Enter (and Alt+Enter) keep the native textarea newline behavior.
             if ((event.shiftKey || event.altKey) && !event.ctrlKey && !event.metaKey) return;
 
