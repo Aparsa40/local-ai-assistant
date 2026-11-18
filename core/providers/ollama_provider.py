@@ -1,7 +1,10 @@
-import httpx  # type: ignore[import-not-found]
 import json
-from typing import List, Dict, AsyncGenerator
+from typing import AsyncGenerator, Dict, List
+
+import httpx
+
 from .base import BaseLLMProvider
+
 
 class OllamaProvider(BaseLLMProvider):
     def __init__(self, base_url: str = "http://localhost:11434"):
@@ -13,31 +16,35 @@ class OllamaProvider(BaseLLMProvider):
         model: str,
         temperature: float = 0.7,
     ) -> AsyncGenerator[str, None]:
+        if not model:
+            raise RuntimeError("No Ollama model is selected. Pull a model and select it in Settings.")
         url = f"{self.base_url}/api/chat"
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "options": {
-                "temperature": temperature,
-                "num_ctx": 1024,      # کاهش مصرف رم از ۴۰۹۶ به ۱۰۲۴ توکن
-                "num_thread": 2       # جلوگیری از درگیر شدن ۱۰۰ درصدی CPU و قفل شدن ویندوز
-            }
+            "options": {"temperature": temperature, "num_ctx": 1024, "num_thread": 2},
         }
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream("POST", url, json=payload) as response:
-                response.raise_for_status()
+                if response.is_error:
+                    body = (await response.aread()).decode("utf-8", errors="replace")
+                    raise RuntimeError(f"Ollama returned HTTP {response.status_code}: {body[:2000]}")
                 async for line in response.aiter_lines():
-                    if line:
-                        data = json.loads(line)
-                        if "message" in data and "content" in data["message"]:
-                            yield data["message"]["content"]
+                    if not line:
+                        continue
+                    data = json.loads(line)
+                    content = (data.get("message") or {}).get("content")
+                    if isinstance(content, str) and content:
+                        yield content
+                    if data.get("error"):
+                        raise RuntimeError(f"Ollama error: {data['error']}")
 
     async def list_models(self) -> List[str]:
-        url = f"{self.base_url}/api/tags"
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                return [m["name"] for m in data.get("models", [])]
-            return []
+            response = await client.get(f"{self.base_url}/api/tags")
+            if response.is_error:
+                body = (await response.aread()).decode("utf-8", errors="replace")
+                raise RuntimeError(f"Cannot reach Ollama at {self.base_url}: HTTP {response.status_code}: {body[:1000]}")
+            data = response.json()
+        return sorted({item["name"] for item in data.get("models", []) if item.get("name")})

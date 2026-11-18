@@ -1,32 +1,142 @@
+import copy
 import json
 import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 CONFIG_PATH = Path("config/settings.json")
 EXAMPLE_CONFIG_PATH = Path("config/settings.example.json")
 
+
+def _deep_merge(target: dict, updates: dict) -> dict:
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _deep_merge(target[key], value)
+        else:
+            target[key] = value
+    return target
+
+
+_SECRET_KEY_MARKERS = (
+    "api_key",
+    "access_token",
+    "refresh_token",
+    "personal_access_token",
+    "secret",
+    "password",
+    "credential",
+    "authorization",
+    "private_key",
+)
+
+
+def _is_secret_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    generic_token_fields = {
+        "token",
+        "api_token",
+        "auth_token",
+        "client_token",
+        "id_token",
+    }
+    return (
+        normalized in generic_token_fields
+        or (normalized.endswith("_token") and not normalized.endswith("_tokens"))
+        or any(marker in normalized for marker in _SECRET_KEY_MARKERS)
+    )
+
+
+def _redact_secrets(value: Any) -> Any:
+    """Recursively redact credential-like fields in provider and tool settings."""
+    if isinstance(value, dict):
+        safe = {}
+        for key, item in value.items():
+            if str(key).endswith("_configured"):
+                safe[key] = item
+            elif _is_secret_key(str(key)):
+                safe[f"{key}_configured"] = bool(item)
+                safe[key] = ""
+            else:
+                safe[key] = _redact_secrets(item)
+        return safe
+    if isinstance(value, list):
+        return [_redact_secrets(item) for item in value]
+    return value
+
+
+def _remove_empty_secret_updates(incoming: Any, existing: Any) -> None:
+    """Remove blank secret updates so an omitted/empty UI field keeps its old value."""
+    if not isinstance(incoming, dict) or not isinstance(existing, dict):
+        return
+    for key in list(incoming):
+        value = incoming[key]
+        if key.endswith("_configured"):
+            incoming.pop(key)
+            continue
+        if _is_secret_key(str(key)) and value in (None, ""):
+            incoming.pop(key)
+            continue
+        if isinstance(value, dict):
+            _remove_empty_secret_updates(value, existing.get(key, {}))
+
+
 class ConfigManager:
     @staticmethod
+    def _normalize(config: Dict[str, Any]) -> Dict[str, Any]:
+        config.setdefault("active_provider", "ollama")
+        config.setdefault("providers_config", {})
+        providers = config["providers_config"]
+        providers.setdefault("ollama", {})
+        providers.setdefault("openrouter", {})
+        providers["ollama"].setdefault("base_url", "http://localhost:11434")
+        providers["openrouter"].setdefault("base_url", "https://openrouter.ai/api/v1")
+        providers["openrouter"]["base_url"] = providers["openrouter"]["base_url"].rstrip("/")
+        if not providers["openrouter"]["base_url"].endswith("/api/v1"):
+            providers["openrouter"]["base_url"] += "/api/v1"
+        providers["ollama"].setdefault("model", config.get("models", {}).get("general", ""))
+        providers["openrouter"].setdefault("model", "openrouter/free")
+        config.setdefault("routing_mode", "manual")
+        config.setdefault("assistant_name", "Local AI Assistant")
+        config.setdefault("system_prompt", "You are a helpful assistant.")
+        return config
+
+    @staticmethod
     def load_config() -> Dict[str, Any]:
-        # اگر فایل اصلی وجود نداشت، از روی فایل نمونه می‌سازد
         if not CONFIG_PATH.exists():
-            if EXAMPLE_CONFIG_PATH.exists():
-                shutil.copy(EXAMPLE_CONFIG_PATH, CONFIG_PATH)
-            else:
-                raise FileNotFoundError("هیچ فایل تنظیماتی (اصلی یا نمونه) یافت نشد.")
-                
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            if not EXAMPLE_CONFIG_PATH.exists():
+                raise FileNotFoundError("Neither config/settings.json nor config/settings.example.json exists.")
+            CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(EXAMPLE_CONFIG_PATH, CONFIG_PATH)
+        with CONFIG_PATH.open("r", encoding="utf-8") as file:
+            config = json.load(file)
+        normalized = ConfigManager._normalize(config)
+        if normalized != config:
+            ConfigManager.save_config(normalized)
+        return normalized
+
+    @staticmethod
+    def public_config(config: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        source = config if config is not None else ConfigManager.load_config()
+        return _redact_secrets(copy.deepcopy(source))
 
     @staticmethod
     def save_config(new_config: Dict[str, Any]) -> None:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(new_config, f, ensure_ascii=False, indent=2)
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with CONFIG_PATH.open("w", encoding="utf-8") as file:
+            json.dump(new_config, file, ensure_ascii=False, indent=2)
 
     @staticmethod
     def update_config(partial_data: Dict[str, Any]) -> Dict[str, Any]:
         config = ConfigManager.load_config()
-        config.update(partial_data)
+        incoming = copy.deepcopy(partial_data)
+        _remove_empty_secret_updates(incoming, config)
+        _deep_merge(config, incoming)
+        ConfigManager._normalize(config)
+        active_provider = config.get("active_provider")
+        # Import at validation time to keep configuration helpers decoupled from adapters.
+        from core.providers.registry import PROVIDER_FACTORIES
+
+        if active_provider not in PROVIDER_FACTORIES:
+            raise ValueError(f"Unsupported provider: {active_provider}")
         ConfigManager.save_config(config)
         return config
