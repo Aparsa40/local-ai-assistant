@@ -9,26 +9,50 @@
     <script defer src="/static/alpine.js"></script>
     <script src="/static/marked.js"></script>
     <style>
+        [x-cloak] { display: none !important; }
         body { font-family: Tahoma, system-ui, sans-serif; }
         .prose pre { background: #1e293b; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; direction: ltr; text-align: left; }
         .prose code { font-family: Consolas, monospace; color: #38bdf8; }
+        .theme-light { background: #f1f5f9 !important; color: #0f172a !important; }
+        .theme-light .bg-slate-950 { background-color: #e2e8f0 !important; }
+        .theme-light .bg-slate-900 { background-color: #f8fafc !important; }
+        .theme-light .bg-slate-800 { background-color: #e2e8f0 !important; }
+        .theme-light .border-slate-800, .theme-light .border-slate-700 { border-color: #cbd5e1 !important; }
+        .theme-light .text-slate-100, .theme-light .text-white { color: #0f172a !important; }
+        .theme-light .text-slate-400, .theme-light .text-slate-500 { color: #475569 !important; }
+        .theme-light input, .theme-light textarea, .theme-light select { color: #0f172a; }
+        .theme-light .prose { color: #1e293b; }
+        .sidebar-transition { transition: width 180ms ease; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 h-screen flex overflow-hidden" x-data="chatApp()">
+<body class="bg-slate-900 text-slate-100 h-screen flex overflow-hidden" x-data="chatApp()" @keydown.escape.window="showSettings = false; openSessionMenuId = null">
 
-    <!-- سایدبار راست: تاریخچه چت‌ها -->
-    <aside class="w-64 bg-slate-950 border-l border-slate-800 flex flex-col">
-        <div class="p-4 border-b border-slate-800 flex justify-between items-center">
-            <span class="font-bold text-sky-400" x-text="settings.assistant_name"></span>
-            <button @click="createNewSession()" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded text-sm">+ چت جدید</button>
+    <!-- نوار کناری راست: تاریخچه نشست‌ها و دسترسی‌های سریع -->
+    <aside class="sidebar-transition shrink-0 bg-slate-950 border-l border-slate-800 flex flex-col"
+           :class="sidebarCollapsed ? 'w-16' : 'w-72'">
+        <div class="min-h-16 p-3 border-b border-slate-800 flex items-center gap-2">
+            <div class="h-10 w-10 shrink-0 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
+                <img x-show="profile.avatar_url" :src="profile.avatar_url" alt="تصویر پروفایل" class="h-full w-full object-cover">
+                <span x-show="!profile.avatar_url" aria-hidden="true" class="text-xl">🤖</span>
+            </div>
+            <div class="min-w-0 flex-1" x-show="!sidebarCollapsed">
+                <div class="font-bold text-sky-400 text-sm truncate" x-text="settings.assistant_name"></div>
+                <div class="text-[11px] text-slate-500 truncate" x-text="profile.display_name"></div>
+            </div>
+            <button @click="toggleSidebar()" type="button"
+                    :aria-label="sidebarCollapsed ? 'باز کردن نوار کناری' : 'بستن نوار کناری'"
+                    :title="sidebarCollapsed ? 'باز کردن نوار کناری' : 'بستن نوار کناری'"
+                    class="shrink-0 rounded-lg p-2 text-slate-400 hover:text-white hover:bg-slate-800">
+                <span x-text="sidebarCollapsed ? '◀' : '▶'"></span>
+            </button>
         </div>
 
         <div class="flex-1 overflow-y-auto p-2 space-y-1">
             <template x-for="session in sessions" :key="session.id">
                 <div class="relative flex items-center gap-1 rounded transition"
                      :class="currentSessionId === session.id ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900'">
-                    <template x-if="editingSessionId === session.id">
-                        <div class="flex-1 flex items-center gap-1 px-2 py-1">
+                    <template x-if="editingSessionId === session.id && !sidebarCollapsed">
+                        <div class="flex-1 flex items-center gap-1 px-1 py-1">
                             <input type="text" x-model="editingSessionTitle"
                                    @keydown.enter.prevent="saveSessionRename()"
                                    @keydown.escape.stop="cancelSessionRename()"
@@ -40,38 +64,31 @@
                                     class="px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white">×</button>
                         </div>
                     </template>
-                    <template x-if="editingSessionId !== session.id">
+                    <template x-if="editingSessionId !== session.id || sidebarCollapsed">
                         <div class="flex-1 min-w-0 flex items-center">
                             <button @click="selectSession(session.id)"
                                     :class="currentSessionId === session.id ? 'text-white' : 'text-slate-400 hover:text-white'"
                                     class="flex-1 min-w-0 text-right px-3 py-2 text-sm truncate"
                                     :title="session.title">
-                                <span x-text="session.title"></span>
+                                <span x-show="!sidebarCollapsed" x-text="session.title"></span>
+                                <span x-show="sidebarCollapsed" aria-hidden="true">◉</span>
                             </button>
-                            <div class="relative shrink-0">
+                            <div class="relative shrink-0" x-show="!sidebarCollapsed">
                                 <button @click.stop="toggleSessionMenu(session.id)" type="button"
                                         :aria-expanded="openSessionMenuId === session.id"
                                         :aria-label="'عملیات نشست ' + session.title"
                                         title="عملیات نشست"
-                                        class="px-2 py-2 text-slate-500 hover:text-white rounded">
-                                    ⋯
-                                </button>
+                                        class="px-2 py-2 text-slate-500 hover:text-white rounded">⋯</button>
                                 <div x-show="openSessionMenuId === session.id" @click.outside="openSessionMenuId = null"
                                      x-cloak
                                      class="absolute left-0 top-full z-30 mt-1 w-48 rounded-lg border border-slate-700 bg-slate-900 py-1 shadow-xl">
                                     <button @click="startSessionRename(session)" type="button"
-                                            class="w-full px-3 py-2 text-right text-sm text-slate-200 hover:bg-slate-800">
-                                        ✏️ تغییر نام
-                                    </button>
+                                            class="w-full px-3 py-2 text-right text-sm text-slate-200 hover:bg-slate-800">✏️ تغییر نام</button>
                                     <div class="my-1 border-t border-slate-800"></div>
                                     <button type="button" disabled title="به‌زودی فعال می‌شود"
-                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">
-                                        ↗️ اشتراک‌گذاری / خروجی گرفتن
-                                    </button>
+                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">↗️ اشتراک‌گذاری / خروجی گرفتن</button>
                                     <button type="button" disabled title="به‌زودی فعال می‌شود"
-                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">
-                                        🔗 کپی شناسه / URL نشست
-                                    </button>
+                                            class="w-full cursor-not-allowed px-3 py-2 text-right text-sm text-slate-500 opacity-60">🔗 کپی شناسه / URL نشست</button>
                                 </div>
                             </div>
                         </div>
@@ -80,16 +97,39 @@
             </template>
         </div>
 
-        <div class="p-3 border-t border-slate-800">
-            <button @click="showSettings = true" class="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 py-2 rounded text-sm">
-                <span>⚙️ تنظیمات و ماژول‌ها</span>
+        <!-- سه کنترل پایینی: چت جدید، تنظیمات مدل‌ها، پروفایل و تنظیمات برنامه -->
+        <div class="p-2 border-t border-slate-800 space-y-2">
+            <button @click="createNewSession()" type="button"
+                    class="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 text-white py-2.5 rounded-lg text-sm font-bold"
+                    :title="sidebarCollapsed ? 'چت جدید' : ''">
+                <span class="text-lg">＋</span><span x-show="!sidebarCollapsed">چت جدید</span>
             </button>
+            <button @click="openAppSettings('persona')" type="button"
+                    class="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-lg text-sm"
+                    :title="sidebarCollapsed ? 'تنظیمات مدل‌ها' : ''">
+                <span>🧠</span><span x-show="!sidebarCollapsed">تنظیمات مدل‌ها</span>
+            </button>
+            <div class="flex items-center gap-1">
+                <button @click="openAppSettings('profile')" type="button"
+                        class="min-w-0 flex-1 flex items-center gap-2 rounded-lg bg-slate-800 hover:bg-slate-700 p-2 text-right"
+                        :title="profile.username">
+                    <div class="h-8 w-8 shrink-0 rounded-full overflow-hidden bg-slate-700 flex items-center justify-center">
+                        <img x-show="profile.avatar_url" :src="profile.avatar_url" alt="" class="h-full w-full object-cover">
+                        <span x-show="!profile.avatar_url" aria-hidden="true">👤</span>
+                    </div>
+                    <span x-show="!sidebarCollapsed" class="min-w-0 truncate text-xs text-slate-200" x-text="profile.username"></span>
+                </button>
+                <button @click="toggleAppSettings('general')" type="button"
+                        :aria-expanded="showSettings && activeTab === 'general'"
+                        title="تنظیمات برنامه" aria-label="تنظیمات برنامه"
+                        class="shrink-0 rounded-lg bg-slate-800 hover:bg-slate-700 p-3 text-slate-200">⚙️</button>
+            </div>
         </div>
     </aside>
 
     <!-- بخش اصلی چت -->
-    <main class="flex-1 flex flex-col bg-slate-900">
-        <header class="h-14 border-b border-slate-800 px-6 flex items-center justify-between text-xs text-slate-400">
+    <main class="min-w-0 flex-1 flex flex-col bg-slate-900">
+        <header class="h-14 shrink-0 border-b border-slate-800 px-6 flex items-center justify-between text-xs text-slate-400">
             <div>سرویس‌دهنده فعال: <span class="text-emerald-400 font-bold uppercase" x-text="settings.active_provider"></span></div>
             <div>مدل انتخاب‌شده: <span class="text-sky-400" x-text="settings.providers_config[settings.active_provider]?.model || 'انتخاب نشده'"></span></div>
         </header>
@@ -113,7 +153,7 @@
             <form @submit.prevent="sendMessage()" class="max-w-4xl mx-auto flex gap-3">
                 <input type="text" x-model="inputMessage" :disabled="isLoading"
                        placeholder="پیام خود را بنویسید (کدنویسی، تحلیل متن، سوال روزمره)..."
-                       class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-sky-500">
+                       class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-sky-500">
                 <button type="submit" :disabled="isLoading || !inputMessage.trim()"
                         class="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 px-6 py-3 rounded-lg text-sm font-bold">
                     <span x-text="isLoading ? 'در حال پردازش...' : 'ارسال'"></span>
@@ -122,92 +162,185 @@
         </div>
     </main>
 
-    <!-- پنجره تنظیمات ماژولار -->
-    <div x-show="showSettings" class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" style="display: none;">
-        <div class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <!-- پنجره یکپارچه تنظیمات برنامه -->
+    <div x-show="showSettings" x-cloak @click.self="showSettings = false"
+         class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+        <section class="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl">
             <div class="p-4 border-b border-slate-800 flex justify-between items-center">
-                <h2 class="font-bold text-lg">تنظیمات سیستم و آداپتورها</h2>
-                <button @click="showSettings = false" class="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div class="flex border-b border-slate-800 text-sm bg-slate-950">
-                <button @click="activeTab = 'persona'" :class="activeTab === 'persona' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">شخصیت و پرامپت</button>
-                <button @click="activeTab = 'providers'" :class="activeTab === 'providers' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">مدل‌ها و آداپتورها</button>
-                <button @click="activeTab = 'knowledge'" :class="activeTab === 'knowledge' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">اسناد و حافظه (فاز ۳)</button>
-                <button @click="activeTab = 'tools'" :class="activeTab === 'tools' ? 'border-b-2 border-sky-500 text-sky-400' : 'text-slate-400'" class="px-4 py-3">ابزارها و گیت‌هاب (فاز ۴)</button>
+                <div>
+                    <h2 class="font-bold text-lg">تنظیمات برنامه</h2>
+                    <p class="text-xs text-slate-500 mt-1">پروفایل، ظاهر و پیکربندی دستیار</p>
+                </div>
+                <button @click="showSettings = false" type="button" aria-label="بستن تنظیمات" class="text-slate-400 hover:text-white text-xl">✕</button>
             </div>
 
-            <div class="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
-                <div x-show="activeTab === 'persona'" class="space-y-4">
-                    <div>
-                        <label class="block text-slate-400 mb-1">نام دستیار واحد:</label>
-                        <input type="text" x-model="settings.assistant_name" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+            <nav class="flex flex-wrap gap-1 p-2 border-b border-slate-800 bg-slate-950 text-xs">
+                <button @click="activeTab = 'profile'" :class="activeTab === 'profile' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">پروفایل</button>
+                <button @click="activeTab = 'appearance'" :class="activeTab === 'appearance' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">ظاهر و پوسته</button>
+                <button @click="activeTab = 'general'" :class="activeTab === 'general' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">عمومی</button>
+                <button @click="activeTab = 'support'" :class="activeTab === 'support' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">پشتیبانی</button>
+                <button @click="activeTab = 'persona'" :class="activeTab === 'persona' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">شخصیت و پرامپت</button>
+                <button @click="activeTab = 'providers'" :class="activeTab === 'providers' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">مدل‌ها و Providerها</button>
+                <button @click="activeTab = 'knowledge'" :class="activeTab === 'knowledge' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">اسناد و حافظه</button>
+                <button @click="activeTab = 'tools'" :class="activeTab === 'tools' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">ابزارها و اتصال‌ها</button>
+            </nav>
+
+            <div class="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
+                <!-- پروفایل محلی برنامه -->
+                <div x-show="activeTab === 'profile'" class="space-y-5">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="h-24 w-24 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center">
+                            <img x-show="profile.avatar_url" :src="profile.avatar_url" alt="آواتار پروفایل" class="h-full w-full object-cover">
+                            <span x-show="!profile.avatar_url" class="text-4xl" aria-hidden="true">👤</span>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="font-semibold">تصویر پروفایل</div>
+                            <p class="text-xs text-slate-500">PNG، JPG یا WebP؛ حداکثر ۲ مگابایت و ۴۰۹۶×۴۰۹۶ پیکسل. تصویر برای نمایش به ۲۵۶×۲۵۶ تبدیل می‌شود.</p>
+                            <div class="flex flex-wrap gap-2">
+                                <label class="cursor-pointer rounded bg-sky-700 hover:bg-sky-600 px-3 py-2 text-xs">
+                                    انتخاب و بارگذاری تصویر
+                                    <input x-ref="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAvatar($event)" class="hidden">
+                                </label>
+                                <button @click="removeAvatar()" type="button" :disabled="!profile.avatar_configured"
+                                        class="rounded bg-rose-900/70 hover:bg-rose-800 disabled:opacity-40 px-3 py-2 text-xs">حذف تصویر</button>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-slate-400 mb-1">دستورالعمل سیستم (System Prompt) برای تمام مدل‌ها:</label>
-                        <textarea rows="4" x-model="settings.system_prompt" class="w-full bg-slate-950 border border-slate-700 rounded p-2"></textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="block">نام نمایشی
+                            <input x-model="profileDraft.display_name" maxlength="100" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
+                        </label>
+                        <label class="block">نام کاربری
+                            <input x-model="profileDraft.username" maxlength="50" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <label class="block md:col-span-2">ایمیل
+                            <input x-model="profileDraft.email" type="email" maxlength="254" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 p-3 space-y-2">
+                        <div class="font-semibold">گذرواژه</div>
+                        <p class="text-xs text-slate-500">این نسخه هنوز سیستم ورود و احراز هویت کاربر ندارد؛ بنابراین گذرواژه‌ای ذخیره نمی‌شود. بخش تغییر گذرواژه پس از پیاده‌سازی امن ورود فعال خواهد شد.</p>
+                        <input type="password" disabled placeholder="در نسخه فعلی غیرفعال است" class="w-full bg-slate-950 border border-slate-700 rounded p-2 opacity-50">
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button @click="cancelProfileEdit()" type="button" class="rounded bg-slate-700 hover:bg-slate-600 px-4 py-2">انصراف</button>
+                        <button @click="saveProfile()" type="button" :disabled="profileSaving"
+                                class="rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 px-4 py-2">ذخیره پروفایل</button>
+                    </div>
+                </div>
+
+                <!-- ظاهر برنامه -->
+                <div x-show="activeTab === 'appearance'" class="space-y-4">
+                    <h3 class="font-semibold">پوسته رنگی برنامه</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button @click="setTheme('dark')" :class="theme === 'dark' ? 'border-sky-500 ring-1 ring-sky-500' : 'border-slate-700'"
+                                class="rounded-xl border p-4 text-right bg-slate-950">
+                            <div class="h-16 rounded-lg bg-slate-800 border border-slate-700 mb-3"></div>
+                            <span class="font-semibold">تاریک</span><span class="block text-xs text-slate-500 mt-1">پوسته فعلی</span>
+                        </button>
+                        <button @click="setTheme('light')" :class="theme === 'light' ? 'border-sky-500 ring-1 ring-sky-500' : 'border-slate-700'"
+                                class="rounded-xl border p-4 text-right bg-slate-100 text-slate-900">
+                            <div class="h-16 rounded-lg bg-white border border-slate-300 mb-3"></div>
+                            <span class="font-semibold">روشن</span><span class="block text-xs text-slate-500 mt-1">پس‌زمینه روشن</span>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500">انتخاب پوسته در همین مرورگر ذخیره می‌شود و با بازکردن دوباره برنامه باقی می‌ماند.</p>
+                </div>
+
+                <div x-show="activeTab === 'general'" class="space-y-3">
+                    <h3 class="font-semibold">تنظیمات عمومی</h3>
+                    <div class="rounded-lg border border-slate-700 p-4">
+                        <div class="font-medium mb-1">نوار کناری</div>
+                        <p class="text-xs text-slate-500 mb-3">نمایش کامل یا جمع‌شده نوار تاریخچه گفتگوها.</p>
+                        <button @click="toggleSidebar()" type="button" class="rounded bg-slate-700 hover:bg-slate-600 px-3 py-2 text-xs"
+                                x-text="sidebarCollapsed ? 'باز کردن نوار کناری' : 'جمع کردن نوار کناری'"></button>
+                    </div>
+                    <div class="rounded-lg border border-slate-700 p-4">
+                        <div class="font-medium">ذخیره‌سازی محلی</div>
+                        <p class="text-xs text-slate-500 mt-1">گفتگوها و اطلاعات پروفایل در پایگاه داده SQLite همین برنامه ذخیره می‌شوند.</p>
+                    </div>
+                </div>
+
+                <div x-show="activeTab === 'support'" class="rounded-lg border border-dashed border-slate-700 p-6 text-center space-y-2">
+                    <div class="text-2xl">💬</div>
+                    <h3 class="font-semibold">ارتباط با ما / پشتیبانی</h3>
+                    <p class="text-xs text-slate-500">این بخش در مرحله بعد به سیستم پشتیبانی متصل خواهد شد.</p>
+                </div>
+
+                <div x-show="activeTab === 'persona'" class="space-y-4">
+                    <label class="block">نام دستیار
+                        <input type="text" x-model="settings.assistant_name" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
+                    </label>
+                    <label class="block">دستورالعمل سیستم (System Prompt)
+                        <textarea rows="5" x-model="settings.system_prompt" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2"></textarea>
+                    </label>
+                    <div class="flex justify-end">
+                        <button @click="saveSettings()" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded text-sm font-bold">ذخیره تنظیمات دستیار</button>
                     </div>
                 </div>
 
                 <div x-show="activeTab === 'providers'" class="space-y-4">
-                    <div>
-                        <label class="block text-slate-400 mb-1">سرویس‌دهنده فعال (Provider):</label>
-                        <select x-model="settings.active_provider" @change="onProviderChange()" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
+                    <label class="block">سرویس‌دهنده فعال (Provider)
+                        <select x-model="settings.active_provider" @change="onProviderChange()" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
                             <template x-for="provider in availableProviders" :key="provider.id">
                                 <option :value="provider.id" x-text="provider.name"></option>
                             </template>
                         </select>
-                    </div>
+                    </label>
 
                     <div x-show="settings.active_provider === 'ollama'" class="space-y-2">
-                        <label class="block text-slate-400 mb-1">مدل نصب‌شده در Ollama:</label>
+                        <label class="block">مدل نصب‌شده در Ollama</label>
                         <div class="flex gap-2">
                             <select x-model="settings.providers_config.ollama.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
                                 <option value="">انتخاب مدل محلی</option>
-                                <template x-for="model in availableModels" :key="model">
-                                    <option :value="model" x-text="model"></option>
-                                </template>
+                                <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                             <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
                         </div>
-                        <p class="text-xs text-slate-500">فهرست مستقیماً از Ollama دریافت می‌شود. ابتدا مدل را با دستور ollama pull نصب کنید.</p>
                     </div>
 
                     <div x-show="settings.active_provider === 'openrouter'" class="space-y-2">
-                        <label class="block text-slate-400 mb-1">کلید API برای OpenRouter:</label>
-                        <input type="password" x-model="settings.providers_config.openrouter.api_key" placeholder="sk-or-v1-..." autocomplete="off" class="w-full bg-slate-950 border border-slate-700 rounded p-2">
-                        <p class="text-xs text-slate-500" x-show="settings.providers_config.openrouter.api_key_configured">کلید API قبلی ذخیره شده است؛ برای حفظ آن، این فیلد را خالی بگذارید.</p>
-                        <label class="block text-slate-400 mb-1">مدل رایگان OpenRouter:</label>
-                        <div class="flex gap-2">
-                            <select x-model="settings.providers_config.openrouter.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
+                        <label class="block">کلید API برای OpenRouter
+                            <input type="password" x-model="settings.providers_config.openrouter.api_key" placeholder="sk-or-v1-..." autocomplete="off" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
+                        </label>
+                        <p class="text-xs text-slate-500" x-show="settings.providers_config.openrouter.api_key_configured">کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذار.</p>
+                        <label class="block">مدل OpenRouter
+                            <select x-model="settings.providers_config.openrouter.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
                                 <template x-for="model in availableModels" :key="model">
-                                    <option :value="model" x-text="model === 'openrouter/free' ? 'انتخاب مدل با OpenRouter (رایگان)' : model"></option>
+                                    <option :value="model" x-text="model === 'openrouter/free' ? 'انتخاب خودکار مدل رایگان' : model"></option>
                                 </template>
                             </select>
-                            <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
-                        </div>
-                        <p class="text-xs text-slate-500">گزینه انتخاب خودکار، مدل رایگان مناسب را در هر درخواست از طرف OpenRouter انتخاب می‌کند.</p>
+                        </label>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌ها ↻</button>
                     </div>
-
                     <p x-show="modelsLoading" class="text-xs text-sky-400">در حال دریافت فهرست مدل‌ها...</p>
                     <p x-show="modelsError" class="text-xs text-rose-400" x-text="modelsError"></p>
-                    <p class="text-xs text-slate-500">مدل انتخاب‌شده فقط برای Provider فعال استفاده می‌شود؛ تنظیمات Ollama و OpenRouter از هم مستقل‌اند.</p>
+                    <div class="flex justify-end">
+                        <button @click="saveSettings()" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded text-sm font-bold">ذخیره تنظیمات مدل‌ها</button>
+                    </div>
                 </div>
 
                 <div x-show="activeTab === 'knowledge'" class="text-slate-400 space-y-2">
-                    <p>در این بخش اسناد PDF و متنی خود را برای پردازش توسط مدل <code class="text-sky-400">nomic-embed-text</code> بارگذاری خواهید کرد.</p>
-                    <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">ماژول ChromaDB در فاز ۳ به این بخش متصل می‌شود.</div>
+                    <h3 class="font-semibold text-slate-200">اسناد و حافظه</h3>
+                    <p>بارگذاری اسناد و حافظه بلندمدت در فاز دیتابیس و مدیریت حافظه پیاده‌سازی خواهد شد.</p>
+                    <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">ماژول پایگاه دانش در مرحله بعد متصل می‌شود.</div>
                 </div>
 
                 <div x-show="activeTab === 'tools'" class="text-slate-400 space-y-2">
-                    <p>اتصال کانکتورهای خارجی (مانند GitHub Token یا جستجوی وب) در این بخش قرار می‌گیرد.</p>
-                    <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">ماژول MCP / Function Calling در فاز ۴ به این بخش متصل می‌شود.</div>
+                    <h3 class="font-semibold text-slate-200">ابزارها و اتصال‌ها</h3>
+                    <p>اتصال GitHub، MCP، پوشه‌های سیستم و Discord در فاز کانکتورها توسعه داده می‌شود.</p>
+                    <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">مدیریت کانکتورها هنوز فعال نشده است.</div>
                 </div>
             </div>
-
-            <div class="p-4 border-t border-slate-800 flex justify-end gap-2">
-                <button @click="saveSettings()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded text-sm font-bold">ذخیره تغییرات</button>
-            </div>
-        </div>
+        </section>
     </div>
 
     <script src="/static/app.js"></script>
