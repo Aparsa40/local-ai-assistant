@@ -303,6 +303,20 @@ function chatApp() {
             }, 50);
         },
 
+        handleMessageKeydown(event) {
+            // Do not submit while an IME (including Persian input) is composing text.
+            if (event.isComposing || event.keyCode === 229) return;
+
+            // Shift+Enter (and Alt+Enter) keep the native textarea newline behavior.
+            if ((event.shiftKey || event.altKey) && !event.ctrlKey && !event.metaKey) return;
+
+            // Enter and Ctrl/Cmd+Enter submit the message instead of inserting a newline.
+            event.preventDefault();
+            if (!this.isLoading && this.inputMessage.trim()) {
+                this.sendMessage();
+            }
+        },
+
         async sendMessage() {
             if (!this.inputMessage.trim() || this.isLoading) return;
             const userText = this.inputMessage;
