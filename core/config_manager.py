@@ -107,11 +107,14 @@ class ConfigManager:
             "base_url", "https://api.cloudflare.com/client/v4"
         )
         providers["cloudflare_workers_ai"].setdefault("account_id", "")
-        providers["cloudflare_workers_ai"].setdefault("model", "@cf/zai-org/glm-4.7-flash")
+        if not providers["cloudflare_workers_ai"].get("model"):
+            providers["cloudflare_workers_ai"]["model"] = "@cf/zai-org/glm-4.7-flash"
         providers["groq"].setdefault("base_url", "https://api.groq.com/openai/v1")
-        providers["groq"].setdefault("model", "openai/gpt-oss-20b")
+        if not providers["groq"].get("model"):
+            providers["groq"]["model"] = "openai/gpt-oss-20b"
         providers["cohere"].setdefault("base_url", "https://api.cohere.com")
-        providers["cohere"].setdefault("model", "command-r7b-12-2024")
+        if not providers["cohere"].get("model"):
+            providers["cohere"]["model"] = "command-r7b-12-2024"
         config.setdefault("routing_mode", "manual")
         config.setdefault("assistant_name", "Local AI Assistant")
         config.setdefault("system_prompt", "You are a helpful assistant.")
