@@ -8,8 +8,10 @@ All notable changes are documented here. The project follows Semantic Versioning
 - Start a fresh empty chat session on every app launch while keeping previous sessions available in the sidebar.
 - Versioned settings migration that defaults new and legacy installations to OpenRouter with `openrouter/free`, while preserving later user provider selections.
 - Google AI Studio/Gemini provider using the Interactions API with streaming and live model discovery.
-- Hugging Face Inference Providers adapter with live discovery of model/provider IDs currently marked free.
-- Provider settings panels and secret-safe key/token storage for Google AI Studio and Hugging Face.
+- Cloudflare Workers AI, Groq, and Cohere provider adapters with streaming and live model discovery.
+- Provider/model capability metadata for task suitability, context windows, tool calling, streaming, and free-tier quota semantics.
+- Provider settings panels and secret-safe API-key/token storage for Cloudflare, Groq, and Cohere.
+- Versioned settings migration that retires Hugging Face and migrates an active Hugging Face selection to OpenRouter.
 
 ### Added
 - Collapsible right-hand conversation sidebar with persistent expanded/collapsed preference.
