@@ -1,87 +1,51 @@
 import pytest
 
-from core.providers.google_ai_studio_provider import FREE_TIER_MODEL_IDS, GoogleAIStudioProvider
-from core.providers.huggingface_provider import HuggingFaceProvider
+from core.providers.cloudflare_provider import CloudflareWorkersAIProvider
+from core.providers.cohere_provider import CohereProvider
+from core.providers.groq_provider import GroqProvider
+from core.providers.capabilities import get_provider_capabilities
 
 
-def test_gemini_interactions_text_delta_is_extracted():
+def test_cloudflare_stream_response_extraction():
+    assert CloudflareWorkersAIProvider._extract_text({"response": "سلام"}) == "سلام"
+    assert CloudflareWorkersAIProvider._extract_text({"result": {"response": "Hello"}}) == "Hello"
+
+
+def test_cloudflare_requires_account_and_token():
+    provider = CloudflareWorkersAIProvider(api_key="", account_id="")
+    with pytest.raises(RuntimeError, match="token is missing"):
+        provider._headers()
+    provider = CloudflareWorkersAIProvider(api_key="token", account_id="")
+    with pytest.raises(RuntimeError, match="Account ID is missing"):
+        provider._headers()
+
+
+def test_cohere_content_delta_extraction():
     event = {
-        "event_type": "step.delta",
-        "delta": {"type": "text", "text": "سلام"},
+        "type": "content-delta",
+        "delta": {"message": {"content": {"text": "سلام"}}},
     }
-    assert GoogleAIStudioProvider._extract_stream_content(event) == "سلام"
+    assert CohereProvider._extract_text(event) == "سلام"
 
 
-def test_gemini_non_text_interactions_events_are_ignored():
-    assert GoogleAIStudioProvider._extract_stream_content(
-        {"event_type": "step.delta", "delta": {"type": "thought", "signature": "abc"}}
-    ) == ""
+def test_cohere_ignores_non_text_events():
+    assert CohereProvider._extract_text({"type": "message-start"}) == ""
 
 
-def test_gemini_input_preserves_system_and_chat_roles():
-    messages = [
-        {"role": "system", "content": "Be concise"},
-        {"role": "user", "content": "Hi"},
-        {"role": "assistant", "content": "Hello"},
-    ]
-    prompt = GoogleAIStudioProvider._build_input(messages)
-    assert GoogleAIStudioProvider._system_instruction(messages) == "Be concise"
-    assert "User: Hi" in prompt
-    assert "Assistant: Hello" in prompt
-    assert "Be concise" not in prompt
+def test_groq_recommended_models_are_current_and_task_suitable():
+    from core.providers.groq_provider import RECOMMENDED_MODELS
+    assert "openai/gpt-oss-20b" in RECOMMENDED_MODELS
+    assert "openai/gpt-oss-120b" in RECOMMENDED_MODELS
+    assert "qwen/qwen3.8-27b" in RECOMMENDED_MODELS
 
 
-def test_huggingface_catalog_returns_only_live_free_provider_model_ids():
-    catalog = {
-        "data": [
-            {
-                "id": "Qwen/Qwen3-4B",
-                "providers": [
-                    {"provider": "novita", "status": "live", "is_free": True},
-                    {"provider": "together", "status": "live", "is_free": False},
-                ],
-            },
-            {
-                "id": "meta-llama/Llama-3",
-                "providers": [{"provider": "replicate", "status": "error", "is_free": True}],
-            },
-        ]
-    }
-    assert HuggingFaceProvider._free_model_ids(catalog) == ["Qwen/Qwen3-4B:novita"]
+def test_provider_capabilities_include_quota_and_model_metadata():
+    data = get_provider_capabilities("cloudflare_workers_ai")
+    assert data["quota"]["allowance"] == "10,000 Neurons/day"
+    assert data["models"]["@cf/zai-org/glm-4.7-flash"]["context_window"] == 131072
+    assert data["models"]["@cf/zai-org/glm-4.7-flash"]["tool_calling"] is True
 
 
-def test_huggingface_stream_delta_is_extracted():
-    event = {"choices": [{"delta": {"content": "Hello"}}]}
-    assert HuggingFaceProvider._extract_stream_content(event) == "Hello"
-
-
-def test_huggingface_stream_error_is_reported():
-    with pytest.raises(RuntimeError, match="quota exceeded"):
-        HuggingFaceProvider._extract_stream_content({"error": {"message": "quota exceeded"}})
-
-
-
-def test_gemini_free_tier_catalog_is_explicit_and_known():
-    assert "gemini-3.8-flash" in FREE_TIER_MODEL_IDS
-    assert "gemini-3.1-flash-lite" in FREE_TIER_MODEL_IDS
-    assert "gemini-2.5-flash" in FREE_TIER_MODEL_IDS
-    assert "gemini-2.5-flash-lite" in FREE_TIER_MODEL_IDS
-
-
-
-def test_huggingface_catalog_normalizes_provider_ids_to_routing_suffixes():
-    catalog = {
-        "data": [
-            {
-                "id": "Qwen/Qwen3-4B",
-                "providers": [
-                    {"provider": "fireworks-ai", "status": "live", "is_free": True},
-                    {"provider": "featherless-ai", "status": "live", "is_free": True},
-                ],
-            }
-        ]
-    }
-    assert HuggingFaceProvider._free_model_ids(catalog) == [
-        "Qwen/Qwen3-4B:featherless",
-        "Qwen/Qwen3-4B:fireworks",
-    ]
+def test_capability_catalog_filters_to_live_discovered_models():
+    data = get_provider_capabilities("groq", ["openai/gpt-oss-20b"])
+    assert list(data["models"]) == ["openai/gpt-oss-20b"]
