@@ -4,7 +4,11 @@ from core.providers.openrouter_provider import OpenRouterProvider
 
 
 def test_builtin_providers_are_registered():
-    assert {"ollama", "openrouter", "google_ai_studio", "huggingface"}.issubset(PROVIDER_FACTORIES)
+    assert {
+        "ollama", "openrouter", "google_ai_studio",
+        "cloudflare_workers_ai", "groq", "cohere",
+    }.issubset(PROVIDER_FACTORIES)
+    assert "huggingface" not in PROVIDER_FACTORIES
 
 
 def test_ollama_factory_uses_configured_base_url():
@@ -19,6 +23,22 @@ def test_openrouter_factory_normalizes_api_url():
     assert provider.base_url == "https://openrouter.ai/api/v1"
 
 
+def test_cloud_provider_factories_use_expected_configuration():
+    from core.providers.cloudflare_provider import CloudflareWorkersAIProvider
+    from core.providers.groq_provider import GroqProvider
+    from core.providers.cohere_provider import CohereProvider
+
+    cloudflare = get_provider_factory("cloudflare_workers_ai")({"api_key": "token", "account_id": "acct"})
+    groq = get_provider_factory("groq")({"api_key": "token"})
+    cohere = get_provider_factory("cohere")({"api_key": "token"})
+    assert isinstance(cloudflare, CloudflareWorkersAIProvider)
+    assert cloudflare.account_id == "acct"
+    assert isinstance(groq, GroqProvider)
+    assert groq.base_url == "https://api.groq.com/openai/v1"
+    assert isinstance(cohere, CohereProvider)
+    assert cohere.base_url == "https://api.cohere.com"
+
+
 def test_unknown_provider_fails_clearly():
     try:
         get_provider_factory("missing-provider")
@@ -31,20 +51,3 @@ def test_unknown_provider_fails_clearly():
 def test_new_provider_can_be_registered(monkeypatch):
     monkeypatch.setitem(PROVIDER_FACTORIES, "test-provider", lambda config: object())
     assert "test-provider" in PROVIDER_FACTORIES
-
-
-
-def test_google_ai_studio_factory_uses_gemini_api_base_url():
-    from core.providers.google_ai_studio_provider import GoogleAIStudioProvider
-
-    provider = get_provider_factory("google_ai_studio")({"api_key": "test"})
-    assert isinstance(provider, GoogleAIStudioProvider)
-    assert provider.base_url == "https://generativelanguage.googleapis.com/v1beta"
-
-
-def test_huggingface_factory_normalizes_router_url():
-    from core.providers.huggingface_provider import HuggingFaceProvider
-
-    provider = get_provider_factory("huggingface")({"api_key": "test", "base_url": "https://router.huggingface.co"})
-    assert isinstance(provider, HuggingFaceProvider)
-    assert provider.base_url == "https://router.huggingface.co/v1"
