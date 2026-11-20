@@ -18,27 +18,14 @@ def _deep_merge(target: dict, updates: dict) -> dict:
 
 
 _SECRET_KEY_MARKERS = (
-    "api_key",
-    "access_token",
-    "refresh_token",
-    "personal_access_token",
-    "secret",
-    "password",
-    "credential",
-    "authorization",
-    "private_key",
+    "api_key", "access_token", "refresh_token", "personal_access_token",
+    "secret", "password", "credential", "authorization", "private_key",
 )
 
 
 def _is_secret_key(key: str) -> bool:
     normalized = key.lower().replace("-", "_")
-    generic_token_fields = {
-        "token",
-        "api_token",
-        "auth_token",
-        "client_token",
-        "id_token",
-    }
+    generic_token_fields = {"token", "api_token", "auth_token", "client_token", "id_token"}
     return (
         normalized in generic_token_fields
         or (normalized.endswith("_token") and not normalized.endswith("_tokens"))
@@ -83,33 +70,48 @@ def _remove_empty_secret_updates(incoming: Any, existing: Any) -> None:
 class ConfigManager:
     @staticmethod
     def _normalize(config: Dict[str, Any]) -> Dict[str, Any]:
-        # Migrate legacy installations to OpenRouter once; later user selections are preserved.
+        # Migrate legacy installations once, preserving all supported explicit selections.
         schema_version = int(config.get("settings_schema_version", 0) or 0)
         if schema_version < 2:
             if config.get("active_provider") in (None, "ollama"):
                 config["active_provider"] = "openrouter"
-            config["settings_schema_version"] = 2
+            schema_version = 2
+        if schema_version < 3:
+            # Hugging Face is intentionally retired. Keep the user's app usable by
+            # switching only the retired active provider to the known free router.
+            if config.get("active_provider") == "huggingface":
+                config["active_provider"] = "openrouter"
+            config.setdefault("providers_config", {}).pop("huggingface", None)
+            schema_version = 3
+        config["settings_schema_version"] = schema_version
         config.setdefault("active_provider", "openrouter")
         config.setdefault("providers_config", {})
         providers = config["providers_config"]
-        providers.setdefault("ollama", {})
-        providers.setdefault("openrouter", {})
-        providers.setdefault("google_ai_studio", {})
-        providers.setdefault("huggingface", {})
+        for provider_id in (
+            "ollama", "openrouter", "google_ai_studio",
+            "cloudflare_workers_ai", "groq", "cohere",
+        ):
+            providers.setdefault(provider_id, {})
         providers["ollama"].setdefault("base_url", "http://localhost:11434")
+        providers["ollama"].setdefault("model", config.get("models", {}).get("general", ""))
         providers["openrouter"].setdefault("base_url", "https://openrouter.ai/api/v1")
         providers["openrouter"]["base_url"] = providers["openrouter"]["base_url"].rstrip("/")
         if not providers["openrouter"]["base_url"].endswith("/api/v1"):
             providers["openrouter"]["base_url"] += "/api/v1"
-        providers["google_ai_studio"].setdefault("base_url", "https://generativelanguage.googleapis.com/v1beta")
-        providers["google_ai_studio"].setdefault("model", "gemini-3.8-flash")
-        providers["huggingface"].setdefault("base_url", "https://router.huggingface.co/v1")
-        providers["huggingface"]["base_url"] = providers["huggingface"]["base_url"].rstrip("/")
-        if not providers["huggingface"]["base_url"].endswith("/v1"):
-            providers["huggingface"]["base_url"] += "/v1"
-        providers["huggingface"].setdefault("model", "")
-        providers["ollama"].setdefault("model", config.get("models", {}).get("general", ""))
         providers["openrouter"].setdefault("model", "openrouter/free")
+        providers["google_ai_studio"].setdefault(
+            "base_url", "https://generativelanguage.googleapis.com/v1beta"
+        )
+        providers["google_ai_studio"].setdefault("model", "gemini-3.8-flash")
+        providers["cloudflare_workers_ai"].setdefault(
+            "base_url", "https://api.cloudflare.com/client/v4"
+        )
+        providers["cloudflare_workers_ai"].setdefault("account_id", "")
+        providers["cloudflare_workers_ai"].setdefault("model", "@cf/zai-org/glm-4.7-flash")
+        providers["groq"].setdefault("base_url", "https://api.groq.com/openai/v1")
+        providers["groq"].setdefault("model", "openai/gpt-oss-20b")
+        providers["cohere"].setdefault("base_url", "https://api.cohere.com")
+        providers["cohere"].setdefault("model", "command-r7b-12-2024")
         config.setdefault("routing_mode", "manual")
         config.setdefault("assistant_name", "Local AI Assistant")
         config.setdefault("system_prompt", "You are a helpful assistant.")
@@ -148,9 +150,7 @@ class ConfigManager:
         _deep_merge(config, incoming)
         ConfigManager._normalize(config)
         active_provider = config.get("active_provider")
-        # Import at validation time to keep configuration helpers decoupled from adapters.
         from core.providers.registry import PROVIDER_FACTORIES
-
         if active_provider not in PROVIDER_FACTORIES:
             raise ValueError(f"Unsupported provider: {active_provider}")
         ConfigManager.save_config(config)
