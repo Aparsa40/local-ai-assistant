@@ -11,6 +11,7 @@ class OpenAICompatibleChat:
         self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
         self.provider_name = provider_name
+        self.last_quota = {"status": "unknown", "source": "no API response yet"}
 
     def headers(self) -> Dict[str, str]:
         if not self.api_key:
@@ -28,6 +29,15 @@ class OpenAICompatibleChat:
                 "POST", f"{self.base_url}/chat/completions",
                 headers=self.headers(), json=payload,
             ) as response:
+                self.last_quota = {
+                    "status": "observed",
+                    "requests_remaining": response.headers.get("x-ratelimit-remaining-requests"),
+                    "requests_limit": response.headers.get("x-ratelimit-limit-requests"),
+                    "tokens_remaining": response.headers.get("x-ratelimit-remaining-tokens"),
+                    "tokens_limit": response.headers.get("x-ratelimit-limit-tokens"),
+                    "requests_reset": response.headers.get("x-ratelimit-reset-requests"),
+                    "tokens_reset": response.headers.get("x-ratelimit-reset-tokens"),
+                }
                 if response.is_error:
                     body = (await response.aread()).decode("utf-8", errors="replace")
                     raise RuntimeError(
