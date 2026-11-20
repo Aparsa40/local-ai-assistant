@@ -4,6 +4,7 @@ from typing import AsyncGenerator, Dict, List
 import httpx
 
 from .base import BaseLLMProvider
+from .capabilities import record_provider_quota
 
 
 class CohereProvider(BaseLLMProvider):
@@ -40,6 +41,19 @@ class CohereProvider(BaseLLMProvider):
             async with client.stream(
                 "POST", f"{self.base_url}/v2/chat", headers=self._headers(), json=payload
             ) as response:
+                observed = {
+                    key: response.headers.get(key)
+                    for key in (
+                        "x-ratelimit-limit", "x-ratelimit-remaining",
+                        "x-ratelimit-reset", "retry-after",
+                    )
+                    if response.headers.get(key) is not None
+                }
+                record_provider_quota("cohere", {
+                    "status": "observed" if observed else "not_exposed",
+                    "headers": observed,
+                    "monthly_remaining": None,
+                })
                 if response.is_error:
                     body = (await response.aread()).decode("utf-8", errors="replace")
                     raise RuntimeError(f"Cohere returned HTTP {response.status_code}: {body[:1600]}")
