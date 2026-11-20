@@ -438,7 +438,8 @@ function chatApp() {
                     if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
-                // Capability refresh is local metadata only; it must never trigger remote model discovery.
+                // This endpoint serves local metadata only; it does not call provider model catalogs.
+                await this.loadProviderCapabilities();
             } catch (error) {
                 this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
             } finally {
