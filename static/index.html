@@ -411,6 +411,7 @@
                         <p class="text-xs text-slate-400" x-text="'Streaming: ' + providerCapabilities.streaming + ' · Tool Calling: ' + providerCapabilities.tool_calling"></p>
                         <p class="text-xs text-slate-400" x-text="'سهمیه: ' + (providerCapabilities.quota?.allowance || 'نامشخص')"></p>
                         <p class="text-xs text-amber-400" x-text="'وضعیت سهمیه: ' + (providerCapabilities.quota?.status || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-500" x-text="'آخرین وضعیت API: ' + JSON.stringify(providerCapabilities.quota?.runtime || {})"></p>
                         <template x-for="(details, modelId) in (providerCapabilities.models || {})" :key="modelId">
                             <div class="border-t border-slate-800 pt-2 text-xs">
                                 <div class="text-sky-300" x-text="modelId"></div>
