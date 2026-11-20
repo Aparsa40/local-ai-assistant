@@ -23,6 +23,7 @@ function chatApp() {
         availableModels: [],
         modelsLoading: false,
         modelsError: '',
+        providerCapabilities: null,
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -32,7 +33,9 @@ function chatApp() {
                 ollama: { base_url: 'http://localhost:11434', model: '' },
                 openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' },
                 google_ai_studio: { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' },
-                huggingface: { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' }
+                cloudflare_workers_ai: { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' },
+                groq: { base_url: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', api_key: '' },
+                cohere: { base_url: 'https://api.cohere.com', model: 'command-r7b-12-2024', api_key: '' }
             }
         },
 
@@ -41,6 +44,7 @@ function chatApp() {
             await this.loadProfile();
             await this.loadSettings();
             await this.loadProviders();
+            await this.loadProviderCapabilities();
             await this.refreshModels();
             await this.loadSessions();
             // Keep previous conversations in the sidebar, but never reopen one automatically.
@@ -55,7 +59,9 @@ function chatApp() {
             this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
             this.settings.providers_config.google_ai_studio ||= { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' };
-            this.settings.providers_config.huggingface ||= { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' };
+            this.settings.providers_config.cloudflare_workers_ai ||= { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' };
+            this.settings.providers_config.groq ||= { base_url: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', api_key: '' };
+            this.settings.providers_config.cohere ||= { base_url: 'https://api.cohere.com', model: 'command-r7b-12-2024', api_key: '' };
             this.updateProviderKeyHints();
         },
 
@@ -63,7 +69,9 @@ function chatApp() {
             const providers = [
                 ['openrouter', 'https://openrouter.ai'],
                 ['google_ai_studio', 'https://aistudio.google.com'],
-                ['huggingface', 'https://huggingface.co/settings/tokens']
+                ['cloudflare_workers_ai', 'https://dash.cloudflare.com/'],
+                ['groq', 'https://console.groq.com/keys'],
+                ['cohere', 'https://dashboard.cohere.com/api-keys']
             ];
             for (const [id, url] of providers) {
                 const config = this.settings.providers_config[id] || {};
@@ -80,7 +88,21 @@ function chatApp() {
         },
 
         async onProviderChange() {
+            await this.loadProviderCapabilities();
             await this.refreshModels();
+        },
+
+        async loadProviderCapabilities() {
+            this.providerCapabilities = null;
+            const provider = this.settings.active_provider;
+            if (!['cloudflare_workers_ai', 'groq', 'cohere'].includes(provider)) return;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/capabilities`);
+                if (!response.ok) return;
+                this.providerCapabilities = await response.json();
+            } catch (error) {
+                console.warn('Provider capability discovery failed:', error);
+            }
         },
 
         async refreshModels() {
