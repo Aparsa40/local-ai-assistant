@@ -1,9 +1,16 @@
 import pytest
 
+from core.providers.google_ai_studio_provider import FREE_TIER_MODEL_IDS, GoogleAIStudioProvider
 from core.providers.cloudflare_provider import CloudflareWorkersAIProvider
 from core.providers.cohere_provider import CohereProvider
 from core.providers.groq_provider import GroqProvider
 from core.providers.capabilities import get_provider_capabilities
+
+
+def test_gemini_interactions_text_delta_and_free_models():
+    event = {"event_type": "step.delta", "delta": {"type": "text", "text": "سلام"}}
+    assert GoogleAIStudioProvider._extract_stream_content(event) == "سلام"
+    assert "gemini-2.5-flash" in FREE_TIER_MODEL_IDS
 
 
 def test_cloudflare_stream_response_extraction():
