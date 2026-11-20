@@ -340,7 +340,7 @@
                         <label class="block">کلید API برای OpenRouter
                             <input type="password" x-model="settings.providers_config.openrouter.api_key" placeholder="sk-or-v1-..." autocomplete="off" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
                         </label>
-                        <p class="text-xs text-slate-500" x-show="settings.providers_config.openrouter.api_key_configured">کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذار.</p>
+                        <p class="text-xs text-slate-500" x-show="settings.providers_config.openrouter.api_key_configured" data-key-hint="openrouter">کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذار.</p>
                         <label class="block">مدل OpenRouter
                             <select x-model="settings.providers_config.openrouter.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2">
                                 <template x-for="model in availableModels" :key="model">
@@ -349,6 +349,34 @@
                             </select>
                         </label>
                         <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌ها ↻</button>
+                    </div>
+                    <div x-show="settings.active_provider === 'google_ai_studio'" class="space-y-2">
+                        <label class="block">کلید API برای Google AI Studio
+                            <input type="password" x-model="settings.providers_config.google_ai_studio.api_key" autocomplete="off" placeholder="AIza..." class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <p data-key-hint="google_ai_studio" class="text-xs text-slate-500" x-show="settings.providers_config.google_ai_studio.api_key_configured">کلید ذخیره شده است.</p>
+                        <label class="block">شناسه دقیق مدل Gemini
+                            <select x-model="settings.providers_config.google_ai_studio.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                                <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
+                            </select>
+                        </label>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های قابل‌دسترسی ↻</button>
+                        <p class="text-xs text-slate-500">فقط شناسه‌های مدل‌های دارای Free Tier طبق فهرست رسمی گوگل نمایش داده می‌شوند و با API حساب شما تطبیق داده می‌شوند. سهمیه و دسترسی نهایی به پروژه و محدودیت‌های حساب بستگی دارد.</p>
+                    </div>
+
+                    <div x-show="settings.active_provider === 'huggingface'" class="space-y-2">
+                        <label class="block">توکن دسترسی Hugging Face
+                            <input type="password" x-model="settings.providers_config.huggingface.api_key" autocomplete="off" placeholder="hf_..." class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <p data-key-hint="huggingface" class="text-xs text-slate-500" x-show="settings.providers_config.huggingface.api_key_configured">توکن ذخیره شده است.</p>
+                        <label class="block">مدل رایگان و شناسه دقیق (Model ID:Provider)
+                            <select x-model="settings.providers_config.huggingface.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                                <option value="">انتخاب مدل رایگان</option>
+                                <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
+                            </select>
+                        </label>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌های رایگان ↻</button>
+                        <p class="text-xs text-slate-500">فقط مدل‌هایی نمایش داده می‌شوند که API در لحظه دریافت فهرست، حداقل یک ارائه‌دهنده رایگان برای آن‌ها گزارش کند؛ این وضعیت ممکن است تغییر کند.</p>
                     </div>
                     <p x-show="modelsLoading" class="text-xs text-sky-400">در حال دریافت فهرست مدل‌ها...</p>
                     <p x-show="modelsError" class="text-xs text-rose-400" x-text="modelsError"></p>

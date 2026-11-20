@@ -16,6 +16,8 @@ def test_legacy_settings_are_migrated_and_openrouter_defaults_to_free_router(tmp
 
     config = ConfigManager.load_config()
 
+    assert config["active_provider"] == "openrouter"
+    assert config["settings_schema_version"] == 2
     assert config["providers_config"]["ollama"]["model"] == "llama3.2:1b"
     assert config["providers_config"]["openrouter"]["model"] == "openrouter/free"
     assert config["providers_config"]["openrouter"]["base_url"] == "https://openrouter.ai/api/v1"
@@ -107,3 +109,15 @@ def test_unregistered_provider_cannot_be_activated(tmp_path, monkeypatch):
         assert "Unsupported provider" in str(exc)
     else:
         raise AssertionError("An unregistered provider must not be activated")
+
+
+
+def test_versioned_settings_preserve_an_explicit_ollama_selection():
+    config = ConfigManager._normalize({
+        "settings_schema_version": 2,
+        "active_provider": "ollama",
+        "providers_config": {"ollama": {"model": "qwen2.5:1.5b"}},
+    })
+
+    assert config["active_provider"] == "ollama"
+    assert config["providers_config"]["ollama"]["model"] == "qwen2.5:1.5b"
