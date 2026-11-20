@@ -133,3 +133,21 @@ def test_versioned_settings_preserve_an_explicit_ollama_selection():
     })
     assert config["active_provider"] == "ollama"
     assert config["providers_config"]["ollama"]["model"] == "qwen2.5:1.5b"
+
+
+
+def test_empty_cloud_provider_models_are_restored_to_safe_defaults():
+    config = ConfigManager._normalize({
+        "settings_schema_version": 3,
+        "active_provider": "openrouter",
+        "providers_config": {
+            "cloudflare_workers_ai": {"model": "", "api_key": "", "account_id": ""},
+            "groq": {"model": "", "api_key": ""},
+            "cohere": {"model": "", "api_key": ""},
+        },
+    })
+
+    providers = config["providers_config"]
+    assert providers["cloudflare_workers_ai"]["model"] == "@cf/zai-org/glm-4.7-flash"
+    assert providers["groq"]["model"] == "openai/gpt-oss-20b"
+    assert providers["cohere"]["model"] == "command-r7b-12-2024"
