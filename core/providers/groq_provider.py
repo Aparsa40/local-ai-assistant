@@ -4,6 +4,7 @@ import httpx
 
 from .base import BaseLLMProvider
 from .openai_compatible import OpenAICompatibleChat
+from .capabilities import record_provider_quota
 
 
 # Current general-purpose models selected for their published context and tool support.
@@ -26,8 +27,11 @@ class GroqProvider(BaseLLMProvider):
         self, messages: List[Dict[str, str]], model: str, temperature: float = 0.7
     ) -> AsyncGenerator[str, None]:
         client = OpenAICompatibleChat(self.api_key, self.base_url, "Groq")
-        async for chunk in client.stream(messages, model, temperature):
-            yield chunk
+        try:
+            async for chunk in client.stream(messages, model, temperature):
+                yield chunk
+        finally:
+            record_provider_quota("groq", client.last_quota)
 
     async def list_models(self) -> List[str]:
         if not self.api_key:
