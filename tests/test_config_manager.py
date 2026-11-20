@@ -17,12 +17,26 @@ def test_legacy_settings_are_migrated_and_openrouter_defaults_to_free_router(tmp
     config = ConfigManager.load_config()
 
     assert config["active_provider"] == "openrouter"
-    assert config["settings_schema_version"] == 2
+    assert config["settings_schema_version"] == 3
     assert config["providers_config"]["ollama"]["model"] == "llama3.2:1b"
     assert config["providers_config"]["openrouter"]["model"] == "openrouter/free"
     assert config["providers_config"]["openrouter"]["base_url"] == "https://openrouter.ai/api/v1"
     assert ConfigManager.public_config(config)["providers_config"]["openrouter"]["api_key"] == ""
     assert ConfigManager.public_config(config)["providers_config"]["openrouter"]["api_key_configured"] is True
+
+
+def test_huggingface_selection_is_migrated_to_openrouter_and_config_is_removed():
+    config = ConfigManager._normalize({
+        "settings_schema_version": 2,
+        "active_provider": "huggingface",
+        "providers_config": {
+            "huggingface": {"api_key": "retired-token", "model": "some/model"},
+            "openrouter": {"model": "openrouter/free"},
+        },
+    })
+    assert config["settings_schema_version"] == 3
+    assert config["active_provider"] == "openrouter"
+    assert "huggingface" not in config["providers_config"]
 
 
 def test_empty_api_key_update_preserves_existing_secret(tmp_path, monkeypatch):
@@ -111,13 +125,11 @@ def test_unregistered_provider_cannot_be_activated(tmp_path, monkeypatch):
         raise AssertionError("An unregistered provider must not be activated")
 
 
-
 def test_versioned_settings_preserve_an_explicit_ollama_selection():
     config = ConfigManager._normalize({
-        "settings_schema_version": 2,
+        "settings_schema_version": 3,
         "active_provider": "ollama",
         "providers_config": {"ollama": {"model": "qwen2.5:1.5b"}},
     })
-
     assert config["active_provider"] == "ollama"
     assert config["providers_config"]["ollama"]["model"] == "qwen2.5:1.5b"
