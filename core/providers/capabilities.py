@@ -1,7 +1,15 @@
 """Provider/model capability catalog used by the UI and future Architect routing.
 
-Quota figures are published plan limits, not live remaining-balance measurements.
+Quota figures are published plan limits; runtime telemetry is recorded only when APIs expose it.
 """
+
+RUNTIME_QUOTA_STATUS = {}
+
+
+def record_provider_quota(provider_id: str, status: dict) -> None:
+    """Store non-secret rate-limit telemetry from the latest provider response."""
+    RUNTIME_QUOTA_STATUS[provider_id] = dict(status)
+
 from copy import deepcopy
 
 PROVIDER_CATALOG = {
@@ -26,7 +34,7 @@ PROVIDER_CATALOG = {
                 "free_tier_eligible": True,
             },
             "@cf/google/gemma-4-26b-a4b-it": {
-                "context_window": None, "tool_calling": True, "streaming": True,
+                "context_window": None, "tool_calling": "model-dependent", "streaming": True,
                 "tasks": ["general_chat", "translation", "analysis"],
                 "recommended_for": ["translation", "general_chat"],
                 "free_tier_eligible": True,
@@ -42,7 +50,7 @@ PROVIDER_CATALOG = {
             "plan": "Free developer access (organization-specific)",
             "allowance": "Per-model RPM/RPD/TPM/TPD limits shown in Groq Console",
             "remaining": None,
-            "status": "read_from_response_headers_when_available",
+            "status": "unknown_until_first_api_response",
             "dashboard": "https://console.groq.com/settings/limits",
         },
         "models": {
@@ -107,6 +115,10 @@ def get_provider_capabilities(provider_id: str, available_models=None) -> dict:
     item = deepcopy(PROVIDER_CATALOG.get(provider_id, {}))
     if not item:
         return {}
+    if provider_id in RUNTIME_QUOTA_STATUS:
+        item["quota"]["runtime"] = deepcopy(RUNTIME_QUOTA_STATUS[provider_id])
+    else:
+        item["quota"]["runtime"] = {"status": "unknown", "message": "No recent quota telemetry available."}
     if available_models is not None:
         live = set(available_models)
         item["models"] = {
