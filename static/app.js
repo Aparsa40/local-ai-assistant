@@ -108,22 +108,42 @@ function chatApp() {
         async refreshModels() {
             this.modelsLoading = true;
             this.modelsError = '';
-            this.availableModels = [];
             const provider = this.settings.active_provider;
+            const config = this.settings.providers_config[provider] ||= {};
+            const defaultModel = config.model || '';
+
+            // Do not make a network request until the provider credentials are present.
+            const credentialsReady = provider === 'cloudflare_workers_ai'
+                ? Boolean(config.api_key && config.account_id)
+                : ['groq', 'cohere'].includes(provider)
+                    ? Boolean(config.api_key)
+                    : true;
+
+            if (!credentialsReady) {
+                this.availableModels = defaultModel ? [defaultModel] : [];
+                this.modelsError = 'برای دریافت فهرست زنده مدل‌ها، ابتدا اطلاعات اتصال این Provider را وارد کنید.';
+                this.modelsLoading = false;
+                return;
+            }
+
+            this.availableModels = defaultModel ? [defaultModel] : [];
             try {
                 const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/models`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
-                this.availableModels = data.models || [];
-                const config = this.settings.providers_config[provider] ||= {};
-                if (!this.availableModels.includes(config.model)) {
-                    config.model = this.availableModels[0] || '';
+                const discoveredModels = data.models || [];
+                this.availableModels = discoveredModels;
+                // Keep the configured default if discovery returns an empty or partial catalog.
+                if (discoveredModels.length && !discoveredModels.includes(config.model)) {
+                    config.model = discoveredModels[0];
                 }
             } catch (error) {
                 this.modelsError = error.message;
+                // Discovery is optional; never erase a working default because an API is unavailable.
+                this.availableModels = defaultModel ? [defaultModel] : [];
                 if (provider === 'openrouter') {
                     this.availableModels = ['openrouter/free'];
-                    this.settings.providers_config.openrouter.model ||= 'openrouter/free';
+                    config.model ||= 'openrouter/free';
                 }
             } finally {
                 this.modelsLoading = false;
@@ -418,7 +438,7 @@ function chatApp() {
                     if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
-                await this.loadProviderCapabilities();
+                // Capability refresh is local metadata only; it must never trigger remote model discovery.
             } catch (error) {
                 this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
             } finally {
