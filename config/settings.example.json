@@ -1,5 +1,5 @@
 {
-  "settings_schema_version": 2,
+  "settings_schema_version": 3,
   "assistant_name": "آریا (دستیار هوشمند)",
   "system_prompt": "تو یک دستیار هوشمند شخصی، دقیق و کاربردی هستی. به زبان فارسی روان و حرفه‌ای پاسخ بده. از ارائه توضیحات اضافی و حاشیه‌پردازی پرهیز کن.",
   "active_provider": "openrouter",
@@ -19,10 +19,21 @@
       "base_url": "https://generativelanguage.googleapis.com/v1beta",
       "model": "gemini-3.8-flash"
     },
-    "huggingface": {
+    "cloudflare_workers_ai": {
       "api_key": "",
-      "base_url": "https://router.huggingface.co/v1",
-      "model": ""
+      "account_id": "",
+      "base_url": "https://api.cloudflare.com/client/v4",
+      "model": "@cf/zai-org/glm-4.7-flash"
+    },
+    "groq": {
+      "api_key": "",
+      "base_url": "https://api.groq.com/openai/v1",
+      "model": "openai/gpt-oss-20b"
+    },
+    "cohere": {
+      "api_key": "",
+      "base_url": "https://api.cohere.com",
+      "model": "command-r7b-12-2024"
     }
   },
   "tools_config": {
