@@ -17,7 +17,9 @@ FastAPI (main.py)
        ├── OllamaProvider
        ├── OpenRouterProvider
        ├── GoogleAIStudioProvider
-       └── HuggingFaceProvider
+       ├── CloudflareWorkersAIProvider
+       ├── GroqProvider
+       └── CohereProvider
 ```
 
 ## Provider contract
@@ -32,7 +34,7 @@ Provider construction is delegated to `core/providers/registry.py`. The API retu
 ## Model selection and defaults
 
 - New installations and unversioned legacy settings migrate once to OpenRouter with `openrouter/free` selected.
-- The migration is versioned. Once a user explicitly chooses Ollama, Gemini, or Hugging Face, subsequent launches preserve that selection.
+- The migration is versioned. A legacy Hugging Face selection is migrated to OpenRouter because that provider has been retired; supported explicit provider selections are preserved.
 - Each provider keeps its own model ID in `providers_config.<provider>.model`.
 - Settings and provider credentials are stored locally in the ignored `config/settings.json`; public settings responses redact secrets and blank updates preserve saved credentials.
 
@@ -62,12 +64,29 @@ Each browser/app startup creates a new empty chat session. Existing sessions rem
 - Model IDs are discovered from the Google model catalog and intersected with a maintained allowlist of model IDs currently published with a free tier.
 - The free-tier allowlist must be updated when Google's pricing/model catalog changes; project-level rate limits and availability still depend on the user's account.
 
-### Hugging Face Inference Providers
+### Cloudflare Workers AI
 
-- Uses the OpenAI-compatible `https://router.huggingface.co/v1` chat-completions endpoint.
-- Authenticates with a Hugging Face user access token.
-- Model discovery reads `GET /v1/models` and offers exact `model_id:provider` choices only when a live provider reports `is_free: true`.
-- Free status can be temporary and can change between catalog refreshes and requests.
+- Uses the account-scoped Workers AI REST inference endpoint and requires an API token plus Account ID.
+- Model discovery uses the Cloudflare AI model-search endpoint and intersects the live catalog with a conservative free-plan allowlist.
+- Workers Free includes 10,000 Neurons/day. Remaining Neurons are not returned by the inference endpoint and are represented as unknown.
+
+### Groq
+
+- Uses the OpenAI-compatible Chat Completions API at `https://api.groq.com/openai/v1`.
+- Model discovery reads the authenticated `/models` catalog and filters to curated chat models.
+- Streaming uses SSE. Tool calling is supported by the selected Groq models.
+- Free-tier limits vary by organization and model; the account Limits dashboard is authoritative.
+
+### Cohere
+
+- Uses the native Cohere Chat v2 endpoint `/v2/chat` with SSE streaming.
+- Model discovery reads `/v1/models?endpoint=chat` and excludes deprecated models.
+- Trial keys are limited to 1,000 API calls/month and 20 Chat requests/minute/model. The API does not expose remaining monthly calls.
+
+### Capability metadata
+
+- `core/providers/capabilities.py` exposes context windows, task suitability, streaming, tool calling, free-tier eligibility, quota allowances, and quota-status semantics.
+- `GET /api/providers/{provider_id}/capabilities` serves the capability manifest. This is groundwork for a future Architect; automatic routing is not yet enabled.
 
 ## API endpoints
 
