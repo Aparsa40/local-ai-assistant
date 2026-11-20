@@ -179,16 +179,9 @@ async def list_providers():
 async def provider_capabilities(provider_id: str):
     if provider_id not in PROVIDER_FACTORIES:
         raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
-    config = ConfigManager.load_config().get("providers_config", {}).get(provider_id, {})
-    available_models = None
-    if provider_id in {"cloudflare_workers_ai", "groq", "cohere"}:
-        try:
-            provider = get_provider_factory(provider_id)(config)
-            available_models = await provider.list_models()
-        except Exception:
-            # Capability metadata remains useful when the provider is not configured yet.
-            available_models = None
-    return get_provider_capabilities(provider_id, available_models)
+    # This endpoint serves the local capability manifest and observed runtime quota
+    # telemetry only. Keep remote model discovery in the explicit /models endpoint.
+    return get_provider_capabilities(provider_id)
 
 
 @app.get("/api/providers/{provider_id}/models")
