@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from core.providers.google_ai_studio_provider import FREE_TIER_MODEL_IDS, GoogleAIStudioProvider
@@ -56,3 +58,17 @@ def test_provider_capabilities_include_quota_and_model_metadata():
 def test_capability_catalog_filters_to_live_discovered_models():
     data = get_provider_capabilities("groq", ["openai/gpt-oss-20b"])
     assert list(data["models"]) == ["openai/gpt-oss-20b"]
+
+
+
+def test_capability_endpoint_does_not_trigger_remote_model_discovery(monkeypatch):
+    import main
+
+    def unexpected_discovery(_config):
+        raise AssertionError("Capability metadata must not call a provider model catalog")
+
+    monkeypatch.setattr(main, "get_provider_factory", unexpected_discovery)
+    data = asyncio.run(main.provider_capabilities("groq"))
+
+    assert "openai/gpt-oss-20b" in data["models"]
+    assert data["quota"]["runtime"]["status"] == "unknown"
