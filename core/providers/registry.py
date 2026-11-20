@@ -4,7 +4,9 @@ from .base import BaseLLMProvider
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
 from .google_ai_studio_provider import GoogleAIStudioProvider
-from .huggingface_provider import HuggingFaceProvider
+from .cloudflare_provider import CloudflareWorkersAIProvider
+from .groq_provider import GroqProvider
+from .cohere_provider import CohereProvider
 
 ProviderFactory = Callable[[dict], BaseLLMProvider]
 PROVIDER_FACTORIES: Dict[str, ProviderFactory] = {}
@@ -35,9 +37,6 @@ def _openrouter(config: dict) -> BaseLLMProvider:
     )
 
 
-register_provider("ollama", _ollama)
-register_provider("openrouter", _openrouter)
-
 def _google_ai_studio(config: dict) -> BaseLLMProvider:
     return GoogleAIStudioProvider(
         api_key=config.get("api_key", ""),
@@ -45,12 +44,31 @@ def _google_ai_studio(config: dict) -> BaseLLMProvider:
     )
 
 
-def _huggingface(config: dict) -> BaseLLMProvider:
-    return HuggingFaceProvider(
+def _cloudflare_workers_ai(config: dict) -> BaseLLMProvider:
+    return CloudflareWorkersAIProvider(
         api_key=config.get("api_key", ""),
-        base_url=config.get("base_url", "https://router.huggingface.co/v1"),
+        account_id=config.get("account_id", ""),
+        base_url=config.get("base_url", "https://api.cloudflare.com/client/v4"),
     )
 
 
+def _groq(config: dict) -> BaseLLMProvider:
+    return GroqProvider(
+        api_key=config.get("api_key", ""),
+        base_url=config.get("base_url", "https://api.groq.com/openai/v1"),
+    )
+
+
+def _cohere(config: dict) -> BaseLLMProvider:
+    return CohereProvider(
+        api_key=config.get("api_key", ""),
+        base_url=config.get("base_url", "https://api.cohere.com"),
+    )
+
+
+register_provider("ollama", _ollama)
+register_provider("openrouter", _openrouter)
 register_provider("google_ai_studio", _google_ai_studio)
-register_provider("huggingface", _huggingface)
+register_provider("cloudflare_workers_ai", _cloudflare_workers_ai)
+register_provider("groq", _groq)
+register_provider("cohere", _cohere)
