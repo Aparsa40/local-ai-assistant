@@ -23,6 +23,8 @@ function chatApp() {
         availableModels: [],
         modelsLoading: false,
         modelsError: '',
+        connectionLoading: false,
+        connectionResult: null,
         providerCapabilities: null,
         settings: {
             assistant_name: 'دستیار هوشمند',
@@ -88,8 +90,39 @@ function chatApp() {
         },
 
         async onProviderChange() {
+            this.connectionResult = null;
             await this.loadProviderCapabilities();
             await this.refreshModels();
+        },
+
+        async checkProviderConnection() {
+            this.connectionLoading = true;
+            this.connectionResult = null;
+            try {
+                // Persist the currently edited provider settings before probing them.
+                const saveResponse = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.settings)
+                });
+                const saved = await saveResponse.json();
+                if (!saveResponse.ok) throw new Error(saved.detail || 'ذخیره تنظیمات ناموفق بود.');
+                this.settings = saved.config;
+                this.updateProviderKeyHints();
+
+                const provider = this.settings.active_provider;
+                const response = await fetch('/api/providers/' + encodeURIComponent(provider) + '/connection');
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
+                this.connectionResult = result;
+            } catch (error) {
+                this.connectionResult = {
+                    status: 'error',
+                    error: { message: error.message || 'بررسی اتصال ناموفق بود.' }
+                };
+            } finally {
+                this.connectionLoading = false;
+            }
         },
 
         async loadProviderCapabilities() {
