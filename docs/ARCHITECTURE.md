@@ -102,15 +102,15 @@ Refreshes provider and model metadata on a schedule or on user request. It detec
 
 ### Conversation Processing Module
 
-The single conversation lifecycle and execution coordinator. It contains request analysis, planning, routing, context/memory access, online and offline execution engines, and conversation recording.
+Owns the user-facing conversation lifecycle: request intake, conversation history, authorized context assembly, task handoff, event recording, and delivery of the validated result.
 
-The two engines are execution strategies within one module, not two independent products.
+It decides whether a request can be answered directly, handled by a deterministic workflow, or delegated to Agent Runtime. It does not own the lifecycle of specialized agent runs.
 
-### AI Manager / Supervisor
+### Supervisor Agent
 
-Coordinates complex tasks, decomposition, model selection, tool planning, and multi-model work. It may use an LLM, but must not be a single point of failure.
+A specialized coordinating agent hosted by Agent Runtime. It plans complex work, decomposes tasks, selects eligible agent roles and model capabilities, coordinates handoffs, and evaluates combined results.
 
-A deterministic dispatcher must handle basic routing, policy checks, simple workflows, and fallback without requiring an LLM.
+It is not a separate infrastructure manager and cannot grant permissions or execute tools directly. Deterministic runtime code handles lifecycle transitions, policy checks, iteration limits, and simple workflows without requiring an LLM.
 
 ### Response Validator & Composer
 
@@ -140,7 +140,7 @@ Backup reads consistent snapshots through owner-controlled APIs. Maintenance is 
 
 ## 5. Online and offline execution
 
-The Conversation Processing Module chooses an execution path based on actual task requirements and available capabilities.
+Agent Runtime selects an execution strategy for agent tasks based on actual task requirements and available capabilities. Conversation Processing may use the same provider-neutral execution boundary for direct conversational requests.
 
 - Online path: Agent Runtime / Conversation Processing -> Online Execution Strategy -> Interface Manager -> cloud provider adapter.
 - Offline path: Agent Runtime / Conversation Processing -> Offline Execution Strategy -> Interface Manager -> local provider adapter (for example, Ollama).
