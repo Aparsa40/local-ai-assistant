@@ -73,11 +73,11 @@ The current application does not yet have a dedicated application-cache subsyste
 
 ## Phase 5 — Provider and model ecosystem
 
-**Initial provider integrations implemented:** Ollama, OpenRouter, Google AI Studio/Gemini (Interactions API), and Hugging Face Inference Providers. Provider-specific model IDs are discovered dynamically; Hugging Face model/provider options are limited to live entries marked free by the provider catalog.
+**Initial provider integrations implemented:** Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. Cloudflare/Groq/Cohere expose model capability manifests and provider-specific quota semantics.
 
 Remaining work:
-- Add provider health checks, connection diagnostics, timeout/retry policies, and clearer quota/error reporting.
-- Add model capability metadata (context length, vision, tools, streaming, structured output) instead of assuming all models behave alike.
+- Add provider health checks, connection diagnostics, timeout/retry policies, and live quota telemetry where APIs expose it.
+- Expand verified model capability metadata (vision, structured output, output limits) as provider catalogs evolve.
 - Add per-conversation provider/model selection and optional routing policies.
 - Move secrets to environment variables or a managed secret store for hosted deployments.
 - Build the task-based architect/router that classifies each request and chooses the appropriate model/provider. This is a separate phase after provider reliability and capability metadata.

@@ -364,19 +364,60 @@
                         <p class="text-xs text-slate-500">فقط شناسه‌های مدل‌های دارای Free Tier طبق فهرست رسمی گوگل نمایش داده می‌شوند و با API حساب شما تطبیق داده می‌شوند. سهمیه و دسترسی نهایی به پروژه و محدودیت‌های حساب بستگی دارد.</p>
                     </div>
 
-                    <div x-show="settings.active_provider === 'huggingface'" class="space-y-2">
-                        <label class="block">توکن دسترسی Hugging Face
-                            <input type="password" x-model="settings.providers_config.huggingface.api_key" autocomplete="off" placeholder="hf_..." class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                    <div x-show="settings.active_provider === 'cloudflare_workers_ai'" class="space-y-2">
+                        <label class="block">Cloudflare API Token
+                            <input type="password" x-model="settings.providers_config.cloudflare_workers_ai.api_key" autocomplete="off" placeholder="Cloudflare API Token" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
                         </label>
-                        <p data-key-hint="huggingface" class="text-xs text-slate-500" x-show="settings.providers_config.huggingface.api_key_configured">توکن ذخیره شده است.</p>
-                        <label class="block">مدل رایگان و شناسه دقیق (Model ID:Provider)
-                            <select x-model="settings.providers_config.huggingface.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
-                                <option value="">انتخاب مدل رایگان</option>
+                        <p data-key-hint="cloudflare_workers_ai" class="text-xs text-slate-500" x-show="settings.providers_config.cloudflare_workers_ai.api_key_configured">توکن قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید.</p>
+                        <label class="block">Cloudflare Account ID
+                            <input type="text" x-model="settings.providers_config.cloudflare_workers_ai.account_id" autocomplete="off" placeholder="Account ID" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <label class="block">مدل Workers AI
+                            <select x-model="settings.providers_config.cloudflare_workers_ai.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌های رایگان ↻</button>
-                        <p class="text-xs text-slate-500">فقط مدل‌هایی نمایش داده می‌شوند که API در لحظه دریافت فهرست، حداقل یک ارائه‌دهنده رایگان برای آن‌ها گزارش کند؛ این وضعیت ممکن است تغییر کند.</p>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های رایگان قابل‌دسترسی ↻</button>
+                    </div>
+
+                    <div x-show="settings.active_provider === 'groq'" class="space-y-2">
+                        <label class="block">Groq API Key
+                            <input type="password" x-model="settings.providers_config.groq.api_key" autocomplete="off" placeholder="gsk_..." class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <p data-key-hint="groq" class="text-xs text-slate-500" x-show="settings.providers_config.groq.api_key_configured">کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید.</p>
+                        <label class="block">مدل Groq
+                            <select x-model="settings.providers_config.groq.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                                <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
+                            </select>
+                        </label>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی مدل‌های در دسترس ↻</button>
+                    </div>
+
+                    <div x-show="settings.active_provider === 'cohere'" class="space-y-2">
+                        <label class="block">Cohere API Key
+                            <input type="password" x-model="settings.providers_config.cohere.api_key" autocomplete="off" placeholder="Cohere Trial API Key" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                        </label>
+                        <p data-key-hint="cohere" class="text-xs text-slate-500" x-show="settings.providers_config.cohere.api_key_configured">کلید قبلی ذخیره شده است؛ برای حفظ آن فیلد را خالی بگذارید.</p>
+                        <label class="block">مدل Cohere
+                            <select x-model="settings.providers_config.cohere.model" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2" dir="ltr">
+                                <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
+                            </select>
+                        </label>
+                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های Chat قابل‌دسترسی ↻</button>
+                    </div>
+
+                    <div x-show="providerCapabilities && ['cloudflare_workers_ai','groq','cohere'].includes(settings.active_provider)" class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
+                        <div class="font-semibold text-slate-200">قابلیت‌ها و سهمیه Provider</div>
+                        <p class="text-xs text-slate-400" x-text="'Streaming: ' + providerCapabilities.streaming + ' · Tool Calling: ' + providerCapabilities.tool_calling"></p>
+                        <p class="text-xs text-slate-400" x-text="'سهمیه: ' + (providerCapabilities.quota?.allowance || 'نامشخص')"></p>
+                        <p class="text-xs text-amber-400" x-text="'وضعیت سهمیه: ' + (providerCapabilities.quota?.status || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-500" x-text="'آخرین وضعیت API: ' + JSON.stringify(providerCapabilities.quota?.runtime || {})"></p>
+                        <template x-for="(details, modelId) in (providerCapabilities.models || {})" :key="modelId">
+                            <div class="border-t border-slate-800 pt-2 text-xs">
+                                <div class="text-sky-300" x-text="modelId"></div>
+                                <div class="text-slate-500" x-text="'Context: ' + (details.context_window || 'نامشخص') + ' · Tools: ' + details.tool_calling + ' · Tasks: ' + (details.tasks || []).join(', ')"></div>
+                            </div>
+                        </template>
                     </div>
                     <p x-show="modelsLoading" class="text-xs text-sky-400">در حال دریافت فهرست مدل‌ها...</p>
                     <p x-show="modelsError" class="text-xs text-rose-400" x-text="modelsError"></p>

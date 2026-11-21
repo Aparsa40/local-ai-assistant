@@ -8,7 +8,9 @@ A Persian-first personal AI workspace with a FastAPI backend, lightweight browse
 - **Persistent settings:** provider, exact model ID, system prompt, profile, and appearance settings are independent of chat sessions and survive restarts.
 - **OpenRouter (cloud):** OpenAI-compatible streaming API, free model catalog, and `openrouter/free` default.
 - **Google AI Studio / Gemini:** Gemini Interactions API streaming, API-driven model discovery, and exact model ID selection.
-- **Hugging Face Inference Providers:** streaming chat completions and discovery of model/provider combinations currently marked free by the catalog.
+- **Cloudflare Workers AI:** account-scoped inference, SSE streaming, and free-plan model discovery.
+- **Groq:** OpenAI-compatible streaming chat, live model discovery, and tool-capable model choices.
+- **Cohere:** Chat v2 streaming and live discovery of chat-compatible models.
 - **Ollama (local):** discovers installed model tags and streams local chat responses.
 - **Provider-specific model selection:** each provider retains its own selected model.
 - **Secret-safe settings:** API keys/tokens are never returned to the browser; blank secret fields preserve existing credentials.
@@ -73,14 +75,30 @@ Links: [OpenRouter API keys](https://openrouter.ai/keys), [Free Models](https://
 - The initial free-tier choices are `gemini-3.8-flash`, `gemini-3.1-flash-lite`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`, based on Google's published [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing). Availability and rate limits still depend on your Google AI Studio project.
 - The adapter uses the current Interactions API and streaming events.
 
-### Hugging Face Inference Providers
+### Cloudflare Workers AI
 
-- Create a user access token with the required inference permissions in [Hugging Face Settings → Access Tokens](https://huggingface.co/settings/tokens).
-- The model catalog returns exact `model_id:provider` values only when a live inference provider currently reports `is_free: true`.
-- Free status may be a temporary promotion. The app refreshes the catalog from Hugging Face rather than hard-coding a list of models.
-- Hugging Face Inference Providers may require paid credits for models/providers that are not currently marked free.
+- Configure a Workers AI API token and your Cloudflare Account ID.
+- The Workers Free plan includes 10,000 Neurons per day; remaining daily Neurons are not exposed by the inference endpoint.
+- Model discovery is checked against the live account catalog and a conservative free-plan allowlist.
+- Recommended model: `@cf/zai-org/glm-4.7-flash` for coding, analysis, multilingual chat, and tool-oriented tasks.
 
-Links: [Inference Providers Chat Completion](https://huggingface.co/docs/inference-providers/tasks/chat-completion), [Hub API model catalog](https://huggingface.co/docs/inference-providers/hub-api).
+Links: [REST API](https://developers.cloudflare.com/workers-ai/get-started/rest-api/), [Pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+
+### Groq
+
+- Create an API key in [Groq Console](https://console.groq.com/keys).
+- The model catalog is refreshed from the authenticated Groq API.
+- Recommended models: `openai/gpt-oss-20b` for everyday chat and `openai/gpt-oss-120b` or `qwen/qwen3.8-27b` for coding and analysis.
+- Free-tier limits are organization- and model-specific; consult the [rate-limit page](https://console.groq.com/docs/rate-limits) and your [Limits dashboard](https://console.groq.com/settings/limits).
+
+### Cohere
+
+- Create a free trial API key in [Cohere Dashboard](https://dashboard.cohere.com/api-keys).
+- Chat model discovery uses the Cohere `/v1/models` catalog and filters to non-deprecated chat models.
+- Trial keys are limited to 1,000 API calls per month and 20 Chat requests per minute per model.
+- Recommended model: `command-r7b-12-2024` for general chat and translation; Command models can be selected for deeper analysis.
+
+Links: [Model catalog](https://docs.cohere.com/v2/reference/list-models), [Rate limits](https://docs.cohere.com/docs/rate-limits).
 
 ### Ollama
 
@@ -115,7 +133,7 @@ GitHub Actions runs JavaScript syntax validation, Python compilation, and unit t
 - MCP and external app connectors with permission management remain future work.
 - Documents, long-term knowledge memory, RAG, and cache management remain future work.
 - Google AI Studio free-tier IDs are maintained against Google's public pricing page; update the allowlist when pricing or model availability changes.
-- Hugging Face free model/provider availability can change; the app uses the live catalog's `is_free` metadata.
+- Cloudflare, Groq, and Cohere quotas and model availability can change; quota remaining is shown as unknown when the provider does not expose a live balance.
 - API keys are stored in the local ignored settings file as plaintext. Protect access to the machine.
 - The application does not implement user authentication. Do not expose it to an untrusted network.
 

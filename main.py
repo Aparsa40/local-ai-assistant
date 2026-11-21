@@ -14,6 +14,7 @@ from core.config_manager import ConfigManager
 from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
 from core.providers.registry import PROVIDER_FACTORIES, get_provider_factory
+from core.providers.capabilities import PROVIDER_CATALOG, get_provider_capabilities
 
 app = FastAPI(title="Local Modular AI Assistant")
 init_db()
@@ -96,7 +97,6 @@ async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="نام نمایشی و نام کاربری نمی‌توانند خالی باشند")
     if email and ("@" not in email or email.startswith("@") or email.endswith("@")):
         raise HTTPException(status_code=422, detail="فرمت ایمیل معتبر نیست")
-
     profile = get_or_create_profile(db)
     profile.display_name = display_name
     profile.username = username
@@ -113,7 +113,6 @@ async def upload_profile_avatar(request: Request, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="فایلی دریافت نشد")
     if len(image_bytes) > 2 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="حجم تصویر نباید بیشتر از ۲ مگابایت باشد")
-
     try:
         with Image.open(BytesIO(image_bytes)) as source:
             if source.format not in {"PNG", "JPEG", "WEBP"}:
@@ -128,7 +127,6 @@ async def upload_profile_avatar(request: Request, db: Session = Depends(get_db))
         raise
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
         raise HTTPException(status_code=422, detail="فایل تصویر معتبر نیست") from exc
-
     profile = get_or_create_profile(db)
     profile.avatar_data = output.getvalue()
     profile.avatar_mime = "image/webp"
@@ -163,12 +161,27 @@ async def list_providers():
         "ollama": "Ollama",
         "openrouter": "OpenRouter",
         "google_ai_studio": "Google AI Studio",
-        "huggingface": "Hugging Face",
+        "cloudflare_workers_ai": "Cloudflare Workers AI",
+        "groq": "Groq",
+        "cohere": "Cohere",
     }
     return [
-        {"id": name, "name": display_names.get(name, name.replace("_", " ").title())}
+        {
+            "id": name,
+            "name": display_names.get(name, name.replace("_", " ").title()),
+            "capabilities_available": name in PROVIDER_CATALOG,
+        }
         for name in PROVIDER_FACTORIES
     ]
+
+
+@app.get("/api/providers/{provider_id}/capabilities")
+async def provider_capabilities(provider_id: str):
+    if provider_id not in PROVIDER_FACTORIES:
+        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
+    # This endpoint serves the local capability manifest and observed runtime quota
+    # telemetry only. Keep remote model discovery in the explicit /models endpoint.
+    return get_provider_capabilities(provider_id)
 
 
 @app.get("/api/providers/{provider_id}/models")
@@ -204,26 +217,19 @@ async def delete_session(session_id: int, db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="نشست یافت نشد")
-
     db.delete(session)
     db.commit()
     return {"status": "success", "deleted_session_id": session_id}
 
 
 @app.patch("/api/sessions/{session_id}")
-async def rename_session(
-    session_id: int,
-    data: SessionTitleUpdate,
-    db: Session = Depends(get_db),
-):
+async def rename_session(session_id: int, data: SessionTitleUpdate, db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if not session:
         raise HTTPException(status_code=404, detail="نشست یافت نشد")
-
     title = data.title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="عنوان نشست نمی‌تواند خالی باشد")
-
     session.title = title
     session.title_is_custom = True
     db.commit()
@@ -248,13 +254,11 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
     if session.title == "گفتگوی جدید" and not session.title_is_custom:
         session.title = req.message[:35] + ("..." if len(req.message) > 35 else "")
         db.commit()
-
     user_msg = ChatMessage(session_id=req.session_id, role="user", content=req.message)
     db.add(user_msg)
     db.commit()
     past_msgs = db.query(ChatMessage).filter(ChatMessage.session_id == req.session_id).all()
     history = [{"role": message.role, "content": message.content} for message in past_msgs[:-1]]
-
     try:
         orchestrator = Orchestrator()
         provider = orchestrator.get_provider()
@@ -272,7 +276,6 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
         except Exception as exc:
             yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
             return
-
         db_session = SessionLocal()
         try:
             db_session.add(ChatMessage(

@@ -23,6 +23,7 @@ function chatApp() {
         availableModels: [],
         modelsLoading: false,
         modelsError: '',
+        providerCapabilities: null,
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -32,7 +33,9 @@ function chatApp() {
                 ollama: { base_url: 'http://localhost:11434', model: '' },
                 openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' },
                 google_ai_studio: { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' },
-                huggingface: { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' }
+                cloudflare_workers_ai: { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' },
+                groq: { base_url: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', api_key: '' },
+                cohere: { base_url: 'https://api.cohere.com', model: 'command-r7b-12-2024', api_key: '' }
             }
         },
 
@@ -41,6 +44,7 @@ function chatApp() {
             await this.loadProfile();
             await this.loadSettings();
             await this.loadProviders();
+            await this.loadProviderCapabilities();
             await this.refreshModels();
             await this.loadSessions();
             // Keep previous conversations in the sidebar, but never reopen one automatically.
@@ -55,7 +59,9 @@ function chatApp() {
             this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
             this.settings.providers_config.google_ai_studio ||= { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' };
-            this.settings.providers_config.huggingface ||= { base_url: 'https://router.huggingface.co/v1', model: '', api_key: '' };
+            this.settings.providers_config.cloudflare_workers_ai ||= { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' };
+            this.settings.providers_config.groq ||= { base_url: 'https://api.groq.com/openai/v1', model: 'openai/gpt-oss-20b', api_key: '' };
+            this.settings.providers_config.cohere ||= { base_url: 'https://api.cohere.com', model: 'command-r7b-12-2024', api_key: '' };
             this.updateProviderKeyHints();
         },
 
@@ -63,7 +69,9 @@ function chatApp() {
             const providers = [
                 ['openrouter', 'https://openrouter.ai'],
                 ['google_ai_studio', 'https://aistudio.google.com'],
-                ['huggingface', 'https://huggingface.co/settings/tokens']
+                ['cloudflare_workers_ai', 'https://dash.cloudflare.com/'],
+                ['groq', 'https://console.groq.com/keys'],
+                ['cohere', 'https://dashboard.cohere.com/api-keys']
             ];
             for (const [id, url] of providers) {
                 const config = this.settings.providers_config[id] || {};
@@ -80,28 +88,64 @@ function chatApp() {
         },
 
         async onProviderChange() {
+            await this.loadProviderCapabilities();
             await this.refreshModels();
+        },
+
+        async loadProviderCapabilities() {
+            this.providerCapabilities = null;
+            const provider = this.settings.active_provider;
+            if (!['cloudflare_workers_ai', 'groq', 'cohere'].includes(provider)) return;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/capabilities`);
+                if (!response.ok) return;
+                this.providerCapabilities = await response.json();
+            } catch (error) {
+                console.warn('Provider capability discovery failed:', error);
+            }
         },
 
         async refreshModels() {
             this.modelsLoading = true;
             this.modelsError = '';
-            this.availableModels = [];
             const provider = this.settings.active_provider;
+            const config = this.settings.providers_config[provider] ||= {};
+            const defaultModel = config.model || '';
+
+            // Secret values are redacted by /api/settings; trust the configured marker
+            // when the actual credential is intentionally absent from the browser payload.
+            const hasApiKey = Boolean(config.api_key || config.api_key_configured);
+            const credentialsReady = provider === 'cloudflare_workers_ai'
+                ? Boolean(hasApiKey && config.account_id)
+                : ['groq', 'cohere'].includes(provider)
+                    ? hasApiKey
+                    : true;
+
+            if (!credentialsReady) {
+                this.availableModels = defaultModel ? [defaultModel] : [];
+                this.modelsError = 'برای دریافت فهرست زنده مدل‌ها، ابتدا اطلاعات اتصال این Provider را وارد کنید.';
+                this.modelsLoading = false;
+                return;
+            }
+
+            this.availableModels = defaultModel ? [defaultModel] : [];
             try {
                 const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/models`);
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
-                this.availableModels = data.models || [];
-                const config = this.settings.providers_config[provider] ||= {};
-                if (!this.availableModels.includes(config.model)) {
-                    config.model = this.availableModels[0] || '';
+                const discoveredModels = data.models || [];
+                this.availableModels = discoveredModels;
+                // Keep the configured default if discovery returns an empty or partial catalog.
+                if (discoveredModels.length && !discoveredModels.includes(config.model)) {
+                    config.model = discoveredModels[0];
                 }
             } catch (error) {
                 this.modelsError = error.message;
+                // Discovery is optional; never erase a working default because an API is unavailable.
+                this.availableModels = defaultModel ? [defaultModel] : [];
                 if (provider === 'openrouter') {
                     this.availableModels = ['openrouter/free'];
-                    this.settings.providers_config.openrouter.model ||= 'openrouter/free';
+                    config.model ||= 'openrouter/free';
                 }
             } finally {
                 this.modelsLoading = false;
@@ -396,6 +440,8 @@ function chatApp() {
                     if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
+                // This endpoint serves local metadata only; it does not call provider model catalogs.
+                await this.loadProviderCapabilities();
             } catch (error) {
                 this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
             } finally {
