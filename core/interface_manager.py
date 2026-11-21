@@ -12,7 +12,7 @@ from typing import Any, AsyncIterator, Callable, Dict, List, Optional
 from .config_manager import ConfigManager
 from .providers.base import BaseLLMProvider
 from .providers.capabilities import get_provider_capabilities
-from .providers.registry import PROVIDER_FACTORIES, get_provider_factory
+from .providers.registry import PROVIDER_FACTORIES
 
 
 class InterfaceManagerError(Exception):
