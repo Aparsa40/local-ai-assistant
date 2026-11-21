@@ -16,7 +16,7 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Ollama:** local model discovery and streaming inference.
 - **Provider-specific model selection:** each provider retains its own selected model.
 - **Interface Manager foundation:** provider listing, capability access, bounded model discovery, safe provider-neutral errors, and chat streaming through one service boundary.
-- **Connection diagnostics:** a new endpoint probes model-catalog reachability; it does not claim that inference is fully healthy.
+- **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
 - **SQLite persistence:** chat sessions, messages, and profile data are stored locally.
 
