@@ -39,37 +39,37 @@ The current credential file is local and ignored by Git, but credentials are not
                  /                    \
         Request Analyzer           Context & Memory
                  |                       |
-            Task Planner ---------------+
+       Direct Response or Agent Task    |
+                 |                       |
+             Agent Runtime <-------------+
+       Agent Registry / Lifecycle / State
                  |
-          Execution Router
-             /       \
-            /         \
-   Online Engine     Offline Engine
-        |                 |
-        +------+----------+
-               |
-        Interface Manager
-        /       |        \
-   Provider  Model    Connection /
-   Registry  Catalog  Credential Services
+       Supervisor & Specialized Agents
+                 |
+       Online / Offline Execution Strategy
+                 |
+          Interface Manager
+        /       |          \
+   Provider  Model/Capability  Connection /
+   Registry    Catalog       Credential Services
         |
-   Provider Adapters
+   Provider Adapters (cloud and local)
 
-  Conversation Processing
-            |
-   Response Validator & Composer
-            |
-        Final Response
-            |
-             UI
+  Agent Runtime / Conversation Processing
+                    |
+        Response Validator & Composer
+                    |
+                Final Response
+                    |
+                     UI
 
   Tool & Permission Manager ---- Tool Runtime ---- Tools
-            |
-       Permission Registry
+              |
+        Permission Registry
 
   Knowledge Access Layer ---- Repositories ---- SQLite / PostgreSQL
-            |                      |
-       Approved Knowledge     File Storage
+              |                       |
+       Approved Knowledge        File Storage
 
   AI Librarian ---- Source Scanner / Extractor / Analyzer / Report Validator
        |                         |
@@ -79,6 +79,8 @@ The current credential file is local and ignored by Git, but credentials are not
 
   Backup & Maintenance ---- Snapshot APIs / Cache Policies
 ```
+
+This is a logical architecture. It does not require a separate process or database for every box. Agent Runtime and its agents are accepted target design, not current shipped functionality.
 
 This is a logical architecture. It does not require a separate process or database for every box.
 
