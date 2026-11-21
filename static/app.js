@@ -112,11 +112,13 @@ function chatApp() {
             const config = this.settings.providers_config[provider] ||= {};
             const defaultModel = config.model || '';
 
-            // Do not make a network request until the provider credentials are present.
+            // Secret values are redacted by /api/settings; trust the configured marker
+            // when the actual credential is intentionally absent from the browser payload.
+            const hasApiKey = Boolean(config.api_key || config.api_key_configured);
             const credentialsReady = provider === 'cloudflare_workers_ai'
-                ? Boolean(config.api_key && config.account_id)
+                ? Boolean(hasApiKey && config.account_id)
                 : ['groq', 'cohere'].includes(provider)
-                    ? Boolean(config.api_key)
+                    ? hasApiKey
                     : true;
 
             if (!credentialsReady) {
