@@ -15,6 +15,8 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Cohere:** Chat v2 streaming and model discovery.
 - **Ollama:** local model discovery and streaming inference.
 - **Provider-specific model selection:** each provider retains its own selected model.
+- **Interface Manager foundation:** provider listing, capability access, bounded model discovery, safe provider-neutral errors, and chat streaming through one service boundary.
+- **Connection diagnostics:** a new endpoint probes model-catalog reachability; it does not claim that inference is fully healthy.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
 - **SQLite persistence:** chat sessions, messages, and profile data are stored locally.
 
@@ -28,6 +30,7 @@ local-ai-assistant/
 ├── core/config_manager.py
 ├── core/database.py
 ├── core/orchestrator.py
+├── core/interface_manager.py # provider-neutral service boundary
 ├── data/                    # local SQLite database (git-ignored)
 ├── docs/                    # architecture, principles, module contracts, roadmap
 ├── static/
@@ -144,7 +147,7 @@ GitHub Actions runs JavaScript syntax validation, Python compilation, and unit t
 ## Current limitations
 
 The following target capabilities are **not yet implemented as complete systems**:
-- Full Interface Manager service boundary and Model & Provider Updater.
+- Full Model Manager/catalog persistence, scheduled Model & Provider Updater, encrypted credential vault, comprehensive health monitoring, and inference retry/fallback policies.
 - Automatic task-based routing and LLM Supervisor.
 - Unified Conversation Processing with explicit online/offline engines.
 - Response Validator & Composer.
@@ -154,7 +157,7 @@ The following target capabilities are **not yet implemented as complete systems*
 - Full repository/migration architecture for SQLite and PostgreSQL.
 - Encrypted credential vault, authentication, and hosted multi-user security.
 
-The current chat path still uses manual provider/model selection. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
+The current chat path still uses manual provider/model selection. Agent Runtime, automatic task routing, and Multi-Agent execution are not implemented yet. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
 
 ## License
 
