@@ -62,6 +62,5 @@ local-ai-assistant.code-workspace
 .DS_Store
 Thumbs.db
 
-
-
-
+# Pytest temporary files (kept inside the repository to avoid OS temp-folder ACL issues)
+.pytest-tmp/
