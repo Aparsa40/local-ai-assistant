@@ -14,6 +14,7 @@ This directory is the architectural and engineering reference for Local AI Assis
 | Document | Scope |
 | --- | --- |
 | [Interface Manager](INTERFACE_MANAGER.md) | Provider/model control plane and internal service contract |
+| [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog, capability metadata, labels, and safe updates |
 | [Connector System](CONNECTOR_SYSTEM.md) | Optional external service integrations |
