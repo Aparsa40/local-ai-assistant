@@ -35,9 +35,24 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** The architecture documents agree with one another; each planned module has a clear owner, inputs, outputs, dependencies, and explicit non-goals.
 
-### Phase 1 — Persistence and repository foundation
+### Phase 1 — Interface Manager and provider/model control plane
 
-**Goal:** Establish durable, replaceable data access without overbuilding the schema.
+**Goal:** Turn existing provider adapters into a provider-neutral service before adding autonomous workflows.
+
+- Keep provider adapters isolated behind the registry.
+- Introduce the Interface Manager service boundary.
+- Route provider listing, capability access, model discovery, and inference streaming through it.
+- Add bounded catalog diagnostics and safe provider-neutral errors.
+- Preserve exact model IDs and existing user-selected provider/model behavior.
+- Keep Ollama/local inference behind the same provider-neutral contract as cloud providers.
+
+**Current implementation:** The first service boundary, catalog probe, and chat-stream delegation are implemented on the feature branch. Persistent model records, full health monitoring, normalized inference envelopes, retry/fallback policies, and an encrypted credential vault remain incomplete.
+
+**Exit criteria:** Internal modules can discover and invoke providers through Interface Manager without importing provider-specific adapters. Catalog diagnostics are bounded and accurately labeled.
+
+### Phase 2 — Persistence and repository foundation
+
+**Goal:** Establish durable, replaceable data access before storing catalog history, agent runs, and knowledge artifacts.
 
 - Keep SQLite as the local database target.
 - Design PostgreSQL compatibility for hosted/online deployment.
@@ -46,72 +61,89 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 - Define stable identifiers, timestamps, ownership, and provenance conventions.
 - Add SQLite FTS5 as the initial lexical search option.
 - Keep vector indexing behind a replaceable adapter.
+- Avoid speculative tables until an owning workflow is ready.
 
-**Exit criteria:** Schema migrations are repeatable and tested; modules do not issue uncontrolled cross-domain SQL; file storage is independent of database storage.
+**Exit criteria:** Migrations are repeatable and tested; modules do not issue uncontrolled cross-domain SQL; file storage is independent of database storage.
 
-### Phase 2 — Permission and credential foundations
+### Phase 3 — Model and Provider Updater
 
-**Goal:** Enforce access control in application code before introducing autonomous tools or ingestion.
+**Goal:** Detect provider/model catalog changes without silently changing user choices.
+
+- Refresh supported provider catalogs on explicit request and, later, on a configurable schedule.
+- Compare new catalog results with last-known state.
+- Report added, changed, deprecated, unavailable, or removed models.
+- Track catalog source, retrieval time, and capability evidence.
+- Make updates visible and explain their impact.
+- Never replace a user's selected model without explicit policy/confirmation.
+- Treat pricing and free-tier eligibility as time-sensitive metadata.
+
+**Exit criteria:** Catalog refresh is observable, repeatable, and safe; unknown quota/capability values remain unknown.
+
+### Phase 4 — Permission and credential foundations
+
+**Goal:** Enforce access control before autonomous tools, connectors, or ingestion are introduced.
 
 - Define permission subjects, resources, scopes, operations, grants, expiry, revocation, and audit events.
-- Centralize credential access and redaction.
+- Centralize credential access and redaction; plan encrypted local secret storage.
 - Keep secrets out of browser responses, logs, prompts, and ordinary backups.
 - Require permission checks for connector, file, conversation, memory, and tool access.
 - Define explicit user approval for sensitive write operations.
+- Keep model-generated tool calls as proposals, never as authorization.
 
 **Exit criteria:** Unauthorized access is denied by default and covered by tests; permission decisions are auditable.
 
-### Phase 3 — Interface Manager and provider/model control plane
+### Phase 5 — Conversation Processing and online/offline execution
 
-**Goal:** Turn current provider adapters into a coherent internal service.
+**Goal:** Build one conversation lifecycle that can use either cloud or local inference.
 
-- Maintain provider and model registries.
-- Normalize provider adapter contracts and errors.
-- Track model capabilities, context limits, modalities, tool support, streaming, and operational constraints.
-- Manage credentials, connection state, health, timeout, retry, quota visibility, and fallback eligibility.
-- Separate catalog refresh/update from request-time model selection.
-- Provide internal APIs for other modules.
+- Introduce request analysis, context assembly, task planning, execution routing, and conversation recording.
+- Provide an Online Execution Strategy using Interface Manager.
+- Provide an Offline Execution Strategy using local provider adapters and permitted local knowledge.
+- Use deterministic dispatch for basic routing, fixed workflows, policy checks, and fallback.
+- Preserve task checkpoints and re-check model capabilities when switching engines.
+- Never send private local data to a cloud provider as an implicit fallback.
+- Keep complex LLM-based planning optional.
 
-**Exit criteria:** Other modules can discover and invoke models without importing provider-specific SDKs or depending on vendor response formats.
-
-### Phase 4 — Model and Provider Updater
-
-**Goal:** Detect catalog and provider changes without silently changing user choices.
-
-- Periodically check supported provider catalogs and relevant metadata.
-- Compare new results with the stored catalog.
-- Report added, changed, deprecated, unavailable, or removed models.
-- Make updates visible and explain their impact.
-- Do not replace a user's selected model without an explicit policy/confirmation.
-- Treat pricing and free-tier eligibility as time-sensitive metadata, not permanent guarantees.
-
-**Exit criteria:** Catalog refresh is observable, repeatable, and safe; unknown quota values remain unknown.
-
-### Phase 5 — Prompt Manager and Conversation Processing
-
-**Goal:** Build one conversation-processing module with two execution engines.
-
-- Version and categorize prompts.
-- Introduce request analysis, task planning, execution routing, context management, and conversation recording.
-- Provide an Online Execution Engine using Interface Manager.
-- Provide an Offline Execution Engine using local models and permitted local knowledge.
-- Use deterministic/rule-based dispatch for basic routing, policy enforcement, and fallback.
-- Keep complex LLM-based planning optional through an AI Supervisor.
-- Preserve conversation and task provenance.
-
-**Exit criteria:** Online and offline execution share the same conversation lifecycle and validation boundary; loss of a cloud provider does not disable eligible local workflows.
+**Exit criteria:** Online and offline execution share the same lifecycle and validation boundary; eligible local workflows remain usable without internet.
 
 ### Phase 6 — Response validation and safe tool execution
 
-**Goal:** Ensure model output is checked and tool calls are mediated.
+**Goal:** Validate model outputs and mediate every tool action.
 
-- Add a Response Validator & Composer independent from provider adapters.
+- Add Response Validator & Composer independently from provider adapters.
 - Validate structure, completeness, policy, references, and execution outcomes.
 - Introduce a permissioned tool registry and isolated Tool Runtime.
 - Treat model tool calls as proposals, not authorization.
-- Log tool activity, arguments, results, and failures with sensitive-value redaction.
+- Record tool activity, arguments, results, and failures with sensitive-value redaction.
+- Require explicit approval for sensitive or externally visible actions.
 
-**Exit criteria:** No tool executes without an application-side permission decision; unvalidated model output is not silently promoted to trusted knowledge.
+**Exit criteria:** No tool executes without an application-side permission decision; unvalidated output is not promoted to trusted knowledge.
+
+### Phase 7 — Agent Runtime and the first single-agent workflow
+
+**Goal:** Execute one bounded goal-oriented workflow reliably before introducing multiple agents.
+
+- Define versioned Agent, Task, Run, State, Input, Output, and Completion Criteria contracts.
+- Add Agent Registry, Lifecycle Manager, Task Manager, State Manager, and bounded Execution Controller.
+- Support pause, resume, cancellation, iteration limits, and auditable outcomes.
+- Host one specialized agent using online or offline inference through the same Interface Manager boundary.
+- Enforce least-privilege context and permissioned tools.
+- Start with a workflow that has no autonomous external side effects.
+
+**Exit criteria:** One agent can complete a bounded task, preserve state, stop safely, and pass deterministic lifecycle and permission tests.
+
+### Phase 8 — Supervisor and Multi-Agent orchestration
+
+**Goal:** Coordinate multiple specialized agents through explicit task contracts.
+
+- Implement Supervisor as a specialized agent hosted by Agent Runtime.
+- Add agent selection, task decomposition, dependencies, structured handoffs, and result aggregation.
+- Support different models per agent without making model count the definition of Multi-Agent.
+- Preserve provenance and expose disagreements or incomplete results.
+- Prevent agents from inheriting or expanding permissions implicitly.
+- Add concurrency only after sequential handoffs and cancellation are reliable.
+
+**Exit criteria:** Multiple agents can collaborate on a bounded task with traceable handoffs, enforced permissions, and validated final output.
 
 ### Phase 7 — Knowledge Access and managed data
 
