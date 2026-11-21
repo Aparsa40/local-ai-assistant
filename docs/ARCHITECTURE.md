@@ -21,9 +21,10 @@ The current repository contains:
 - Configuration handling in `core/config_manager.py`.
 - SQLAlchemy/SQLite persistence in `core/database.py`.
 - A current chat orchestrator in `core/orchestrator.py`.
+- A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
 - Provider and chat tests in `tests/`.
 
-Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. The existing provider capability manifest is groundwork, not the complete target Interface Manager or automatic AI Supervisor.
+Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
 
 The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not yet implement user authentication. Do not expose the current development server to untrusted networks.
 
@@ -89,6 +90,10 @@ The provider/model control plane. It owns provider registration, model catalog a
 
 It does not decide whether a response is factually correct and does not own task planning.
 
+### Agent Runtime (accepted target; not implemented)
+
+Hosts goal-oriented agents and manages their task lifecycle, state, bounded execution loops, handoffs, and completion evaluation. The Supervisor is a specialized agent hosted by this runtime, not the runtime itself. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md).
+
 ### Model & Provider Updater
 
 Refreshes provider and model metadata on a schedule or on user request. It detects catalog changes and reports them. It must not silently replace a user's selected model.
@@ -135,13 +140,13 @@ Backup reads consistent snapshots through owner-controlled APIs. Maintenance is 
 
 The Conversation Processing Module chooses an execution path based on actual task requirements and available capabilities.
 
-- Online path: Conversation Processing -> Online Engine -> Interface Manager -> provider adapter.
-- Offline path: Conversation Processing -> Offline Engine -> local model adapter and permitted local knowledge.
+- Online path: Agent Runtime / Conversation Processing -> Online Execution Strategy -> Interface Manager -> cloud provider adapter.
+- Offline path: Agent Runtime / Conversation Processing -> Offline Execution Strategy -> Interface Manager -> local provider adapter (for example, Ollama).
 - Provider availability, credentials, health, quota state, model capability, and task constraints influence routing.
 - Internet connectivity alone is not a reason to choose the online path.
 - If no LLM is available, deterministic search, retrieval, extraction, and fixed workflows may still run. The system must clearly state when a task requires language-model reasoning that is unavailable.
 
-Both paths converge on Response Validator & Composer before the final answer is presented.
+Both paths converge on Response Validator & Composer before the final answer is presented. Agent Runtime and the two execution strategies are accepted target design, not implemented functionality.
 
 ## 6. Data and ownership boundaries
 
