@@ -1,19 +1,17 @@
 from typing import Dict, List, Tuple
 
 from .config_manager import ConfigManager
-from .providers.base import BaseLLMProvider
-from .providers.registry import get_provider_factory
+
 
 
 class Orchestrator:
     def __init__(self):
         self.config = ConfigManager.load_config()
 
-    def get_provider(self) -> BaseLLMProvider:
+    def get_provider_id(self) -> str:
+        """Return the user's explicitly selected provider identifier."""
         self.config = ConfigManager.load_config()
-        active = self.config.get("active_provider", "openrouter")
-        provider_config = self.config.get("providers_config", {}).get(active, {})
-        return get_provider_factory(active)(provider_config)
+        return self.config.get("active_provider", "openrouter")
 
     def select_model(self, user_message: str = "") -> str:
         """Return the model explicitly selected for the active provider."""
