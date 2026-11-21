@@ -53,6 +53,7 @@ Important documents:
 - [Model Manager](docs/MODEL_MANAGER.md)
 - [Permissions](docs/PERMISSIONS.md)
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
+- [Agent Runtime](docs/AGENT_RUNTIME.md)
 
 The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Read the relevant module contract before changing that area.
 
@@ -155,7 +156,7 @@ The following target capabilities are **not yet implemented as complete systems*
 - External connector framework and Discord synchronization.
 - Document ingestion, AI Librarian, approved shared knowledge, and model-private memory lifecycle.
 - Full repository/migration architecture for SQLite and PostgreSQL.
-- Encrypted credential vault, authentication, and hosted multi-user security.
+- Authentication and hosted multi-user security.
 
 The current chat path still uses manual provider/model selection. Agent Runtime, automatic task routing, and Multi-Agent execution are not implemented yet. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
 
