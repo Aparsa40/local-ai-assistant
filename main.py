@@ -13,10 +13,10 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from core.config_manager import ConfigManager
 from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
-from core.providers.registry import PROVIDER_FACTORIES, get_provider_factory
-from core.providers.capabilities import PROVIDER_CATALOG, get_provider_capabilities
+from core.interface_manager import InterfaceManager, InterfaceManagerError
 
 app = FastAPI(title="Local Modular AI Assistant")
+interface_manager = InterfaceManager()
 init_db()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -157,44 +157,34 @@ async def delete_profile_avatar(db: Session = Depends(get_db)):
 
 @app.get("/api/providers")
 async def list_providers():
-    display_names = {
-        "ollama": "Ollama",
-        "openrouter": "OpenRouter",
-        "google_ai_studio": "Google AI Studio",
-        "cloudflare_workers_ai": "Cloudflare Workers AI",
-        "groq": "Groq",
-        "cohere": "Cohere",
-    }
-    return [
-        {
-            "id": name,
-            "name": display_names.get(name, name.replace("_", " ").title()),
-            "capabilities_available": name in PROVIDER_CATALOG,
-        }
-        for name in PROVIDER_FACTORIES
-    ]
+    return interface_manager.list_providers()
 
 
 @app.get("/api/providers/{provider_id}/capabilities")
 async def provider_capabilities(provider_id: str):
-    if provider_id not in PROVIDER_FACTORIES:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
-    # This endpoint serves the local capability manifest and observed runtime quota
-    # telemetry only. Keep remote model discovery in the explicit /models endpoint.
-    return get_provider_capabilities(provider_id)
+    try:
+        return interface_manager.get_capabilities(provider_id)
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
 
 
 @app.get("/api/providers/{provider_id}/models")
 async def list_provider_models(provider_id: str):
-    if provider_id not in PROVIDER_FACTORIES:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
-    config = ConfigManager.load_config().get("providers_config", {}).get(provider_id, {})
     try:
-        provider = get_provider_factory(provider_id)(config)
-        models = await provider.list_models()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        models = await interface_manager.list_models(provider_id)
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
     return {"provider": provider_id, "models": models}
+
+
+@app.get("/api/providers/{provider_id}/connection")
+async def provider_connection_status(provider_id: str):
+    try:
+        return await interface_manager.check_connection(provider_id)
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
 
 
 @app.get("/api/sessions")
@@ -261,7 +251,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
     history = [{"role": message.role, "content": message.content} for message in past_msgs[:-1]]
     try:
         orchestrator = Orchestrator()
-        provider = orchestrator.get_provider()
+        provider_id = orchestrator.get_provider_id()
         formatted_messages, selected_model = orchestrator.build_messages(history, req.message)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -270,7 +260,9 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
         full_response = ""
         yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\n\n"
         try:
-            async for chunk in provider.chat_stream(formatted_messages, model=selected_model):
+            async for chunk in interface_manager.stream_chat(
+                provider_id, formatted_messages, model=selected_model
+            ):
                 full_response += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as exc:
