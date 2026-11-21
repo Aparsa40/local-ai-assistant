@@ -145,7 +145,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** Multiple agents can collaborate on a bounded task with traceable handoffs, enforced permissions, and validated final output.
 
-### Phase 7 — Knowledge Access and managed data
+### Phase 9 — Knowledge Access and managed data
 
 **Goal:** Expose controlled retrieval over application-owned data.
 
@@ -157,7 +157,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** Retrieval respects source permissions and can return traceable references to original material.
 
-### Phase 8 — Document ingestion and AI Librarian
+### Phase 10 — Document ingestion and AI Librarian
 
 **Goal:** Provide user-controlled analysis and curation of project knowledge.
 
@@ -170,7 +170,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** No source is ingested without a grant; no report is published as approved knowledge without user approval and provenance.
 
-### Phase 9 — Connectors and Discord synchronization
+### Phase 11 — Connectors and Discord synchronization
 
 **Goal:** Add optional integrations without making them authoritative dependencies.
 
@@ -182,7 +182,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** Disconnecting a connector does not make local project data unavailable; synchronization is scoped and traceable.
 
-### Phase 10 — Backup, maintenance, and hosted deployment
+### Phase 12 — Backup, maintenance, and hosted deployment
 
 **Goal:** Protect user data and support an optional online deployment.
 
@@ -195,7 +195,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 
 **Exit criteria:** Restore is tested; secrets are protected; public deployment has authentication and security controls.
 
-### Phase 11 — Quality and release readiness
+### Phase 13 — Quality and release readiness
 
 - Add integration and browser-level tests for critical workflows.
 - Test Persian RTL, keyboard navigation, accessibility, and responsive layouts.
