@@ -1,19 +1,21 @@
 # Local AI Assistant
 
-A Persian-first personal AI workspace with a FastAPI backend, lightweight browser UI, SQLite chat history, and pluggable local/cloud LLM providers.
+A Persian-first, local-first AI workspace with a FastAPI backend, lightweight browser UI, SQLite persistence, and replaceable local/cloud model providers.
 
-## Implemented features
+The long-term direction is a provider-agnostic assistant with controlled knowledge access, online/offline execution paths, permissioned tools and connectors, and an auditable AI Librarian workflow. The current implementation is an earlier foundation; planned architecture must not be mistaken for shipped functionality.
 
-- **Fresh chat on startup:** every app/browser launch creates a new empty session; previous conversations remain in the sidebar and SQLite.
-- **Persistent settings:** provider, exact model ID, system prompt, profile, and appearance settings are independent of chat sessions and survive restarts.
-- **OpenRouter (cloud):** OpenAI-compatible streaming API, free model catalog, and `openrouter/free` default.
-- **Google AI Studio / Gemini:** Gemini Interactions API streaming, API-driven model discovery, and exact model ID selection.
-- **Cloudflare Workers AI:** account-scoped inference, SSE streaming, and free-plan model discovery.
-- **Groq:** OpenAI-compatible streaming chat, live model discovery, and tool-capable model choices.
-- **Cohere:** Chat v2 streaming and live discovery of chat-compatible models.
-- **Ollama (local):** discovers installed model tags and streams local chat responses.
+## Current implemented foundation
+
+- **Fresh chat on startup:** each app/browser launch creates a new empty session; previous conversations remain available in the sidebar and SQLite.
+- **Persistent settings:** provider, exact model ID, system prompt, profile, and appearance settings persist independently of chat sessions.
+- **OpenRouter:** OpenAI-compatible streaming API, model catalog, and `openrouter/free` default.
+- **Google AI Studio / Gemini:** Gemini Interactions API streaming and model discovery.
+- **Cloudflare Workers AI:** account-scoped inference, SSE streaming, and model discovery.
+- **Groq:** OpenAI-compatible streaming chat and model discovery.
+- **Cohere:** Chat v2 streaming and model discovery.
+- **Ollama:** local model discovery and streaming inference.
 - **Provider-specific model selection:** each provider retains its own selected model.
-- **Secret-safe settings:** API keys/tokens are never returned to the browser; blank secret fields preserve existing credentials.
+- **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
 - **SQLite persistence:** chat sessions, messages, and profile data are stored locally.
 
 ## Project structure
@@ -27,12 +29,29 @@ local-ai-assistant/
 ├── core/database.py
 ├── core/orchestrator.py
 ├── data/                    # local SQLite database (git-ignored)
-├── docs/
+├── docs/                    # architecture, principles, module contracts, roadmap
 ├── static/
 ├── tests/
 ├── main.py
 └── requirements.txt
 ```
+
+## Architecture and roadmap
+
+Start with the documentation index: [docs/README.md](docs/README.md).
+
+Important documents:
+- [Project principles](docs/PROJECT_PRINCIPLES.md)
+- [System architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [AI contribution/delegation guide](docs/AI_CONTRIBUTION_GUIDE.md)
+- [Interface Manager](docs/INTERFACE_MANAGER.md)
+- [Provider system](docs/PROVIDER_SYSTEM.md)
+- [Model Manager](docs/MODEL_MANAGER.md)
+- [Permissions](docs/PERMISSIONS.md)
+- [AI orchestration](docs/AI_ORCHESTRATION.md)
+
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Read the relevant module contract before changing that area.
 
 ## Requirements
 
@@ -46,59 +65,52 @@ local-ai-assistant/
 git clone https://github.com/Aparsa40/local-ai-assistant.git
 cd local-ai-assistant
 python -m venv .venv
-.\\.venv\\Scripts\\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Open http://127.0.0.1:8000.
 
-On first run, the app copies `config/settings.example.json` to the ignored `config/settings.json`. Existing unversioned settings migrate once to OpenRouter as the default provider. After that migration, any provider the user explicitly selects is preserved. Each app startup creates a new chat session while retaining all earlier sessions.
+On first run, the app copies `config/settings.example.json` to the ignored `config/settings.json`. Existing unversioned settings migrate once to OpenRouter as the default provider. After that migration, explicitly selected providers are preserved. Each app startup creates a new chat session while retaining earlier sessions.
 
 ## Configure providers
 
-Open **Settings → Models and Providers**, select a provider, enter its key/token, refresh its model list, select the exact model ID, and save.
+Open **Settings → Models and Providers**, select a provider, enter its key/token where required, refresh its model list, select the exact model ID, and save.
 
 ### OpenRouter
 
 - API key: create one in your OpenRouter account.
 - Default model: `openrouter/free` (router-selected free model).
-- The model list includes currently free/zero-priced chat models.
+- The model list is filtered according to the current catalog/pricing logic.
 
 Links: [OpenRouter API keys](https://openrouter.ai/keys), [Free Models](https://openrouter.ai/collections/free-models/).
 
 ### Google AI Studio / Gemini
 
 - API key: create it in [Google AI Studio](https://aistudio.google.com/app/apikey).
-- Default model ID in the example: `gemini-3.8-flash`.
-- Refresh the model catalog to get exact model IDs that are both available to your API key and present in the maintained free-tier allowlist.
-- The initial free-tier choices are `gemini-3.8-flash`, `gemini-3.1-flash-lite`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite`, based on Google's published [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing). Availability and rate limits still depend on your Google AI Studio project.
-- The adapter uses the current Interactions API and streaming events.
+- Refresh the model catalog to obtain exact model IDs available to the key and supported by the maintained allowlist.
+- Availability and rate limits depend on the Google AI Studio project and can change.
 
 ### Cloudflare Workers AI
 
-- Configure a Workers AI API token and your Cloudflare Account ID.
-- The Workers Free plan includes 10,000 Neurons per day; remaining daily Neurons are not exposed by the inference endpoint.
-- Model discovery is checked against the live account catalog and a conservative free-plan allowlist.
-- Recommended model: `@cf/zai-org/glm-4.7-flash` for coding, analysis, multilingual chat, and tool-oriented tasks.
+- Configure a Workers AI API token and Cloudflare Account ID.
+- The Workers Free plan allowance and live remaining balance are different concepts; remaining quota may be unknown when the API does not expose it.
+- Model discovery uses the account catalog and a maintained allowlist.
 
 Links: [REST API](https://developers.cloudflare.com/workers-ai/get-started/rest-api/), [Pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
 
 ### Groq
 
 - Create an API key in [Groq Console](https://console.groq.com/keys).
-- The model catalog is refreshed from the authenticated Groq API.
-- Recommended models: `openai/gpt-oss-20b` for everyday chat and `openai/gpt-oss-120b` or `qwen/qwen3.8-27b` for coding and analysis.
-- Free-tier limits are organization- and model-specific; consult the [rate-limit page](https://console.groq.com/docs/rate-limits) and your [Limits dashboard](https://console.groq.com/settings/limits).
+- The model catalog is refreshed from the authenticated API.
+- Limits vary by organization and model; consult the [rate-limit page](https://console.groq.com/docs/rate-limits) and your [Limits dashboard](https://console.groq.com/settings/limits).
 
 ### Cohere
 
-- Create a free trial API key in [Cohere Dashboard](https://dashboard.cohere.com/api-keys).
-- Chat model discovery uses the Cohere `/v1/models` catalog and filters to non-deprecated chat models.
-- Trial keys are limited to 1,000 API calls per month and 20 Chat requests per minute per model.
-- Recommended model: `command-r7b-12-2024` for general chat and translation; Command models can be selected for deeper analysis.
-
-Links: [Model catalog](https://docs.cohere.com/v2/reference/list-models), [Rate limits](https://docs.cohere.com/docs/rate-limits).
+- Create a trial API key in [Cohere Dashboard](https://dashboard.cohere.com/api-keys).
+- Chat model discovery uses the Cohere model catalog and filters deprecated/non-chat models.
+- Trial quotas and model availability may change; consult the [model catalog](https://docs.cohere.com/v2/reference/list-models) and [rate limits](https://docs.cohere.com/docs/rate-limits).
 
 ### Ollama
 
@@ -108,13 +120,15 @@ Links: [Model catalog](https://docs.cohere.com/v2/reference/list-models), [Rate 
 
 Default URL: `http://localhost:11434`.
 
-## Settings example
+## Settings and credentials
 
-The complete example is in `config/settings.example.json`. Copy only the provider blocks you need into your existing ignored `config/settings.json`, or enter keys directly through the Settings UI. Never commit the real `settings.json` file.
+The complete example is in `config/settings.example.json`. The real `config/settings.json` is ignored by Git. Never commit it, API keys, tokens, local databases, or chat history.
+
+Current local credential storage is not an encrypted vault. Protect access to the operating-system account and do not expose the development server to untrusted networks.
 
 ## Extend providers
 
-Implement `BaseLLMProvider` with `chat_stream()` and `list_models()`, then register a factory in `core/providers/registry.py`. Add tests for provider construction, model discovery, streaming events, and credential handling.
+Implement the current provider contract in `core/providers/base.py`, register the adapter in `core/providers/registry.py`, and add tests for construction, model discovery, streaming, error handling, and credential redaction. Follow [PROVIDER_SYSTEM.md](docs/PROVIDER_SYSTEM.md) and [AI_CONTRIBUTION_GUIDE.md](docs/AI_CONTRIBUTION_GUIDE.md).
 
 ## Tests
 
@@ -127,16 +141,21 @@ node --check static/app.js
 
 GitHub Actions runs JavaScript syntax validation, Python compilation, and unit tests.
 
-## Current scope and limitations
+## Current limitations
 
-- The task-based architect/router and automatic tool selection are not implemented yet; the current mode remains manual provider/model selection.
-- MCP and external app connectors with permission management remain future work.
-- Documents, long-term knowledge memory, RAG, and cache management remain future work.
-- Google AI Studio free-tier IDs are maintained against Google's public pricing page; update the allowlist when pricing or model availability changes.
-- Cloudflare, Groq, and Cohere quotas and model availability can change; quota remaining is shown as unknown when the provider does not expose a live balance.
-- API keys are stored in the local ignored settings file as plaintext. Protect access to the machine.
-- The application does not implement user authentication. Do not expose it to an untrusted network.
+The following target capabilities are **not yet implemented as complete systems**:
+- Full Interface Manager service boundary and Model & Provider Updater.
+- Automatic task-based routing and LLM Supervisor.
+- Unified Conversation Processing with explicit online/offline engines.
+- Response Validator & Composer.
+- Permission Manager and permissioned Tool Runtime.
+- External connector framework and Discord synchronization.
+- Document ingestion, AI Librarian, approved shared knowledge, and model-private memory lifecycle.
+- Full repository/migration architecture for SQLite and PostgreSQL.
+- Encrypted credential vault, authentication, and hosted multi-user security.
+
+The current chat path still uses manual provider/model selection. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
 
 ## License
 
-MIT — see LICENSE.
+MIT — see [LICENSE](LICENSE).

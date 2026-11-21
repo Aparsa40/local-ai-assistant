@@ -1,13 +1,34 @@
 # Versioning Policy
 
-This project follows **Semantic Versioning (SemVer)** (`MAJOR.MINOR.PATCH`):
+The project follows Semantic Versioning (SemVer): `MAJOR.MINOR.PATCH`.
 
-- **MAJOR (`X.0.0`):** Incompatible API changes, major database schema migrations, or core architectural overhauls.
-- **MINOR (`0.X.0`):** New backward-compatible features (e.g., adding a new LLM provider, RAG support, or GitHub tool integration).
-- **PATCH (`0.0.X`):** Backward-compatible bug fixes, performance optimizations, and documentation updates.
+- **MAJOR:** incompatible public API changes, breaking data migrations, or major architectural changes requiring user action.
+- **MINOR:** backward-compatible user-facing capabilities or substantial additive functionality.
+- **PATCH:** backward-compatible fixes, security updates, documentation corrections, and small improvements.
 
-## Pre-Release Milestones (`0.x.x`)
-- `0.1.x`: Core chat engine, Ollama/OpenRouter providers, SQLite storage, offline UI.
-- `0.2.x`: Document ingestion & RAG (Retrieval-Augmented Generation) via `nomic-embed-text`.
-- `0.3.x`: External tool execution (GitHub connector, web search, local file tools).
-- `1.0.0`: Production-ready release with full test coverage and automated migrations.
+## Pre-1.0 development
+
+Before `1.0.0`, the project may use `0.MINOR.PATCH` releases. Public APIs and internal module contracts may evolve, but database migrations must still protect existing user data.
+
+Do not assign fixed feature promises to a version number before the corresponding scope and acceptance criteria are approved. The roadmap defines dependencies and milestones; release versioning is decided when a milestone is sufficiently scoped.
+
+## Release requirements
+
+A release should include:
+- updated version metadata where applicable;
+- CHANGELOG entry;
+- tests and CI results;
+- migration notes for schema changes;
+- documentation updates;
+- known limitations and upgrade/backup guidance.
+
+## Compatibility
+
+- Database schema changes must use versioned migrations.
+- Breaking changes to persisted data require a backup/recovery plan.
+- Provider model IDs and external service catalogs are operational data and must not be treated as stable public APIs.
+- Document status must distinguish implemented functionality from planned architecture.
+
+## Version history
+
+Record release-specific changes in the repository's `CHANGELOG.md`. This document defines the policy, not a speculative release schedule.
