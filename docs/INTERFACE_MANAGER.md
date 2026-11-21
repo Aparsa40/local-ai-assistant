@@ -49,6 +49,8 @@ HTTP endpoints:
 - GET /api/providers/{provider_id}/connection
 - POST /api/chat uses Interface Manager for provider streaming.
 
+The Provider settings panel exposes a “Save and check connection” action that persists the edited settings before calling the catalog diagnostic endpoint.
+
 The connection endpoint currently performs a **model-catalog probe**. A successful catalog request proves that the provider's discovery endpoint is reachable; it does not prove that a subsequent inference request will succeed. The API must not label this as a full inference health check.
 
 ## 5. Remaining target service contract
