@@ -15,7 +15,7 @@ The application itself, its database, and its managed local files are the primar
 
 The repository currently contains a FastAPI application, a lightweight Alpine.js browser UI, SQLAlchemy-backed SQLite persistence, provider adapters, settings/configuration handling, chat streaming, and tests.
 
-Provider integrations present in the current codebase include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current chat experience still uses explicit provider/model selection. Capability metadata exists as groundwork; it does not mean the full Interface Manager, automatic task routing, or AI Supervisor is complete.
+Provider integrations present in the current codebase include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current chat experience still uses explicit provider/model selection. A first Interface Manager service boundary now handles provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The Model Manager, scheduled Updater, automatic routing, Agent Runtime, and Supervisor remain future work.
 
 The current application also has important limitations: credentials are stored in the ignored local settings JSON file, authentication is not implemented, and the current application must not be exposed to untrusted networks. See README and ARCHITECTURE for the implementation snapshot.
 
