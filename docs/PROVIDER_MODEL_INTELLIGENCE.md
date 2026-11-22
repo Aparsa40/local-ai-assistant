@@ -1,12 +1,14 @@
 # Provider & Model Intelligence
 
-**Status:** First implementation committed; GitHub CI passed (77 tests with default warnings enabled); Windows Ollama smoke testing remains pending.
+**Status:** Intelligence refinement committed; CI validation and Windows Ollama smoke testing are pending.
 
 ### Implemented in the current increment
 
 - Ollama startup/reuse is coordinated during explicit POST connection or catalog-sync actions; opening Settings remains side-effect free.
 - Local startup is restricted to loopback HTTP endpoints, uses the installed Ollama CLI with shell execution disabled, and records process ownership only for processes started by this application.
-- Ollama discovery enriches live tags with size, digest, model family, parameter size, quantization, context metadata, and provider-reported capabilities.
+- Ollama discovery enriches live tags with size, digest, model family, parameter size, quantization, context metadata, and provider-reported capabilities. A separate `/api/ps` observation records whether each installed model is currently loaded; failure to read loaded state does not invalidate catalog discovery.
+- Model roles distinguish embedding indexers from conversational candidates. An embedding-only model is explicitly marked as ineligible for chat; task suitability remains unknown unless model-level API evidence or a curated model profile supports a stronger assessment.
+- Runtime/offline reports receive a semantic fingerprint. A report is persisted only when its meaningful provider, inventory, metadata, capability, quota, or runtime facts change; repeated identical refreshes update operational observations without adding duplicate report rows.
 - Live metadata is persisted in the existing live-model catalog; partial enrichment does not erase prior metadata.
 - Runtime and offline report snapshots are stored in SQLite with bounded per-provider/type history.
 - Read-only latest-report and SQLite-only offline-report API endpoints are exposed, with a minimal Settings UI summary.
@@ -120,7 +122,7 @@ Use the official local API:
 - GET /api/version (or the existing bounded readiness probe) to identify a responding server.
 - GET /api/tags to enumerate locally installed model names and tag metadata.
 - POST /api/show for each discovered model to obtain model details and capability metadata.
-- GET /api/ps only for a separate observation of models currently loaded in memory; this is not proof of total machine capacity.
+- GET /api/ps only for a separate observation of models currently loaded in memory; this is not proof of total machine capacity. Loaded state is distinct from installed state and successful inference.
 
 The current Ollama adapter returns only model IDs from /api/tags. Extend discovery without breaking the existing list_models() -> list[str] contract, for example through an additional typed metadata method exposed by Interface Manager.
 
@@ -150,7 +152,7 @@ The first version should report suitability for a small, stable task taxonomy:
 - embeddings
 - tool calling
 
-For each model/task pair, return supported, likely, unsupported, or unknown, plus evidence, source, and confidence. Only use supported when direct model metadata or an actual runtime test supports the claim. Curated hints and model-card descriptions may produce likely, not verified support.
+For each model/task pair, return supported, likely, unsupported, or unknown, plus evidence, source, and confidence. Only use supported when direct model metadata or an actual runtime test supports the claim. Curated hints and model-card descriptions may produce likely, not verified support. A model name or family label alone must never establish coding, reasoning, or tool-calling support. Completion capability may identify a conversational candidate as likely, not verified instruction-following. Embedding-only models must be routed to indexing/retrieval roles rather than chat.
 
 Do not run automatic benchmark suites or load every installed model during ordinary provider activation. They can consume significant RAM/VRAM and delay startup. A later, explicit evaluation workflow may add opt-in tests.
 
