@@ -306,6 +306,8 @@ def test_ollama_metadata_combines_tags_and_show_evidence(monkeypatch):
                     },
                 }]
             })
+        if request.url.path == "/api/ps":
+            return httpx.Response(200, json={"models": [{"name": "llama3.2:1b"}]})
         if request.url.path == "/api/show":
             return httpx.Response(200, json={
                 "details": {
@@ -340,6 +342,11 @@ def test_ollama_metadata_combines_tags_and_show_evidence(monkeypatch):
     assert metadata["details"]["quantization_level"] == "Q4_K_M"
     assert metadata["context_length"] == 8192
     assert metadata["capabilities"] == ["completion", "tools", "vision"]
+    assert metadata["runtime_observation"] == {
+        "installed": True,
+        "loaded": True,
+        "loaded_source": "ollama_api_ps",
+    }
     assert result["errors"] == []
 
 
@@ -405,3 +412,101 @@ def test_runtime_report_marks_preserved_empty_catalog_as_degraded():
     finally:
         db.close()
         engine.dispose()
+
+
+
+def test_embedding_model_is_not_classified_as_a_chat_model():
+    assessment = {
+        item["task"]: item
+        for item in provider_intelligence._model_task_assessments({
+            "catalog_data": {
+                "capabilities": ["embedding"],
+                "details": {"family": "nomic-bert"},
+            },
+            "operator_profile": {},
+        })
+    }
+
+    assert assessment["embeddings"]["suitability"] == "supported"
+    assert assessment["general_chat"]["suitability"] == "unknown"
+    assert assessment["tool_calling"]["suitability"] == "unknown"
+
+
+def test_model_name_alone_does_not_prove_coding_or_tool_calling():
+    assessment = {
+        item["task"]: item
+        for item in provider_intelligence._model_task_assessments({
+            "catalog_data": {"capabilities": ["completion"]},
+            "operator_profile": {},
+        })
+    }
+
+    assert assessment["general_chat"]["suitability"] == "likely"
+    assert assessment["coding"]["suitability"] == "unknown"
+    assert assessment["tool_calling"]["suitability"] == "unknown"
+
+
+def test_report_fingerprint_ignores_volatile_last_seen_timestamps():
+    engine, session_factory = _database()
+    db = session_factory()
+    try:
+        seed_operator_catalogs(db)
+        sync_live_models(
+            db,
+            "ollama",
+            ["llama3.2:1b"],
+            model_metadata={
+                "llama3.2:1b": {
+                    "size": 1234,
+                    "digest": "stable-digest",
+                    "capabilities": ["completion", "tools"],
+                    "details": {"family": "llama"},
+                }
+            },
+        )
+        first = provider_intelligence.build_runtime_report(
+            db, "ollama", {"status": "reachable", "catalog_sync": {"status": "success"}}
+        )
+        sync_live_models(
+            db,
+            "ollama",
+            ["llama3.2:1b"],
+            model_metadata={
+                "llama3.2:1b": {
+                    "size": 1234,
+                    "digest": "stable-digest",
+                    "capabilities": ["completion", "tools"],
+                    "details": {"family": "llama"},
+                }
+            },
+        )
+        second = provider_intelligence.build_runtime_report(
+            db, "ollama", {"status": "reachable", "catalog_sync": {"status": "success"}}
+        )
+        assert first["fingerprint"] == second["fingerprint"]
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_analyzed_model_exposes_roles_chat_eligibility_and_runtime_state():
+    snapshot = {
+        "live_models": [{
+            "model_id": "nomic-embed-text:latest",
+            "active": True,
+            "source": "ollama_local_api",
+            "catalog_data": {
+                "capabilities": ["embedding"],
+                "runtime_observation": {"installed": True, "loaded": False},
+                "details": {"family": "nomic-bert"},
+            },
+            "runtime": {"availability": "unknown"},
+        }],
+    }
+    model = provider_intelligence._analyze_snapshot(snapshot)[0]
+
+    assert model["model_kind"] == "embedding"
+    assert model["model_roles"] == ["embedding_indexer"]
+    assert model["chat_eligible"] is False
+    assert model["runtime"]["installed"] is True
+    assert model["runtime"]["loaded"] is False
