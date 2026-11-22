@@ -1,4 +1,7 @@
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import asyncio
 
 import pytest
@@ -86,3 +89,40 @@ def test_connection_probe_rejects_get_and_remains_post_only():
     assert response.status_code == 405
     assert "POST" in response.headers.get("allow", "")
     assert "GET" not in response.headers.get("allow", "")
+
+
+def test_offline_intelligence_report_api_reads_and_persists_sqlite_snapshot():
+    import main
+    from core.catalog_storage import seed_operator_catalogs
+    from core.database import Base
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    seed_operator_catalogs(db)
+
+    def override_get_db():
+        try:
+            yield db
+        finally:
+            pass
+
+    main.app.dependency_overrides[main.get_db] = override_get_db
+    try:
+        client = TestClient(main.app)
+        response = client.post("/api/intelligence/reports/offline?provider_id=groq")
+        assert response.status_code == 200
+        assert response.json()["report_type"] == "offline"
+
+        latest = client.get("/api/intelligence/reports/latest?provider_id=groq&report_type=offline")
+        assert latest.status_code == 200
+        assert latest.json()["provider_id"] == "groq"
+    finally:
+        main.app.dependency_overrides.pop(main.get_db, None)
+        db.close()
+        engine.dispose()
