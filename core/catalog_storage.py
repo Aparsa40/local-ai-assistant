@@ -61,8 +61,11 @@ def sync_live_models(
         for row in db.query(LiveModelCatalogEntry).filter_by(provider_id=provider_id).all()
     }
     added = 0
-    for row in existing.values():
-        row.active = False
+    retired = 0
+    for model_id, row in existing.items():
+        if row.active and model_id not in normalized_ids:
+            retired += 1
+        row.active = model_id in normalized_ids
     for model_id in normalized_ids:
         row = existing.get(model_id)
         if row is None:
@@ -81,7 +84,6 @@ def sync_live_models(
             row.active = True
             row.last_seen_at = now
             row.source = source
-    retired = sum(1 for model_id, row in existing.items() if model_id not in normalized_ids and row.active is False)
     history = CatalogSyncHistory(
         provider_id=provider_id,
         status="success",
@@ -132,6 +134,30 @@ def record_quota_snapshot(db: Session, provider_id: str, status: dict[str, Any])
         status=status,
         source=status.get("source"),
     ))
+    db.commit()
+
+
+
+def record_model_runtime(
+    db: Session,
+    provider_id: str,
+    model_id: str,
+    availability: str,
+    error: dict[str, Any] | None = None,
+    observed_limits: dict[str, Any] | None = None,
+) -> None:
+    row = db.get(ModelRuntimeStatus, (provider_id, model_id))
+    if row is None:
+        row = ModelRuntimeStatus(provider_id=provider_id, model_id=model_id)
+        db.add(row)
+    row.availability = availability
+    if availability == "available":
+        row.last_successful_request = datetime.utcnow()
+        row.last_error = None
+    elif error is not None:
+        row.last_error = error
+    if observed_limits is not None:
+        row.observed_limits = observed_limits
     db.commit()
 
 
