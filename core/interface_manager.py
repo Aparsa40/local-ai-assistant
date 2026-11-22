@@ -185,6 +185,28 @@ class InterfaceManager:
     async def get_model_metadata(self, provider_id: str, model_ids: List[str]) -> dict:
         """Collect optional per-model metadata without breaking basic catalog discovery."""
         provider = self._create_provider(provider_id)
+        bulk_reader = getattr(provider, "list_model_metadata", None)
+        if callable(bulk_reader):
+            try:
+                timeout = max(self._timeout_seconds, min(self._timeout_seconds * max(1, len(model_ids)), 120.0))
+                result = await asyncio.wait_for(
+                    bulk_reader(model_ids), timeout=timeout
+                )
+                return {
+                    "models": result.get("models", {}),
+                    "errors": result.get("errors", []),
+                }
+            except asyncio.TimeoutError:
+                return {
+                    "models": {},
+                    "errors": [{"category": "metadata_timeout"}],
+                }
+            except Exception:
+                return {
+                    "models": {},
+                    "errors": [{"category": "metadata_unavailable"}],
+                }
+
         details_reader = getattr(provider, "get_model_details", None)
         if not callable(details_reader):
             return {"models": {}, "errors": []}
@@ -204,9 +226,10 @@ class InterfaceManager:
                     return model_id, None, {"model_id": model_id, "category": "metadata_unavailable"}
 
         results = await asyncio.gather(*(collect(model_id) for model_id in model_ids))
-        models = {model_id: data for model_id, data, error in results if data is not None}
-        errors = [error for _model_id, _data, error in results if error is not None]
-        return {"models": models, "errors": errors}
+        return {
+            "models": {model_id: data for model_id, data, error in results if data is not None},
+            "errors": [error for _model_id, _data, error in results if error is not None],
+        }
 
     async def stream_chat(
         self,
