@@ -80,17 +80,19 @@ class LocalRuntimeController:
         try:
             parsed_base = urlparse(endpoint)
             host = parsed_base.hostname or ""
+            parsed_port = parsed_base.port
             is_local_host = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
         except ValueError:
             is_local_host = False
             parsed_base = None
-        if parsed_base is not None and parsed_base.scheme == "http" and is_local_host and parsed_base.port is None:
+            parsed_port = None
+        if parsed_base is not None and parsed_base.scheme == "http" and is_local_host and parsed_port is None:
             bind_host = "127.0.0.1" if host.lower() == "localhost" else host
             if ":" in bind_host:
                 bind_host = f"[{bind_host}]"
             endpoint = parsed_base._replace(netloc=f"{bind_host}:11434").geturl().rstrip("/")
         elif parsed_base is not None and parsed_base.scheme == "http" and host.lower() == "localhost":
-            endpoint = parsed_base._replace(netloc=f"127.0.0.1:{parsed_base.port}").geturl().rstrip("/")
+            endpoint = parsed_base._replace(netloc=f"127.0.0.1:{parsed_port}").geturl().rstrip("/")
         local_endpoint = self._is_loopback(endpoint)
         async with self._lock:
             if await self._probe(endpoint):
