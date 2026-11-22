@@ -476,6 +476,7 @@
                                target="_blank" rel="noopener noreferrer" class="text-xs text-sky-400 hover:text-sky-300">مستندات رسمی ↗</a>
                         </div>
                         <p class="text-xs text-slate-400" x-text="providerCapabilities.operator?.description || ''"></p>
+                        <p class="text-[11px] text-slate-500" x-text="'آخرین بازبینی مستندات: ' + (providerCapabilities.operator?.review_metadata?.last_reviewed_at || 'ثبت نشده')"></p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                             <div><span class="text-slate-500">نوع سرویس:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.category || 'نامشخص'"></span></div>
                             <div><span class="text-slate-500">روش کاتالوگ:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.catalog_mode || 'نامشخص'"></span></div>
