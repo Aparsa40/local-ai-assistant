@@ -19,6 +19,7 @@ from .database import (
     OperatorModelProfile,
     ProviderQuotaSnapshot,
     ProviderRuntimeStatus,
+    ProviderIntelligenceReport,
     to_utc_naive,
     utcnow_naive,
 )
@@ -67,6 +68,7 @@ def sync_live_models(
     provider_id: str,
     model_ids: list[str],
     source: str = "provider_api",
+    model_metadata: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Persist a successful model discovery without erasing historical records."""
     now = utcnow_naive()
@@ -109,7 +111,7 @@ def sync_live_models(
             row = LiveModelCatalogEntry(
                 provider_id=provider_id,
                 model_id=model_id,
-                catalog_data={},
+                catalog_data=(model_metadata or {}).get(model_id, {}),
                 source=source,
                 active=True,
                 first_seen_at=now,
@@ -121,6 +123,8 @@ def sync_live_models(
             row.active = True
             row.last_seen_at = now
             row.source = source
+            if model_metadata and model_id in model_metadata:
+                row.catalog_data = model_metadata[model_id]
     history = CatalogSyncHistory(
         provider_id=provider_id,
         status="success",
@@ -276,3 +280,46 @@ def get_operational_report(db: Session) -> dict[str, Any]:
         "generated_at": utcnow_naive().isoformat(),
         "providers": [get_provider_catalog_snapshot(db, row.provider_id) for row in providers],
     }
+
+
+def save_intelligence_report(db: Session, report: dict[str, Any], history_limit: int = 20) -> dict[str, Any]:
+    """Persist a complete report snapshot and retain bounded per-provider/type history."""
+    source_value = report.get("source_snapshot_at")
+    source_time = None
+    if source_value:
+        try:
+            source_time = to_utc_naive(datetime.fromisoformat(source_value.replace("Z", "+00:00")))
+        except (TypeError, ValueError):
+            source_time = None
+    row = ProviderIntelligenceReport(
+        provider_id=report["provider_id"],
+        report_type=report["report_type"],
+        generated_at=to_utc_naive(datetime.fromisoformat(report["generated_at"].replace("Z", "+00:00"))),
+        source_snapshot_at=source_time,
+        overall_status=report.get("overall_status", "unknown"),
+        summary=report.get("summary", ""),
+        report_data=report,
+        schema_version=1,
+    )
+    db.add(row)
+    db.flush()
+    stale_rows = (
+        db.query(ProviderIntelligenceReport)
+        .filter_by(provider_id=row.provider_id, report_type=row.report_type)
+        .order_by(ProviderIntelligenceReport.generated_at.desc(), ProviderIntelligenceReport.id.desc())
+        .offset(max(1, history_limit))
+        .all()
+    )
+    for stale in stale_rows:
+        db.delete(stale)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id, "provider_id": row.provider_id, "report_type": row.report_type, "generated_at": row.generated_at.isoformat()}
+
+
+def get_latest_intelligence_report(db: Session, provider_id: str, report_type: str | None = None) -> dict[str, Any] | None:
+    query = db.query(ProviderIntelligenceReport).filter_by(provider_id=provider_id)
+    if report_type:
+        query = query.filter_by(report_type=report_type)
+    row = query.order_by(ProviderIntelligenceReport.generated_at.desc(), ProviderIntelligenceReport.id.desc()).first()
+    return row.report_data if row else None
