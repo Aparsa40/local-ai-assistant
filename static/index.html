@@ -349,6 +349,36 @@
                         <p class="text-[10px] text-slate-600" x-show="operationalReport?.generated_at" x-text="'Generated: ' + operationalReport.generated_at"></p>
                     </section>
 
+                    <section class="rounded-lg border border-slate-700 p-3 space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <div class="font-semibold">گزارش هوشمند Provider و مدل‌ها</div>
+                                <p class="text-xs text-slate-500">تحلیل مدل‌ها بر پایه اطلاعات ذخیره‌شده و شواهد قابل‌ردیابی.</p>
+                            </div>
+                            <button @click="generateOfflineReport()" type="button" :disabled="intelligenceReportLoading"
+                                    class="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-2 text-xs">تولید گزارش آفلاین</button>
+                        </div>
+                        <template x-if="intelligenceReport">
+                            <div class="space-y-2 text-xs">
+                                <div class="flex flex-wrap gap-3 text-slate-300">
+                                    <span x-text="'وضعیت: ' + intelligenceReport.overall_status"></span>
+                                    <span x-text="'نوع: ' + intelligenceReport.report_type"></span>
+                                    <span x-text="'تازگی: ' + (intelligenceReport.freshness?.status || 'unknown')"></span>
+                                </div>
+                                <p class="text-slate-400" x-text="intelligenceReport.summary"></p>
+                                <template x-for="model in (intelligenceReport.models || [])" :key="model.model_id">
+                                    <div class="rounded border border-slate-800 p-2">
+                                        <div class="font-medium text-sky-300 break-all" dir="ltr" x-text="model.model_id"></div>
+                                        <div class="text-slate-500" x-text="'Family: ' + (model.metadata?.family || 'Unknown') + ' · Parameters: ' + (model.metadata?.parameter_size || 'Unknown') + ' · Quantization: ' + (model.metadata?.quantization_level || 'Unknown')"></div>
+                                        <div class="text-slate-400" x-text="'Tasks: ' + (model.task_suitability || []).filter(item => item.suitability !== 'unknown').map(item => item.task + ' (' + item.suitability + ')').join(', ')"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <p x-show="intelligenceReportLoading" class="text-xs text-sky-400">در حال تولید گزارش...</p>
+                        <p x-show="intelligenceReportError" class="text-xs text-amber-400" x-text="intelligenceReportError"></p>
+                    </section>
+
                     <div class="rounded-lg border border-slate-700 p-3 space-y-2">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
@@ -366,6 +396,11 @@
                     </div>
 
                     <div x-show="settings.active_provider === 'ollama'" class="space-y-2">
+                        <label class="flex items-center gap-2 text-xs text-slate-300">
+                            <input type="checkbox" x-model="settings.providers_config.ollama.auto_start" class="accent-sky-500">
+                            در صورت خاموش بودن، سرور Ollama به‌صورت خودکار اجرا شود
+                        </label>
+                        <p class="text-[11px] text-slate-500">راه‌اندازی فقط هنگام «ذخیره، اتصال و دریافت مدل‌ها» انجام می‌شود؛ بازکردن تنظیمات باعث اجرای سرور نخواهد شد.</p>
                         <label class="block">مدل نصب‌شده در Ollama</label>
                         <div class="flex gap-2">
                             <select x-model="settings.providers_config.ollama.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
