@@ -169,6 +169,15 @@ async def provider_capabilities(provider_id: str):
         raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
 
 
+@app.get("/api/providers/{provider_id}/catalog")
+async def provider_catalog(provider_id: str):
+    """Return the local operator catalog; this endpoint never triggers remote discovery."""
+    try:
+        return interface_manager.get_provider_catalog(provider_id)
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+
 @app.get("/api/providers/{provider_id}/models")
 async def list_provider_models(provider_id: str):
     try:
