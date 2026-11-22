@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -6,11 +7,12 @@ from sqlalchemy.pool import StaticPool
 
 from core.catalog_storage import (
     get_provider_catalog_snapshot,
+    record_provider_runtime,
     record_sync_failure,
     seed_operator_catalogs,
     sync_live_models,
 )
-from core.database import Base, LiveModelCatalogEntry
+from core.database import Base, LiveModelCatalogEntry, to_utc_naive, utcnow_naive
 
 
 class CatalogStorageTests(unittest.TestCase):
@@ -27,6 +29,31 @@ class CatalogStorageTests(unittest.TestCase):
     def tearDown(self):
         self.db.close()
         self.engine.dispose()
+
+    def test_utc_timestamp_helpers_preserve_naive_utc_storage_contract(self):
+        now = utcnow_naive()
+        self.assertIsNone(now.tzinfo)
+
+        offset_timestamp = datetime(2026, 11, 22, 12, 0, tzinfo=timezone(timedelta(hours=3)))
+        self.assertEqual(
+            to_utc_naive(offset_timestamp),
+            datetime(2026, 11, 22, 9, 0),
+        )
+
+        legacy_naive_timestamp = datetime(2026, 11, 22, 9, 0)
+        self.assertIs(to_utc_naive(legacy_naive_timestamp), legacy_naive_timestamp)
+
+    def test_provider_runtime_timestamp_is_normalized_to_utc_before_storage(self):
+        record_provider_runtime(
+            self.db,
+            "groq",
+            {
+                "status": "reachable",
+                "checked_at": "2026-11-22T12:00:00+03:00",
+            },
+        )
+        snapshot = get_provider_catalog_snapshot(self.db, "groq")
+        self.assertEqual(snapshot["provider_runtime"]["checked_at"], "2026-11-22T09:00:00")
 
     def test_operator_manifests_and_curated_profiles_are_seeded(self):
         count = seed_operator_catalogs(self.db)
