@@ -287,6 +287,11 @@ def _analyze_snapshot(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         if has_vision:
             roles.append("vision_analyzer")
         assessments = _model_task_assessments(model)
+        suitability_by_task = {item["task"]: item["suitability"] for item in assessments}
+        if suitability_by_task.get("coding") in {"supported", "likely"}:
+            roles.append("coding_assistant")
+        if suitability_by_task.get("reasoning") in {"supported", "likely"}:
+            roles.append("reasoning_model")
         analyzed_models.append({
             "model_id": model["model_id"],
             "source": model.get("source"),
@@ -312,7 +317,11 @@ def _analyze_snapshot(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
                 "last_successful_request": runtime.get("last_successful_request"),
             },
             "task_suitability": assessments,
-            "metadata_status": "available" if metadata else "unknown",
+            "metadata_status": (
+                "available"
+                if metadata.get("metadata_source") == "ollama_api_show"
+                else "partial" if metadata else "unknown"
+            ),
             "last_seen_at": model.get("last_seen_at"),
         })
     return analyzed_models
