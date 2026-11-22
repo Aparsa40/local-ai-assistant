@@ -54,11 +54,13 @@ HTTP endpoints:
 - GET /api/providers/{provider_id}/quota
 - POST /api/providers/{provider_id}/connection
 - GET /api/operational-report
+- GET /api/intelligence/reports/latest?provider_id=... (persisted report read)
+- POST /api/intelligence/reports/offline?provider_id=... (SQLite-only report generation)
 - POST /api/chat uses Interface Manager for provider streaming.
 
 The Provider settings panel exposes a “Save and check connection” action that persists the edited settings, probes the provider catalog, and persists the model IDs returned by that same probe. Manual catalog refresh is a separate action and does not run during ordinary UI reads.
 
-The connection endpoint currently performs a **model-catalog probe**. A successful catalog request proves that the provider's discovery endpoint is reachable; it does not prove that a subsequent inference request will succeed. The API must not label this as a full inference health check. The endpoint is POST-only because it performs discovery and persists runtime/catalog state. The accepted Provider & Model Intelligence design coordinates local Ollama startup and report generation around this service boundary; it must not move provider API implementations out of adapters.
+The connection endpoint performs a **model-catalog probe**. For Ollama only, the Provider & Model Intelligence service first reuses a responding local API or starts the installed CLI when the configured endpoint is loopback HTTP and auto-start is enabled. Remote endpoints are probe-only. A successful catalog request proves discovery reachability; it does not prove inference success. The endpoint is POST-only because it can start a process, perform discovery, and persist runtime/catalog/report state. Provider API implementations remain inside adapters.
 
 ## 5. Remaining target service contract
 
@@ -145,6 +147,7 @@ Related: PROVIDER_MODEL_INTELLIGENCE.md, OPERATOR_CATALOGS.md, PROVIDER_SYSTEM.m
 - `provider_runtime_status` and `model_runtime_status` for separately observed connection and inference facts.
 - `provider_quota_snapshots` for timestamped provider quota responses.
 - `catalog_sync_history` for successful, failed, and ambiguous-empty sync outcomes.
+- `provider_intelligence_reports` for bounded runtime/offline analysis snapshots; reports are derived read models and do not replace catalog/runtime source records.
 
 Startup uses `Base.metadata.create_all()` to add these tables without replacing existing chat/profile tables, then seeds the version-controlled operator manifests. Existing SQLite data is preserved.
 
