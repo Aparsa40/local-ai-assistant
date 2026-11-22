@@ -510,3 +510,12 @@ def test_analyzed_model_exposes_roles_chat_eligibility_and_runtime_state():
     assert model["chat_eligible"] is False
     assert model["runtime"]["installed"] is True
     assert model["runtime"]["loaded"] is False
+
+
+
+def test_remote_ollama_endpoint_retains_environment_proxy_support():
+    from core.providers.ollama_provider import OllamaProvider
+
+    provider = OllamaProvider(base_url="https://ollama.example.test:11434")
+    assert provider._trust_env is True
+    assert provider.base_url == "https://ollama.example.test:11434"
