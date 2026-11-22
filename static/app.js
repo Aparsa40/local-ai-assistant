@@ -27,6 +27,9 @@ function chatApp() {
         connectionResult: null,
         providerCapabilities: null,
         providerQuota: null,
+        catalogSyncLoading: false,
+        catalogSyncResult: null,
+        providerCatalogSnapshot: null,
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -92,6 +95,8 @@ function chatApp() {
 
         async onProviderChange() {
             this.connectionResult = null;
+            this.providerQuota = null;
+            this.catalogSyncResult = null;
             await this.loadProviderCapabilities();
             await this.refreshModels();
         },
@@ -116,6 +121,7 @@ function chatApp() {
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
                 this.connectionResult = result;
+                if (result.status === 'reachable') await this.syncProviderCatalog();
             } catch (error) {
                 this.connectionResult = {
                     status: 'error',
@@ -134,6 +140,7 @@ function chatApp() {
                 const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/catalog`);
                 if (!response.ok) throw new Error('بارگذاری کاتالوگ اپراتور ناموفق بود.');
                 this.providerCapabilities = await response.json();
+                this.providerCatalogSnapshot = this.providerCapabilities.storage || null;
             } catch (error) {
                 console.warn('Operator catalog could not be loaded:', error);
             }
@@ -156,44 +163,46 @@ function chatApp() {
             const provider = this.settings.active_provider;
             const config = this.settings.providers_config[provider] ||= {};
             const defaultModel = config.model || '';
-
-            // Secret values are redacted by /api/settings; trust the configured marker
-            // when the actual credential is intentionally absent from the browser payload.
-            const hasApiKey = Boolean(config.api_key || config.api_key_configured);
-            const credentialsReady = provider === 'cloudflare_workers_ai'
-                ? Boolean(hasApiKey && config.account_id)
-                : ['groq', 'cohere'].includes(provider)
-                    ? hasApiKey
-                    : true;
-
-            if (!credentialsReady) {
-                this.availableModels = defaultModel ? [defaultModel] : [];
-                this.modelsError = 'برای دریافت فهرست زنده مدل‌ها، ابتدا اطلاعات اتصال این Provider را وارد کنید.';
-                this.modelsLoading = false;
-                return;
-            }
-
-            this.availableModels = defaultModel ? [defaultModel] : [];
             try {
+                // Model selection reads the durable catalog; network discovery is an explicit sync action.
                 const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/models`);
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
-                const discoveredModels = data.models || [];
-                this.availableModels = discoveredModels;
-                // Keep the configured default if discovery returns an empty or partial catalog.
-                if (discoveredModels.length && !discoveredModels.includes(config.model)) {
-                    config.model = discoveredModels[0];
+                if (!response.ok) throw new Error(data.detail || 'خواندن کاتالوگ ذخیره‌شده ناموفق بود.');
+                const storedModels = data.models || [];
+                this.availableModels = storedModels.length ? storedModels : (defaultModel ? [defaultModel] : []);
+                if (storedModels.length && !storedModels.includes(config.model)) {
+                    // Do not silently change the user's selected model; retain it until they choose another.
+                    this.modelsError = 'مدل انتخاب‌شده فعلاً در کاتالوگ زنده دیده نمی‌شود؛ انتخاب فعلی حفظ شده است.';
+                } else if (!storedModels.length) {
+                    this.modelsError = 'هنوز کاتالوگ زنده‌ای برای این Provider ذخیره نشده است. از «دریافت/همگام‌سازی کاتالوگ» استفاده کنید.';
                 }
             } catch (error) {
                 this.modelsError = error.message;
-                // Discovery is optional; never erase a working default because an API is unavailable.
                 this.availableModels = defaultModel ? [defaultModel] : [];
-                if (provider === 'openrouter') {
-                    this.availableModels = ['openrouter/free'];
-                    config.model ||= 'openrouter/free';
-                }
             } finally {
                 this.modelsLoading = false;
+            }
+        },
+
+        async syncProviderCatalog() {
+            if (this.catalogSyncLoading) return;
+            this.catalogSyncLoading = true;
+            this.catalogSyncResult = null;
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/catalog/sync`, { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'همگام‌سازی کاتالوگ ناموفق بود.');
+                this.catalogSyncResult = data.sync;
+                this.providerCatalogSnapshot = data.catalog;
+                await this.loadProviderCapabilities();
+                await this.refreshModels();
+            } catch (error) {
+                // A failed refresh does not clear the previously stored catalog.
+                this.catalogSyncResult = { status: 'failed', error: error.message };
+                this.modelsError = error.message;
+            } finally {
+                this.catalogSyncLoading = false;
             }
         },
 
