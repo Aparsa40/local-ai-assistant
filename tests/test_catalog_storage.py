@@ -184,5 +184,24 @@ class CatalogStorageTests(unittest.TestCase):
         )
 
 
+    def test_provider_runtime_persists_local_process_ownership_details(self):
+        record_provider_runtime(
+            self.db,
+            "ollama",
+            {
+                "status": "reachable",
+                "checked_at": utcnow_naive().isoformat(),
+                "runtime": {
+                    "started_by_application": True,
+                    "process_id": 12345,
+                    "endpoint_scope": "local",
+                },
+            },
+        )
+        snapshot = get_provider_catalog_snapshot(self.db, "ollama")
+        self.assertTrue(snapshot["provider_runtime"]["runtime_details"]["started_by_application"])
+        self.assertEqual(snapshot["provider_runtime"]["runtime_details"]["process_id"], 12345)
+
+
 if __name__ == "__main__":
     unittest.main()
