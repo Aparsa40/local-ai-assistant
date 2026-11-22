@@ -67,9 +67,9 @@ class LocalRuntimeController:
         return next((str(path) for path in candidates if path.is_file()), None)
 
     @staticmethod
-    async def _probe(base_url: str) -> bool:
+    async def _probe(base_url: str, trust_env: bool = False) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=1.5, trust_env=False) as client:
+            async with httpx.AsyncClient(timeout=1.5, trust_env=trust_env) as client:
                 response = await client.get(f"{base_url.rstrip('/')}/api/version")
                 return response.is_success
         except (httpx.HTTPError, ValueError):
@@ -95,7 +95,8 @@ class LocalRuntimeController:
             endpoint = parsed_base._replace(netloc=f"127.0.0.1:{parsed_port}").geturl().rstrip("/")
         local_endpoint = self._is_loopback(endpoint)
         async with self._lock:
-            if await self._probe(endpoint):
+            probe_result = await self._probe(endpoint) if local_endpoint else await self._probe(endpoint, trust_env=True)
+            if probe_result:
                 return {
                     "status": "ready",
                     "endpoint_scope": "local" if local_endpoint else "remote",
