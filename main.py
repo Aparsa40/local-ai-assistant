@@ -188,6 +188,14 @@ async def list_provider_models(provider_id: str):
     return {"provider": provider_id, "models": models}
 
 
+@app.get("/api/providers/{provider_id}/quota")
+async def provider_quota_status(provider_id: str):
+    try:
+        return await interface_manager.get_quota_status(provider_id)
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+
 @app.get("/api/providers/{provider_id}/connection")
 async def provider_connection_status(provider_id: str):
     try:
