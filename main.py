@@ -14,10 +14,21 @@ from core.config_manager import ConfigManager
 from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
+from core.catalog_storage import (
+    get_operational_report,
+    get_provider_catalog_snapshot,
+    record_provider_runtime,
+    record_quota_snapshot,
+    record_sync_failure,
+    seed_operator_catalogs,
+    sync_live_models,
+)
 
 app = FastAPI(title="Local Modular AI Assistant")
 interface_manager = InterfaceManager()
 init_db()
+with SessionLocal() as _catalog_seed_db:
+    seed_operator_catalogs(_catalog_seed_db)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -170,36 +181,65 @@ async def provider_capabilities(provider_id: str):
 
 
 @app.get("/api/providers/{provider_id}/catalog")
-async def provider_catalog(provider_id: str):
-    """Return the local operator catalog; this endpoint never triggers remote discovery."""
+async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+    """Return repository-owned operator metadata and persisted catalog data without network I/O."""
     try:
-        return interface_manager.get_provider_catalog(provider_id)
+        result = interface_manager.get_provider_catalog(provider_id)
     except InterfaceManagerError as exc:
         status_code = 404 if exc.category == "unknown_provider" else 502
         raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+    snapshot = get_provider_catalog_snapshot(db, provider_id)
+    result["storage"] = snapshot
+    result["live_models"] = snapshot["live_models"]
+    result["curated_models"] = snapshot["curated_models"]
+    result["provider_runtime"] = snapshot["provider_runtime"]
+    result["quota_snapshot"] = snapshot["quota"]
+    result["sync_history"] = snapshot["sync_history"]
+    return result
+
 
 @app.get("/api/providers/{provider_id}/models")
-async def list_provider_models(provider_id: str):
+async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
+    """Read the last successfully synchronized model IDs from SQLite; never performs network I/O."""
+    snapshot = get_provider_catalog_snapshot(db, provider_id)
+    active_models = [row["model_id"] for row in snapshot["live_models"] if row["active"]]
+    return {"provider": provider_id, "models": active_models, "source": "persistent_catalog"}
+
+
+@app.post("/api/providers/{provider_id}/catalog/sync")
+async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+    """Explicitly refresh a provider catalog and persist it only after successful discovery."""
     try:
-        models = await interface_manager.list_models(provider_id)
+        model_ids = await interface_manager.list_models(provider_id)
+        summary = sync_live_models(db, provider_id, model_ids)
+        return {"sync": summary, "catalog": get_provider_catalog_snapshot(db, provider_id)}
     except InterfaceManagerError as exc:
-        status_code = 404 if exc.category == "unknown_provider" else 502
-        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
-    return {"provider": provider_id, "models": models}
+        record_sync_failure(db, provider_id, {"category": exc.category, "message": exc.safe_message})
+        raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
+
+
+@app.get("/api/operational-report")
+async def operational_report(db: Session = Depends(get_db)):
+    return get_operational_report(db)
 
 
 @app.get("/api/providers/{provider_id}/quota")
-async def provider_quota_status(provider_id: str):
+async def provider_quota_status(provider_id: str, db: Session = Depends(get_db)):
     try:
-        return await interface_manager.get_quota_status(provider_id)
+        status = await interface_manager.get_quota_status(provider_id)
+        record_quota_snapshot(db, provider_id, status)
+        return status
     except InterfaceManagerError as exc:
         status_code = 404 if exc.category == "unknown_provider" else 502
         raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
 
+
 @app.get("/api/providers/{provider_id}/connection")
-async def provider_connection_status(provider_id: str):
+async def provider_connection_status(provider_id: str, db: Session = Depends(get_db)):
     try:
-        return await interface_manager.check_connection(provider_id)
+        result = await interface_manager.check_connection(provider_id)
+        record_provider_runtime(db, provider_id, result)
+        return result
     except InterfaceManagerError as exc:
         raise HTTPException(status_code=404, detail=exc.safe_message) from exc
 
