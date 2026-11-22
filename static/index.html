@@ -366,6 +366,8 @@
                                     <span x-text="'تازگی: ' + (intelligenceReport.freshness?.status || 'unknown')"></span>
                                 </div>
                                 <p class="text-slate-400" x-text="intelligenceReport.summary"></p>
+                                <p x-show="intelligenceReport.provider_runtime?.startup" class="text-slate-500"
+                                   x-text="intelligenceReport.provider_runtime.startup.started_by_application ? 'Ollama توسط برنامه راه‌اندازی شد.' : (intelligenceReport.provider_runtime.startup.already_running ? 'از سرور فعال Ollama استفاده شد.' : 'راه‌اندازی خودکار انجام نشد.')"></p>
                                 <template x-for="model in (intelligenceReport.models || [])" :key="model.model_id">
                                     <div class="rounded border border-slate-800 p-2">
                                         <div class="font-medium text-sky-300 break-all" dir="ltr" x-text="model.model_id"></div>
