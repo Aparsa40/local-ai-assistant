@@ -252,7 +252,15 @@ async def provider_quota_status(provider_id: str, db: Session = Depends(get_db))
 
 
 @app.get("/api/providers/{provider_id}/connection")
-async def provider_connection_status(provider_id: str, db: Session = Depends(get_db)):
+@app.post("/api/providers/{provider_id}/connection")
+async def provider_connection_status(
+    provider_id: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    # Connection checks discover and persist live models, so responses must never be cached.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
     try:
         result = await interface_manager.check_connection(provider_id)
         model_ids = result.pop("models", [])
