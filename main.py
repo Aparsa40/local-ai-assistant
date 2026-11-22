@@ -184,19 +184,26 @@ async def provider_capabilities(provider_id: str):
 @app.get("/api/providers/{provider_id}/catalog")
 async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
     """Return repository-owned operator metadata and persisted catalog data without network I/O."""
+    owns_session = not isinstance(db, Session)
+    if owns_session:
+        db = SessionLocal()
     try:
-        result = interface_manager.get_provider_catalog(provider_id)
-    except InterfaceManagerError as exc:
-        status_code = 404 if exc.category == "unknown_provider" else 502
-        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
-    snapshot = get_provider_catalog_snapshot(db, provider_id)
-    result["storage"] = snapshot
-    result["live_models"] = snapshot["live_models"]
-    result["curated_models"] = snapshot["curated_models"]
-    result["provider_runtime"] = snapshot["provider_runtime"]
-    result["quota_snapshot"] = snapshot["quota"]
-    result["sync_history"] = snapshot["sync_history"]
-    return result
+        try:
+            result = interface_manager.get_provider_catalog(provider_id)
+        except InterfaceManagerError as exc:
+            status_code = 404 if exc.category == "unknown_provider" else 502
+            raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+        snapshot = get_provider_catalog_snapshot(db, provider_id)
+        result["storage"] = snapshot
+        result["live_models"] = snapshot["live_models"]
+        result["curated_models"] = snapshot["curated_models"]
+        result["provider_runtime"] = snapshot["provider_runtime"]
+        result["quota_snapshot"] = snapshot["quota"]
+        result["sync_history"] = snapshot["sync_history"]
+        return result
+    finally:
+        if owns_session:
+            db.close()
 
 
 @app.get("/api/providers/{provider_id}/models")
