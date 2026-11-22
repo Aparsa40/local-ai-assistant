@@ -228,13 +228,6 @@ def test_init_db_migrates_existing_provider_runtime_status_table(tmp_path, monke
     finally:
         engine.dispose()
 
-
-if __name__ == "__main__":
-    unittest.main()
-
-
-
-
 def test_unchanged_intelligence_report_is_not_persisted_twice():
     engine = create_engine(
         "sqlite://",
@@ -268,3 +261,6 @@ def test_unchanged_intelligence_report_is_not_persisted_twice():
     finally:
         session.close()
         engine.dispose()
+
+if __name__ == "__main__":
+    unittest.main()
