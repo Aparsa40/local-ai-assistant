@@ -39,6 +39,19 @@ def seed_operator_catalogs(db: Session) -> int:
             entry.manifest = manifest
 
         curated = PROVIDER_CATALOG.get(provider_id, {}).get("models", {})
+        curated_model_ids = set(curated)
+
+        # Reconcile this provider's persisted profiles with the current repository manifest.
+        # Profiles removed from the manifest must not remain visible or enrich matching live IDs.
+        stored_profiles = (
+            db.query(OperatorModelProfile)
+            .filter_by(provider_id=provider_id)
+            .all()
+        )
+        for stored_profile in stored_profiles:
+            if stored_profile.model_id not in curated_model_ids:
+                db.delete(stored_profile)
+
         for model_id, profile in curated.items():
             row = db.get(OperatorModelProfile, (provider_id, model_id))
             if row is None:
