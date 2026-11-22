@@ -1,6 +1,6 @@
 # Provider & Model Intelligence
 
-**Status:** First implementation committed; pending CI validation and local Ollama smoke testing.
+**Status:** First implementation committed; GitHub CI passed (77 tests with default warnings enabled); Windows Ollama smoke testing remains pending.
 
 ### Implemented in the current increment
 
