@@ -16,11 +16,14 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Ollama:** local model discovery and streaming inference.
 - **Provider-specific model selection:** each provider retains its own selected model.
 - **Interface Manager foundation:** provider listing, operator-level catalog metadata, capability access, bounded model discovery, safe provider-neutral errors, quota visibility, and chat streaming through one service boundary.
-- **Operator catalogs:** local provider profiles describe discovery methods, task tags, account requirements, and quota visibility separately from exact model IDs.
+- **Operator Capability Catalog:** version-controlled provider manifests describe service type, discovery method, credential requirements, official documentation, task tags, and published free-tier policy separately from exact model IDs.
+- **Persistent Live Model Catalogs:** each provider has an independent SQLite namespace keyed by `(provider_id, model_id)`; active/retired state and first/last-seen timestamps are retained.
+- **Catalog synchronization:** the connection probe persists the model IDs it already discovered; manual refresh is a separate explicit action. Failed or ambiguous-empty refreshes preserve the last known-good catalog.
+- **Operational report:** `/api/operational-report` exposes provider reachability, live model inventory, model inference observations, quota snapshots, and sync history as a shared machine-readable read model.
 - **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
 - **Quota diagnostics:** OpenRouter key usage can be read through its key endpoint; Groq/Cohere telemetry is shown only when response headers have actually been observed. Other unavailable balances remain unknown.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
-- **SQLite persistence:** chat sessions, messages, and profile data are stored locally.
+- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs, provider/model runtime status, quota snapshots, and catalog sync history are stored locally.
 
 ## Project structure
 
@@ -33,6 +36,7 @@ local-ai-assistant/
 ├── core/database.py
 ├── core/orchestrator.py
 ├── core/interface_manager.py # provider-neutral service boundary
+├── core/catalog_storage.py  # durable operator/live catalog repository
 ├── data/                    # local SQLite database (git-ignored)
 ├── docs/                    # architecture, principles, module contracts, roadmap
 ├── static/
@@ -83,7 +87,7 @@ On first run, the app copies `config/settings.example.json` to the ignored `conf
 
 ## Configure providers
 
-Open **Settings → Models and Providers**, select a provider, enter its key/token where required, refresh its model list, select the exact model ID, and save.
+Open **Settings → Models and Providers**, select a provider, enter its key/token where required, then use **Save and check connection** to persist settings and sync the first live catalog. Later, use **دریافت / همگام‌سازی کاتالوگ** for an explicit refresh. The UI reads model lists from SQLite and preserves the last known-good catalog when a refresh fails.
 
 ### OpenRouter
 
