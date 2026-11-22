@@ -50,38 +50,69 @@ class OllamaProvider(BaseLLMProvider):
         return sorted({item["name"] for item in data.get("models", []) if item.get("name")})
 
 
-    async def get_model_details(self, model: str) -> dict:
-        """Return bounded, non-secret model metadata from Ollama's show endpoint."""
+    async def list_model_metadata(self, model_ids: List[str]) -> dict:
+        """Enrich one live tag snapshot with bounded per-model /api/show metadata."""
         async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{self.base_url}/api/show",
-                json={"model": model, "verbose": False},
-            )
-            response.raise_for_status()
-            data = response.json()
-        details = data.get("details") or {}
-        model_info = data.get("model_info") or {}
-        useful_info = {
-            key: value for key, value in model_info.items()
-            if any(marker in key.lower() for marker in (
-                "context_length", "embedding_length", "block_count",
-                "head_count", "vision", "projector",
-            ))
-        }
+            tags_response = await client.get(f"{self.base_url}/api/tags")
+            tags_response.raise_for_status()
+            tags = {
+                item.get("name"): item
+                for item in (tags_response.json().get("models") or [])
+                if item.get("name") in set(model_ids)
+            }
+
+            semaphore = __import__("asyncio").Semaphore(3)
+
+            async def collect(model_id):
+                tag = tags.get(model_id, {})
+                base = {
+                    "size": tag.get("size"),
+                    "digest": tag.get("digest"),
+                    "modified_at": tag.get("modified_at"),
+                    "details": tag.get("details") or {},
+                    "metadata_source": "ollama_api_tags",
+                }
+                async with semaphore:
+                    try:
+                        response = await client.post(
+                            f"{self.base_url}/api/show",
+                            json={"model": model_id, "verbose": False},
+                        )
+                        response.raise_for_status()
+                        data = response.json()
+                        details = data.get("details") or base["details"]
+                        model_info = data.get("model_info") or {}
+                        useful_info = {
+                            key: value for key, value in model_info.items()
+                            if any(marker in key.lower() for marker in (
+                                "context_length", "embedding_length", "block_count",
+                                "head_count", "vision", "projector",
+                            ))
+                        }
+                        base.update({
+                            "details": {
+                                "format": details.get("format"),
+                                "family": details.get("family"),
+                                "families": details.get("families"),
+                                "parameter_size": details.get("parameter_size"),
+                                "quantization_level": details.get("quantization_level"),
+                            },
+                            "capabilities": data.get("capabilities") or [],
+                            "model_info": useful_info,
+                            "context_length": next(
+                                (value for key, value in useful_info.items() if key.endswith("context_length")),
+                                None,
+                            ),
+                            "template_available": bool(data.get("template")),
+                            "metadata_source": "ollama_api_show",
+                        })
+                        return model_id, base, None
+                    except Exception:
+                        return model_id, base, {"model_id": model_id, "category": "metadata_unavailable"}
+
+            import asyncio
+            results = await asyncio.gather(*(collect(model_id) for model_id in model_ids))
         return {
-            "details": {
-                "format": details.get("format"),
-                "family": details.get("family"),
-                "families": details.get("families"),
-                "parameter_size": details.get("parameter_size"),
-                "quantization_level": details.get("quantization_level"),
-            },
-            "capabilities": data.get("capabilities") or [],
-            "model_info": useful_info,
-            "context_length": next(
-                (value for key, value in useful_info.items() if key.endswith("context_length")),
-                None,
-            ),
-            "template_available": bool(data.get("template")),
-            "metadata_source": "ollama_api_show",
+            "models": {model_id: metadata for model_id, metadata, _error in results},
+            "errors": [error for _model_id, _metadata, error in results if error],
         }
