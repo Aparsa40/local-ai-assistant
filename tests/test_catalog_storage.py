@@ -9,10 +9,11 @@ from core.catalog_storage import (
     get_provider_catalog_snapshot,
     record_provider_runtime,
     record_sync_failure,
+    save_intelligence_report,
     seed_operator_catalogs,
     sync_live_models,
 )
-from core.database import Base, LiveModelCatalogEntry, OperatorModelProfile, to_utc_naive, utcnow_naive
+from core.database import Base, LiveModelCatalogEntry, OperatorModelProfile, ProviderIntelligenceReport, to_utc_naive, utcnow_naive
 
 
 class CatalogStorageTests(unittest.TestCase):
@@ -131,3 +132,48 @@ class CatalogStorageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    def test_live_model_metadata_is_persisted_and_updated(self):
+        sync_live_models(
+            self.db,
+            "ollama",
+            ["llama3.2:1b"],
+            model_metadata={"llama3.2:1b": {"size": 123, "capabilities": ["completion"]}},
+        )
+        first = get_provider_catalog_snapshot(self.db, "ollama")
+        self.assertEqual(first["live_models"][0]["catalog_data"]["size"], 123)
+
+        sync_live_models(
+            self.db,
+            "ollama",
+            ["llama3.2:1b"],
+            model_metadata={"llama3.2:1b": {"size": 456, "capabilities": ["tools"]}},
+        )
+        updated = get_provider_catalog_snapshot(self.db, "ollama")
+        self.assertEqual(updated["live_models"][0]["catalog_data"]["size"], 456)
+        self.assertEqual(updated["live_models"][0]["catalog_data"]["capabilities"], ["tools"])
+
+    def test_intelligence_report_history_is_bounded_per_provider_and_type(self):
+        for index in range(3):
+            generated = utcnow_naive().isoformat()
+            save_intelligence_report(
+                self.db,
+                {
+                    "provider_id": "ollama",
+                    "report_type": "runtime",
+                    "generated_at": generated,
+                    "source_snapshot_at": generated,
+                    "overall_status": "healthy",
+                    "summary": f"report-{index}",
+                    "models": [],
+                },
+                history_limit=2,
+            )
+
+        self.assertEqual(
+            self.db.query(ProviderIntelligenceReport).filter_by(
+                provider_id="ollama", report_type="runtime"
+            ).count(),
+            2,
+        )
