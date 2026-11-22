@@ -145,6 +145,19 @@ class CatalogSyncHistory(Base):
     synced_at = Column(DateTime, nullable=False, default=utcnow_naive)
 
 
+
+class ProviderIntelligenceReport(Base):
+    __tablename__ = "provider_intelligence_reports"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider_id = Column(String(80), nullable=False, index=True)
+    report_type = Column(String(20), nullable=False, index=True)
+    generated_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    source_snapshot_at = Column(DateTime, nullable=True)
+    overall_status = Column(String(40), nullable=False, default="unknown")
+    summary = Column(Text, nullable=False, default="")
+    report_data = Column(JSON, nullable=False, default=dict)
+    schema_version = Column(Integer, nullable=False, default=1)
+
 def init_db():
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
