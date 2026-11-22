@@ -57,6 +57,13 @@ class CatalogStorageTests(unittest.TestCase):
             1,
         )
 
+    def test_empty_discovery_preserves_existing_active_catalog(self):
+        sync_live_models(self.db, "groq", ["model-a"])
+        result = sync_live_models(self.db, "groq", [])
+        self.assertEqual(result["status"], "empty_response_preserved")
+        snapshot = get_provider_catalog_snapshot(self.db, "groq")
+        self.assertTrue(snapshot["live_models"][0]["active"])
+
     def test_failed_sync_does_not_clear_last_known_good_catalog(self):
         sync_live_models(self.db, "groq", ["model-a", "model-b"])
         record_sync_failure(self.db, "groq", {"category": "timeout", "message": "Timed out"})
