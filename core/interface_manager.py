@@ -177,6 +177,7 @@ class InterfaceManager:
             "status": "reachable",
             "probe": "model_catalog",
             "model_count": len(models),
+            "models": models,
             "checked_at": checked_at,
             "error": None,
         }
