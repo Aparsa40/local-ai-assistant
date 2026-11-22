@@ -422,10 +422,14 @@
                         <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های Chat قابل‌دسترسی ↻</button>
                     </div>
 
-                    <div x-show="providerCapabilities && ['cloudflare_workers_ai','groq','cohere'].includes(settings.active_provider)" class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
-                        <div class="font-semibold text-slate-200">قابلیت‌ها و سهمیه Provider</div>
+                    <div x-show="providerCapabilities" class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
+                        <div class="font-semibold text-slate-200">کاتالوگ اپراتور و وضعیت قابلیت‌ها</div>
+                        <p class="text-xs text-slate-400" x-text="'روش کاتالوگ: ' + (providerCapabilities.operator?.catalog_mode || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-400" x-text="'وظایف پیشنهادی اپراتور: ' + (providerCapabilities.operator?.task_tags || []).join('، ')"></p>
+                        <p class="text-xs text-slate-400" x-text="'دامنه کشف مدل: ' + (providerCapabilities.operator?.discovery?.scope || 'نامشخص')"></p>
+                        <p class="text-xs text-amber-400" x-text="providerCapabilities.operator?.quota?.notes || 'اطلاعات سهمیه در دسترس نیست.'"></p>
                         <p class="text-xs text-slate-400" x-text="'Streaming: ' + providerCapabilities.streaming + ' · Tool Calling: ' + providerCapabilities.tool_calling"></p>
-                        <p class="text-xs text-slate-400" x-text="'سهمیه: ' + (providerCapabilities.quota?.allowance || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-400" x-text="'سهمیه/مشاهده‌پذیری: ' + (providerCapabilities.quota?.allowance || providerCapabilities.operator?.quota?.visibility || 'نامشخص')"></p>
                         <p class="text-xs text-amber-400" x-text="'وضعیت سهمیه: ' + (providerCapabilities.quota?.status || 'نامشخص')"></p>
                         <p class="text-xs text-slate-500" x-text="'آخرین وضعیت API: ' + JSON.stringify(providerCapabilities.quota?.runtime || {})"></p>
                         <template x-for="(details, modelId) in (providerCapabilities.models || {})" :key="modelId">
