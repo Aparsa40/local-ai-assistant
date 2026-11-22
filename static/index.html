@@ -516,6 +516,8 @@
                                     </div>
                                     <div class="text-[11px] text-slate-500" x-text="'Source: ' + model.source + ' · Last seen: ' + (model.last_seen_at || 'Unknown')"></div>
                                     <div class="text-[11px] text-slate-500" x-text="'Runtime availability: ' + (model.runtime?.availability || 'unknown')"></div>
+                                    <div x-show="model.operator_profile" class="text-[11px] text-slate-400" x-text="'Curated profile · Context: ' + (model.operator_profile?.context_window ?? 'Unknown') + ' · Tools: ' + (model.operator_profile?.tool_calling ?? 'Unknown')"></div>
+                                    <div x-show="model.operator_profile" class="text-[10px] text-slate-500">پروفایل curated مرجع کمکی است و به‌تنهایی پشتیبانی زنده این مدل را اثبات نمی‌کند.</div>
                                 </div>
                             </template>
                         </div>
