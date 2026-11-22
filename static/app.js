@@ -121,7 +121,11 @@ function chatApp() {
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
                 this.connectionResult = result;
-                if (result.status === 'reachable') await this.syncProviderCatalog();
+                if (result.status === 'reachable') {
+                    this.catalogSyncResult = result.catalog_sync || null;
+                    await this.loadProviderCapabilities();
+                    await this.refreshModels();
+                }
             } catch (error) {
                 this.connectionResult = {
                     status: 'error',
