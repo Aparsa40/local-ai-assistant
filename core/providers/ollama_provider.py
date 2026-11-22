@@ -1,6 +1,8 @@
 import asyncio
+import ipaddress
 import json
 from typing import AsyncGenerator, Dict, List
+from urllib.parse import urlparse
 
 import httpx
 
@@ -9,7 +11,21 @@ from .base import BaseLLMProvider
 
 class OllamaProvider(BaseLLMProvider):
     def __init__(self, base_url: str = "http://localhost:11434"):
-        self.base_url = base_url.rstrip("/")
+        parsed = urlparse(base_url)
+        host = parsed.hostname or ""
+        try:
+            local_host = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
+            port = parsed.port
+        except ValueError:
+            local_host = False
+            port = None
+        if parsed.scheme == "http" and local_host:
+            bind_host = "127.0.0.1" if host.lower() == "localhost" else host
+            if ":" in bind_host:
+                bind_host = f"[{bind_host}]"
+            self.base_url = parsed._replace(netloc=f"{bind_host}:{port or 11434}").geturl().rstrip("/")
+        else:
+            self.base_url = base_url.rstrip("/")
 
     async def chat_stream(
         self,
