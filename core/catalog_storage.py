@@ -190,6 +190,7 @@ def _iso(value):
 def get_provider_catalog_snapshot(db: Session, provider_id: str) -> dict[str, Any]:
     operator = db.get(OperatorCatalogEntry, provider_id)
     profiles = db.query(OperatorModelProfile).filter_by(provider_id=provider_id).order_by(OperatorModelProfile.model_id).all()
+    profile_by_model = {row.model_id: row.profile for row in profiles}
     live = db.query(LiveModelCatalogEntry).filter_by(provider_id=provider_id).order_by(LiveModelCatalogEntry.model_id).all()
     runtime = db.get(ProviderRuntimeStatus, provider_id)
     quota = db.query(ProviderQuotaSnapshot).filter_by(provider_id=provider_id).order_by(ProviderQuotaSnapshot.observed_at.desc()).first()
@@ -211,6 +212,7 @@ def get_provider_catalog_snapshot(db: Session, provider_id: str) -> dict[str, An
                 "active": row.active,
                 "source": row.source,
                 "catalog_data": row.catalog_data or {},
+                "operator_profile": profile_by_model.get(row.model_id),
                 "first_seen_at": _iso(row.first_seen_at),
                 "last_seen_at": _iso(row.last_seen_at),
                 "runtime": {
