@@ -182,6 +182,32 @@ class InterfaceManager:
             "error": None,
         }
 
+    async def get_model_metadata(self, provider_id: str, model_ids: List[str]) -> dict:
+        """Collect optional per-model metadata without breaking basic catalog discovery."""
+        provider = self._create_provider(provider_id)
+        details_reader = getattr(provider, "get_model_details", None)
+        if not callable(details_reader):
+            return {"models": {}, "errors": []}
+
+        semaphore = asyncio.Semaphore(3)
+
+        async def collect(model_id: str):
+            async with semaphore:
+                try:
+                    data = await asyncio.wait_for(
+                        details_reader(model_id), timeout=self._timeout_seconds
+                    )
+                    return model_id, data, None
+                except asyncio.TimeoutError:
+                    return model_id, None, {"model_id": model_id, "category": "metadata_timeout"}
+                except Exception:
+                    return model_id, None, {"model_id": model_id, "category": "metadata_unavailable"}
+
+        results = await asyncio.gather(*(collect(model_id) for model_id in model_ids))
+        models = {model_id: data for model_id, data, error in results if data is not None}
+        errors = [error for _model_id, _data, error in results if error is not None]
+        return {"models": models, "errors": errors}
+
     async def stream_chat(
         self,
         provider_id: str,
