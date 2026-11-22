@@ -15,8 +15,10 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Cohere:** Chat v2 streaming and model discovery.
 - **Ollama:** local model discovery and streaming inference.
 - **Provider-specific model selection:** each provider retains its own selected model.
-- **Interface Manager foundation:** provider listing, capability access, bounded model discovery, safe provider-neutral errors, and chat streaming through one service boundary.
+- **Interface Manager foundation:** provider listing, operator-level catalog metadata, capability access, bounded model discovery, safe provider-neutral errors, quota visibility, and chat streaming through one service boundary.
+- **Operator catalogs:** local provider profiles describe discovery methods, task tags, account requirements, and quota visibility separately from exact model IDs.
 - **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
+- **Quota diagnostics:** OpenRouter key usage can be read through its key endpoint; Groq/Cohere telemetry is shown only when response headers have actually been observed. Other unavailable balances remain unknown.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
 - **SQLite persistence:** chat sessions, messages, and profile data are stored locally.
 
@@ -49,6 +51,7 @@ Important documents:
 - [Roadmap](docs/ROADMAP.md)
 - [AI contribution/delegation guide](docs/AI_CONTRIBUTION_GUIDE.md)
 - [Interface Manager](docs/INTERFACE_MANAGER.md)
+- [Operator Catalogs and Discovery Policy](docs/OPERATOR_CATALOGS.md)
 - [Provider system](docs/PROVIDER_SYSTEM.md)
 - [Model Manager](docs/MODEL_MANAGER.md)
 - [Permissions](docs/PERMISSIONS.md)
