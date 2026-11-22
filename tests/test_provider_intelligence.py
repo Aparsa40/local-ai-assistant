@@ -42,7 +42,7 @@ def test_local_runtime_reuses_an_existing_ollama_server(monkeypatch):
 
 
 def test_remote_ollama_endpoint_is_never_started_locally(monkeypatch):
-    async def probe(_url):
+    async def probe(_url, **_kwargs):
         return False
 
     monkeypatch.setattr(LocalRuntimeController, "_probe", staticmethod(probe))
