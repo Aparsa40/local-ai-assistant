@@ -373,3 +373,25 @@ def test_local_runtime_reuses_its_owned_process_after_startup_timeout(monkeypatc
     assert second["error"]["category"] == "startup_timeout"
     assert len(calls) == 1
     assert calls[0][1]["env"]["OLLAMA_HOST"] == "127.0.0.1:11434"
+
+
+def test_runtime_report_marks_preserved_empty_catalog_as_degraded():
+    engine, session_factory = _database()
+    db = session_factory()
+    try:
+        seed_operator_catalogs(db)
+        sync_live_models(db, "ollama", ["llama3.2:1b"])
+        report = provider_intelligence.build_runtime_report(
+            db,
+            "ollama",
+            {
+                "status": "reachable",
+                "catalog_sync": {"status": "empty_response_preserved"},
+            },
+        )
+        assert report["overall_status"] == "degraded"
+        assert any("last-known-good" in warning for warning in report["warnings"])
+        assert report["models"][0]["model_id"] == "llama3.2:1b"
+    finally:
+        db.close()
+        engine.dispose()
