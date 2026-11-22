@@ -353,11 +353,11 @@
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <div class="font-semibold">وضعیت اتصال Provider</div>
-                                <p class="text-xs text-slate-500">ابتدا تنظیمات فعلی را ذخیره می‌کند و سپس دسترسی به کاتالوگ مدل‌ها را بررسی می‌کند.</p>
+                                <p class="text-xs text-slate-500">تنظیمات را ذخیره می‌کند، اتصال را بررسی می‌کند و در صورت موفقیت مدل‌های همان Provider را دریافت و در کاتالوگ زنده ذخیره می‌کند.</p>
                             </div>
                             <button @click="checkProviderConnection()" type="button" :disabled="connectionLoading"
                                     class="rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50 px-3 py-2 text-xs">
-                                <span x-text="connectionLoading ? 'در حال بررسی...' : 'ذخیره و بررسی اتصال'"></span>
+                                <span x-text="connectionLoading ? 'در حال اتصال و دریافت مدل‌ها...' : 'ذخیره، اتصال و دریافت مدل‌ها'"></span>
                             </button>
                         </div>
                         <p x-show="connectionResult" class="text-xs"
