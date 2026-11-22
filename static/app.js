@@ -26,6 +26,7 @@ function chatApp() {
         connectionLoading: false,
         connectionResult: null,
         providerCapabilities: null,
+        providerQuota: null,
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -135,6 +136,18 @@ function chatApp() {
                 this.providerCapabilities = await response.json();
             } catch (error) {
                 console.warn('Operator catalog could not be loaded:', error);
+            }
+        },
+        async refreshProviderQuota() {
+            this.providerQuota = null;
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/quota`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'دریافت وضعیت سهمیه ناموفق بود.');
+                this.providerQuota = data;
+            } catch (error) {
+                this.providerQuota = { status: 'error', message: error.message };
             }
         },
         async refreshModels() {
