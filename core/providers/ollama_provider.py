@@ -19,6 +19,7 @@ class OllamaProvider(BaseLLMProvider):
         except ValueError:
             local_host = False
             port = None
+        self._trust_env = not (parsed.scheme == "http" and local_host)
         if parsed.scheme == "http" and local_host:
             bind_host = "127.0.0.1" if host.lower() == "localhost" else host
             if ":" in bind_host:
@@ -42,7 +43,7 @@ class OllamaProvider(BaseLLMProvider):
             "stream": True,
             "options": {"temperature": temperature, "num_ctx": 1024, "num_thread": 2},
         }
-        async with httpx.AsyncClient(timeout=120.0, trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=120.0, trust_env=self._trust_env) as client:
             async with client.stream("POST", url, json=payload) as response:
                 if response.is_error:
                     body = (await response.aread()).decode("utf-8", errors="replace")
