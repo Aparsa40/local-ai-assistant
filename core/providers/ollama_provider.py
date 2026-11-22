@@ -59,7 +59,7 @@ class OllamaProvider(BaseLLMProvider):
                         raise RuntimeError(f"Ollama error: {data['error']}")
 
     async def list_models(self) -> List[str]:
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=10.0, trust_env=self._trust_env) as client:
             response = await client.get(f"{self.base_url}/api/tags")
             if response.is_error:
                 body = (await response.aread()).decode("utf-8", errors="replace")
@@ -70,7 +70,7 @@ class OllamaProvider(BaseLLMProvider):
 
     async def list_model_metadata(self, model_ids: List[str]) -> dict:
         """Enrich one live tag snapshot with bounded per-model /api/show metadata."""
-        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=self._trust_env) as client:
             tags_response = await client.get(f"{self.base_url}/api/tags")
             tags_response.raise_for_status()
             requested_ids = set(model_ids)
