@@ -157,8 +157,6 @@ class LocalRuntimeController:
                         "started_by_application": False,
                         "error": {"category": "startup_failed", "message": "The Ollama process could not be started. Check installation and operating-system permissions."},
                     }
-                self._owned_process = process
-                self._owned_endpoint = endpoint
 
             deadline = asyncio.get_running_loop().time() + self.startup_timeout
             while asyncio.get_running_loop().time() < deadline:
