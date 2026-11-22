@@ -157,3 +157,35 @@ class InterfaceManagerTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+    async def test_model_metadata_is_collected_through_optional_adapter_contract(self):
+        class MetadataProvider(FakeProvider):
+            async def list_model_metadata(self, model_ids):
+                return {
+                    "models": {model_id: {"capabilities": ["tools"]} for model_id in model_ids},
+                    "errors": [],
+                }
+
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"ollama": {}}},
+            provider_factories={"ollama": MetadataProvider},
+            capabilities_getter=lambda _provider_id: {},
+        )
+        result = await manager.get_model_metadata("ollama", ["llama3.2:1b"])
+        self.assertEqual(result["models"]["llama3.2:1b"]["capabilities"], ["tools"])
+        self.assertEqual(result["errors"], [])
+
+    async def test_model_metadata_failure_does_not_raise_or_break_catalog_contract(self):
+        class MetadataProvider(FakeProvider):
+            async def list_model_metadata(self, model_ids):
+                raise RuntimeError("private provider error")
+
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"ollama": {}}},
+            provider_factories={"ollama": MetadataProvider},
+            capabilities_getter=lambda _provider_id: {},
+        )
+        result = await manager.get_model_metadata("ollama", ["llama3.2:1b"])
+        self.assertEqual(result["models"], {})
+        self.assertEqual(result["errors"][0]["category"], "metadata_unavailable")
