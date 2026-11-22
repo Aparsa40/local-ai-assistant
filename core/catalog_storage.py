@@ -124,7 +124,17 @@ def sync_live_models(
             row.last_seen_at = now
             row.source = source
             if model_metadata and model_id in model_metadata:
-                row.catalog_data = model_metadata[model_id]
+                incoming = model_metadata[model_id] or {}
+                current = dict(row.catalog_data or {})
+                for nested_key in ("details", "model_info"):
+                    if isinstance(current.get(nested_key), dict) and isinstance(incoming.get(nested_key), dict):
+                        current[nested_key] = {**current[nested_key], **incoming[nested_key]}
+                current.update({key: value for key, value in incoming.items() if key not in {"details", "model_info"}})
+                if isinstance(incoming.get("details"), dict):
+                    current["details"] = {**(current.get("details") or {}), **incoming["details"]}
+                if isinstance(incoming.get("model_info"), dict):
+                    current["model_info"] = {**(current.get("model_info") or {}), **incoming["model_info"]}
+                row.catalog_data = current
     history = CatalogSyncHistory(
         provider_id=provider_id,
         status="success",
