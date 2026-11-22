@@ -16,7 +16,7 @@
 | `operator_catalogs` | `provider_id` | Persisted operator manifest, service metadata, discovery policy, documentation, and free-tier caveats. |
 | `operator_model_profiles` | `provider_id + model_id` | Curated model capability evidence maintained in the repository. |
 | `live_model_catalog` | `provider_id + model_id` | Exact model IDs discovered from a provider, safe provider-reported model metadata, source, active state, and first/last-seen timestamps. |
-| `provider_runtime_status` | `provider_id` | Latest catalog reachability probe and safe diagnostic. |
+| `provider_runtime_status` | `provider_id` | Latest catalog reachability probe, safe diagnostic, and local process-start ownership details. |
 | `model_runtime_status` | `provider_id + model_id` | Observed inference availability, last successful request, last error, and observed limits. |
 | `provider_quota_snapshots` | generated ID | Time-stamped provider quota/usage responses. |
 | `catalog_sync_history` | generated ID | Successful, failed, and ambiguous-empty catalog synchronization outcomes. |
