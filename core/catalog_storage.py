@@ -60,6 +60,28 @@ def sync_live_models(
         row.model_id: row
         for row in db.query(LiveModelCatalogEntry).filter_by(provider_id=provider_id).all()
     }
+    # An empty response is ambiguous (provider outage, permission filtering, or a genuinely empty
+    # local inventory). Preserve the last known good active catalog instead of wiping it.
+    if not normalized_ids and existing:
+        db.add(CatalogSyncHistory(
+            provider_id=provider_id,
+            status="empty_response_preserved",
+            source=source,
+            discovered_count=0,
+            added_count=0,
+            retired_count=0,
+        ))
+        db.commit()
+        return {
+            "provider_id": provider_id,
+            "status": "empty_response_preserved",
+            "source": source,
+            "discovered_count": 0,
+            "added_count": 0,
+            "retired_count": 0,
+            "synced_at": now.isoformat(),
+        }
+
     added = 0
     retired = 0
     for model_id, row in existing.items():
