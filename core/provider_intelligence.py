@@ -30,8 +30,12 @@ class LocalRuntimeController:
 
     @staticmethod
     def _is_loopback(base_url: str) -> bool:
-        parsed = urlparse(base_url)
-        if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
+        try:
+            parsed = urlparse(base_url)
+            if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
+                return False
+            parsed.port  # Validate malformed ports before attempting process startup.
+        except ValueError:
             return False
         host = parsed.hostname.lower()
         if host == "localhost":
@@ -260,17 +264,18 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
     for value in source_times:
         if value:
             try:
-                parsed_times.append(datetime.fromisoformat(value.replace("Z", "+00:00")))
+                observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                if observed.tzinfo is None:
+                    observed = observed.replace(tzinfo=timezone.utc)
+                parsed_times.append(observed.astimezone(timezone.utc))
             except ValueError:
                 continue
-    source_snapshot_at = max(parsed_times).isoformat() if parsed_times else None
+    latest_observation = max(parsed_times) if parsed_times else None
+    source_snapshot_at = latest_observation.isoformat() if latest_observation else None
     age_seconds = None
     freshness = "unknown"
-    if parsed_times:
-        observed = max(parsed_times)
-        if observed.tzinfo is None:
-            observed = observed.replace(tzinfo=timezone.utc)
-        age_seconds = max(0, int((datetime.now(timezone.utc) - observed.astimezone(timezone.utc)).total_seconds()))
+    if latest_observation:
+        age_seconds = max(0, int((datetime.now(timezone.utc) - latest_observation).total_seconds()))
         freshness = "fresh" if age_seconds <= 86400 else "stale"
 
     runtime_status = snapshot.get("provider_runtime", {}).get("status", "unknown")
