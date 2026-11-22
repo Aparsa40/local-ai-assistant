@@ -257,10 +257,10 @@ def _analyze_snapshot(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         metadata = model.get("catalog_data") or {}
         details = metadata.get("details") or {}
-        capabilities = {
-            str(item).lower()
-            for item in (metadata.get("capabilities") or [])
-        }
+        raw_capabilities = metadata.get("capabilities") or []
+        if isinstance(raw_capabilities, str):
+            raw_capabilities = [raw_capabilities]
+        capabilities = {str(item).lower() for item in raw_capabilities}
         has_completion = "completion" in capabilities
         has_embeddings = bool({"embedding", "embeddings"}.intersection(capabilities))
         has_tools = bool({"tools", "tool_calling"}.intersection(capabilities))
