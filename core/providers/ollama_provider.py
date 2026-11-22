@@ -72,10 +72,11 @@ class OllamaProvider(BaseLLMProvider):
         async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
             tags_response = await client.get(f"{self.base_url}/api/tags")
             tags_response.raise_for_status()
+            requested_ids = set(model_ids)
             tags = {
                 item.get("name"): item
                 for item in (tags_response.json().get("models") or [])
-                if item.get("name") in set(model_ids)
+                if item.get("name") in requested_ids
             }
 
             semaphore = asyncio.Semaphore(3)
@@ -97,7 +98,7 @@ class OllamaProvider(BaseLLMProvider):
                         )
                         response.raise_for_status()
                         data = response.json()
-                        details = data.get("details") or base["details"]
+                        details = {**base["details"], **(data.get("details") or {})}
                         model_info = data.get("model_info") or {}
                         useful_info = {
                             key: value for key, value in model_info.items()
