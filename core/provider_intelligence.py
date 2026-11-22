@@ -294,3 +294,72 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
         "metadata_errors": errors,
         "sync_history": snapshot.get("sync_history", []),
     }
+
+
+
+_LOCAL_RUNTIME_CONTROLLER = LocalRuntimeController()
+
+
+async def refresh_provider_intelligence(db, interface_manager, provider_id: str, config_loader) -> dict[str, Any]:
+    """Refresh one provider, persist observations, and save its runtime intelligence report."""
+    runtime = None
+    if provider_id == "ollama":
+        config = config_loader() or {}
+        provider_config = (config.get("providers_config") or {}).get("ollama", {})
+        runtime = await _LOCAL_RUNTIME_CONTROLLER.ensure_running(
+            provider_config.get("base_url", "http://localhost:11434"),
+            auto_start=bool(provider_config.get("auto_start", True)),
+        )
+        if runtime.get("status") != "ready":
+            connection = {
+                "provider": provider_id,
+                "status": "unreachable",
+                "probe": "local_runtime",
+                "model_count": None,
+                "checked_at": datetime.now(timezone.utc).isoformat(),
+                "error": runtime.get("error"),
+                "runtime": runtime,
+            }
+        else:
+            connection = await interface_manager.check_connection(provider_id)
+            connection["runtime"] = runtime
+    else:
+        connection = await interface_manager.check_connection(provider_id)
+
+    model_ids = connection.pop("models", [])
+    catalog_storage.record_provider_runtime(db, provider_id, connection)
+    metadata_errors: list[dict[str, str]] = []
+    if connection.get("status") == "reachable":
+        metadata_by_model: dict[str, dict[str, Any]] = {}
+        if provider_id == "ollama" and model_ids:
+            metadata_result = await interface_manager.get_model_metadata(provider_id, model_ids)
+            metadata_by_model = metadata_result.get("models", {})
+            metadata_errors = metadata_result.get("errors", [])
+        operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
+        aliases = set(operator.get("router_aliases", []))
+        exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
+        sync_result = catalog_storage.sync_live_models(
+            db,
+            provider_id,
+            exact_model_ids,
+            model_metadata=metadata_by_model,
+        )
+        connection["catalog_sync"] = sync_result
+        if metadata_errors:
+            connection["metadata_errors"] = metadata_errors
+    else:
+        catalog_storage.record_sync_failure(db, provider_id, connection.get("error") or {
+            "category": "catalog_unavailable",
+            "message": "Provider catalog discovery was unsuccessful.",
+        })
+
+    report = build_runtime_report(db, provider_id, connection, metadata_errors)
+    catalog_storage.save_intelligence_report(db, report)
+    connection["intelligence_report"] = report
+    return connection
+
+
+def create_offline_intelligence_report(db, provider_id: str) -> dict[str, Any]:
+    report = build_offline_report(db, provider_id)
+    catalog_storage.save_intelligence_report(db, report)
+    return report
