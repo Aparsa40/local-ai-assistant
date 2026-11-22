@@ -17,9 +17,14 @@ The operator catalog is useful even when live discovery is unavailable. It must 
 - `core/providers/operator_catalog.py` contains local operator profiles for Ollama, OpenRouter, Google AI Studio, Cloudflare Workers AI, Groq, and Cohere.
 - `InterfaceManager.get_provider_catalog()` combines the operator profile with any existing local model-capability manifest. It performs no network request.
 - `GET /api/providers/{provider_id}/catalog` returns this local metadata.
-- `GET /api/providers/{provider_id}/models` remains an explicit, bounded live discovery request through the selected adapter.
+- `GET /api/providers/{provider_id}/models` reads the last successfully synchronized model IDs from SQLite; it performs no network request.
+- `POST /api/providers/{provider_id}/catalog/sync` performs explicit bounded live discovery and persists the result only after a successful response.
+- `GET /api/operational-report` returns a machine-readable snapshot assembled from persisted operator manifests, live catalogs, runtime diagnostics, quota snapshots, and sync history.
 - `GET /api/providers/{provider_id}/quota` returns observed quota data only where a provider endpoint or recent inference response exposes it. Otherwise it returns an explicit unknown/not-exposed state.
-- The Settings UI displays operator-level task tags, discovery scope, catalog strategy, and quota visibility separately from exact model IDs.
+- The Settings UI displays the repository-owned Operator Capability Catalog and each provider's persisted Live Model Catalog in separate panels, plus the shared operational report.
+- Operator manifests and curated model profiles are seeded into SQLite at startup from version-controlled source files. Live model records are namespaced by the composite identity `(provider_id, model_id)`.
+- Provider connection checks reuse the discovered model IDs for persistence, avoiding a second catalog request. Manual refresh remains a separate explicit sync action.
+- Successful inference requests update model runtime status. Failed catalog syncs and ambiguous empty responses preserve the last known-good active catalog.
 
 A successful catalog request does not prove that every returned model can be invoked. Inference failures, account permissions, model retirement, endpoint compatibility, and quotas remain separate runtime facts.
 
@@ -87,3 +92,28 @@ Provider task tags (for example, coding, analysis, translation, retrieval, or mu
 ## 7. Explicit non-goals
 
 This increment does not implement persistent model history, scheduled Updater jobs, account-wide quota aggregation, encrypted credential storage, automatic task routing, or experimental capability benchmarking. These remain later milestones.
+
+
+## 4. Persistent catalog lifecycle
+
+The repository-owned manifests are the source of truth for operator-level facts. At application startup, `seed_operator_catalogs()` upserts those manifests and curated model profiles into SQLite. This makes the UI and internal services read from the same durable store while keeping the source definitions reviewable in Git.
+
+Live model IDs are not copied into the operator manifest. They are stored in `live_model_catalog` with the composite primary key `(provider_id, model_id)`, source, active state, and first/last-seen timestamps. A successful sync updates the provider's active set and records a row in `catalog_sync_history`. A failed request never changes the existing live catalog. An empty response when previous records exist is treated as ambiguous and preserves the previous active set.
+
+The database also separates:
+- `provider_runtime_status`: latest catalog-reachability probe.
+- `model_runtime_status`: model-specific inference observations; unknown until an inference request is actually observed.
+- `provider_quota_snapshots`: timestamped quota/usage responses, including explicit unknown/not-exposed states.
+
+No remaining quota is inferred from published allowances or model discovery. Provider-level telemetry must not be presented as model-level telemetry.
+
+## 5. API contract
+
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/providers/{provider_id}/catalog` | Read-only combined view of repository manifest and persisted catalog/runtime records. |
+| `GET /api/providers/{provider_id}/models` | Read-only list of active persisted live model IDs. |
+| `POST /api/providers/{provider_id}/catalog/sync` | Explicit live discovery and durable sync. |
+| `GET /api/operational-report` | Cross-provider machine-readable operational snapshot. |
+
+The connection probe also persists the IDs it already discovered, so Save & Connect does not make a redundant second catalog call. Manual sync remains available independently.
