@@ -52,13 +52,13 @@ HTTP endpoints:
 - GET /api/providers/{provider_id}/models (persisted read)
 - POST /api/providers/{provider_id}/catalog/sync (explicit live refresh)
 - GET /api/providers/{provider_id}/quota
-- GET /api/providers/{provider_id}/connection
+- POST /api/providers/{provider_id}/connection
 - GET /api/operational-report
 - POST /api/chat uses Interface Manager for provider streaming.
 
 The Provider settings panel exposes a “Save and check connection” action that persists the edited settings, probes the provider catalog, and persists the model IDs returned by that same probe. Manual catalog refresh is a separate action and does not run during ordinary UI reads.
 
-The connection endpoint currently performs a **model-catalog probe**. A successful catalog request proves that the provider's discovery endpoint is reachable; it does not prove that a subsequent inference request will succeed. The API must not label this as a full inference health check.
+The connection endpoint currently performs a **model-catalog probe**. A successful catalog request proves that the provider's discovery endpoint is reachable; it does not prove that a subsequent inference request will succeed. The API must not label this as a full inference health check. The endpoint is POST-only because it performs discovery and persists runtime/catalog state. The accepted Provider & Model Intelligence design coordinates local Ollama startup and report generation around this service boundary; it must not move provider API implementations out of adapters.
 
 ## 5. Remaining target service contract
 
@@ -133,7 +133,7 @@ Current local provider credentials remain in the ignored settings file and are n
 
 This is an incremental implementation. Do not describe the complete Model Manager, Updater, credential vault, automatic routing, or full health monitoring as shipped.
 
-Related: OPERATOR_CATALOGS.md, PROVIDER_SYSTEM.md, MODEL_MANAGER.md, AGENT_RUNTIME.md, PERMISSIONS.md.
+Related: PROVIDER_MODEL_INTELLIGENCE.md, OPERATOR_CATALOGS.md, PROVIDER_SYSTEM.md, MODEL_MANAGER.md, AGENT_RUNTIME.md, PERMISSIONS.md.
 
 
 ## 8. Persistent catalog storage
