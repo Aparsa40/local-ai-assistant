@@ -31,7 +31,7 @@ class LocalRuntimeController:
     @staticmethod
     def _is_loopback(base_url: str) -> bool:
         parsed = urlparse(base_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        if parsed.scheme != "http" or not parsed.hostname or parsed.username or parsed.password:
             return False
         host = parsed.hostname.lower()
         if host == "localhost":
@@ -129,7 +129,7 @@ class LocalRuntimeController:
                     bind_host = "127.0.0.1"
                 if ":" in bind_host and not bind_host.startswith("["):
                     bind_host = f"[{bind_host}]"
-                bind_port = parsed_endpoint.port or (443 if parsed_endpoint.scheme == "https" else 80)
+                bind_port = parsed_endpoint.port or 11434
                 child_environment = os.environ.copy()
                 child_environment["OLLAMA_HOST"] = f"{bind_host}:{bind_port}"
                 try:
@@ -274,7 +274,15 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
         freshness = "fresh" if age_seconds <= 86400 else "stale"
 
     runtime_status = snapshot.get("provider_runtime", {}).get("status", "unknown")
-    overall_status = runtime_status if runtime_status in {"unavailable", "degraded"} else "unknown" if runtime_status == "unknown" else "healthy"
+    overall_status = (
+        runtime_status
+        if runtime_status in {"unavailable", "degraded"}
+        else "unknown"
+        if runtime_status == "unknown"
+        else "degraded"
+        if freshness == "stale"
+        else "healthy"
+    )
     models = _analyze_snapshot(snapshot)
     return {
         "provider_id": provider_id,
