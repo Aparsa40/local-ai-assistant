@@ -109,6 +109,7 @@ class ProviderRuntimeStatus(Base):
     model_count = Column(Integer, nullable=True)
     checked_at = Column(DateTime, nullable=True)
     error = Column(JSON, nullable=True)
+    runtime_details = Column(JSON, nullable=True)
     updated_at = Column(DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
 
 
@@ -168,4 +169,11 @@ def init_db():
         with engine.begin() as connection:
             connection.execute(
                 text("ALTER TABLE sessions ADD COLUMN title_is_custom BOOLEAN NOT NULL DEFAULT 0")
+            )
+
+    runtime_columns = {column["name"] for column in inspect(engine).get_columns("provider_runtime_status")}
+    if "runtime_details" not in runtime_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE provider_runtime_status ADD COLUMN runtime_details JSON")
             )
