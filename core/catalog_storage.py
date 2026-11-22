@@ -19,6 +19,8 @@ from .database import (
     OperatorModelProfile,
     ProviderQuotaSnapshot,
     ProviderRuntimeStatus,
+    to_utc_naive,
+    utcnow_naive,
 )
 from .providers.capabilities import PROVIDER_CATALOG
 from .providers.operator_catalog import list_operator_catalogs
@@ -54,7 +56,7 @@ def sync_live_models(
     source: str = "provider_api",
 ) -> dict[str, Any]:
     """Persist a successful model discovery without erasing historical records."""
-    now = datetime.utcnow()
+    now = utcnow_naive()
     normalized_ids = list(dict.fromkeys(str(item).strip() for item in model_ids if str(item).strip()))
     existing = {
         row.model_id: row
@@ -145,7 +147,12 @@ def record_provider_runtime(db: Session, provider_id: str, result: dict[str, Any
     row.status = result.get("status", "unknown")
     row.probe = result.get("probe")
     row.model_count = result.get("model_count")
-    row.checked_at = datetime.fromisoformat(result["checked_at"].replace("Z", "+00:00")).replace(tzinfo=None) if result.get("checked_at") else datetime.utcnow()
+    checked_at = result.get("checked_at")
+    row.checked_at = (
+        to_utc_naive(datetime.fromisoformat(checked_at.replace("Z", "+00:00")))
+        if checked_at
+        else utcnow_naive()
+    )
     row.error = result.get("error")
     db.commit()
 
@@ -157,7 +164,6 @@ def record_quota_snapshot(db: Session, provider_id: str, status: dict[str, Any])
         source=status.get("source"),
     ))
     db.commit()
-
 
 
 def record_model_runtime(
@@ -174,7 +180,7 @@ def record_model_runtime(
         db.add(row)
     row.availability = availability
     if availability == "available":
-        row.last_successful_request = datetime.utcnow()
+        row.last_successful_request = utcnow_naive()
         row.last_error = None
     elif error is not None:
         row.last_error = error
@@ -254,6 +260,6 @@ def get_provider_catalog_snapshot(db: Session, provider_id: str) -> dict[str, An
 def get_operational_report(db: Session) -> dict[str, Any]:
     providers = db.query(OperatorCatalogEntry).order_by(OperatorCatalogEntry.provider_id).all()
     return {
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": utcnow_naive().isoformat(),
         "providers": [get_provider_catalog_snapshot(db, row.provider_id) for row in providers],
     }
