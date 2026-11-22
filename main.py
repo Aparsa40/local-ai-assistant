@@ -18,6 +18,7 @@ from core.catalog_storage import (
     get_operational_report,
     get_provider_catalog_snapshot,
     record_provider_runtime,
+    record_model_runtime,
     record_quota_snapshot,
     record_sync_failure,
     seed_operator_catalogs,
@@ -323,10 +324,22 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
                 full_response += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as exc:
+            diagnostic_db = SessionLocal()
+            try:
+                record_model_runtime(
+                    diagnostic_db,
+                    provider_id,
+                    selected_model,
+                    "error",
+                    {"category": getattr(exc, "category", "inference_failed"), "message": "Inference request failed."},
+                )
+            finally:
+                diagnostic_db.close()
             yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
             return
         db_session = SessionLocal()
         try:
+            record_model_runtime(db_session, provider_id, selected_model, "available")
             db_session.add(ChatMessage(
                 session_id=req.session_id,
                 role="assistant",
