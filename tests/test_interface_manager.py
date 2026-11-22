@@ -59,6 +59,23 @@ class InterfaceManagerTests(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(chunks, ["local-test-model:", "hello"])
 
+    def test_operator_catalog_exposes_provider_level_discovery_and_quota_policy(self):
+        manager = InterfaceManager()
+        catalog = manager.get_provider_catalog("openrouter")
+
+        self.assertEqual(catalog["operator"]["catalog_mode"], "live_catalog_and_router_alias")
+        self.assertIn("openrouter/free", catalog["operator"]["router_aliases"])
+        self.assertTrue(catalog["operator"]["quota"]["live_remaining"])
+        self.assertEqual(catalog["catalog_source"], "local_operator_manifest")
+
+    def test_operator_catalog_does_not_invoke_model_discovery(self):
+        manager = InterfaceManager(
+            provider_factories={"groq": FakeProvider},
+            capabilities_getter=lambda _provider_id: {"models": {}},
+        )
+        catalog = manager.get_provider_catalog("groq")
+        self.assertEqual(catalog["operator"]["catalog_mode"], "live_authenticated_catalog")
+        self.assertEqual(catalog["model_metadata_evidence"], "curated_manifest")
 
 if __name__ == "__main__":
     unittest.main()
