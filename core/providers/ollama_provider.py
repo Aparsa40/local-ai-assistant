@@ -79,6 +79,18 @@ class OllamaProvider(BaseLLMProvider):
                 for item in (tags_response.json().get("models") or [])
                 if item.get("name") in requested_ids
             }
+            running_names = None
+            try:
+                running_response = await client.get(f"{self.base_url}/api/ps")
+                running_response.raise_for_status()
+                running_names = {
+                    item.get("name")
+                    for item in (running_response.json().get("models") or [])
+                    if item.get("name")
+                }
+            except Exception:
+                # Loaded state is optional telemetry; its failure must not invalidate model metadata.
+                running_names = None
 
             semaphore = asyncio.Semaphore(3)
 
@@ -90,6 +102,11 @@ class OllamaProvider(BaseLLMProvider):
                     "modified_at": tag.get("modified_at"),
                     "details": tag.get("details") or {},
                     "metadata_source": "ollama_api_tags",
+                    "runtime_observation": {
+                        "installed": bool(tag),
+                        "loaded": (model_id in running_names) if running_names is not None else None,
+                        "loaded_source": "ollama_api_ps" if running_names is not None else None,
+                    },
                 }
                 async with semaphore:
                     try:
