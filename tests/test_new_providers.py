@@ -61,14 +61,17 @@ def test_capability_catalog_filters_to_live_discovered_models():
 
 
 
-def test_capability_endpoint_does_not_trigger_remote_model_discovery(monkeypatch):
+def test_capability_and_operator_catalog_endpoints_do_not_trigger_remote_discovery(monkeypatch):
     import main
 
-    def unexpected_discovery(_config):
-        raise AssertionError("Capability metadata must not call a provider model catalog")
+    async def unexpected_discovery(_provider_id):
+        raise AssertionError("Local metadata endpoints must not call remote model discovery")
 
-    monkeypatch.setattr(main, "get_provider_factory", unexpected_discovery)
-    data = asyncio.run(main.provider_capabilities("groq"))
+    monkeypatch.setattr(main.interface_manager, "list_models", unexpected_discovery)
+    capabilities = asyncio.run(main.provider_capabilities("groq"))
+    operator_catalog = asyncio.run(main.provider_catalog("groq"))
 
-    assert "openai/gpt-oss-20b" in data["models"]
-    assert data["quota"]["runtime"]["status"] == "unknown"
+    assert "openai/gpt-oss-20b" in capabilities["models"]
+    assert capabilities["quota"]["runtime"]["status"] == "unknown"
+    assert operator_catalog["operator"]["catalog_mode"] == "live_authenticated_catalog"
+    assert operator_catalog["catalog_source"] == "local_operator_manifest"
