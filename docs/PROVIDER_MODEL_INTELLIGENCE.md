@@ -1,6 +1,6 @@
 # Provider & Model Intelligence
 
-**Status:** Intelligence refinement committed; CI validation and Windows Ollama smoke testing are pending.
+**Status:** Intelligence refinement committed; GitHub Actions passed (83 tests, warnings enabled); Windows Ollama smoke testing remains pending.
 
 ### Implemented in the current increment
 
