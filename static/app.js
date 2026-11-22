@@ -32,13 +32,16 @@ function chatApp() {
         providerCatalogSnapshot: null,
         operationalReport: null,
         operationalReportLoading: false,
+        intelligenceReport: null,
+        intelligenceReportLoading: false,
+        intelligenceReportError: '',
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
             active_provider: 'openrouter',
             routing_mode: 'manual',
             providers_config: {
-                ollama: { base_url: 'http://localhost:11434', model: '' },
+                ollama: { base_url: 'http://localhost:11434', model: '', auto_start: true },
                 openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' },
                 google_ai_studio: { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' },
                 cloudflare_workers_ai: { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' },
@@ -54,6 +57,7 @@ function chatApp() {
             await this.loadProviders();
             await this.loadOperationalReport();
             await this.loadProviderCapabilities();
+            await this.loadLatestIntelligenceReport();
             await this.refreshModels();
             await this.loadSessions();
             // Keep previous conversations in the sidebar, but never reopen one automatically.
@@ -65,7 +69,8 @@ function chatApp() {
             if (!response.ok) throw new Error('بارگذاری تنظیمات ناموفق بود.');
             this.settings = await response.json();
             this.settings.providers_config ||= {};
-            this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
+            this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '', auto_start: true };
+            this.settings.providers_config.ollama.auto_start ??= true;
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
             this.settings.providers_config.google_ai_studio ||= { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' };
             this.settings.providers_config.cloudflare_workers_ai ||= { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' };
@@ -110,6 +115,40 @@ function chatApp() {
             }
         },
 
+        async loadLatestIntelligenceReport() {
+            this.intelligenceReportError = '';
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch('/api/intelligence/reports/latest?provider_id=' + encodeURIComponent(provider));
+                const data = await response.json();
+                if (response.status === 404) {
+                    this.intelligenceReport = null;
+                    return;
+                }
+                if (!response.ok) throw new Error(data.detail || 'بارگذاری گزارش هوشمند ناموفق بود.');
+                this.intelligenceReport = data;
+            } catch (error) {
+                this.intelligenceReportError = error.message;
+            }
+        },
+
+        async generateOfflineReport() {
+            if (this.intelligenceReportLoading) return;
+            this.intelligenceReportLoading = true;
+            this.intelligenceReportError = '';
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch('/api/intelligence/reports/offline?provider_id=' + encodeURIComponent(provider), { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'تولید گزارش آفلاین ناموفق بود.');
+                this.intelligenceReport = data;
+            } catch (error) {
+                this.intelligenceReportError = error.message;
+            } finally {
+                this.intelligenceReportLoading = false;
+            }
+        },
+
         async onProviderChange() {
             this.connectionResult = null;
             this.providerQuota = null;
@@ -119,6 +158,7 @@ function chatApp() {
             this.modelsError = '';
             await this.loadProviderCapabilities();
             await this.refreshModels();
+            await this.loadLatestIntelligenceReport();
         },
 
         async checkProviderConnection() {
@@ -141,10 +181,13 @@ function chatApp() {
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
                 this.connectionResult = result;
+                this.intelligenceReport = result.intelligence_report || this.intelligenceReport;
                 if (result.status === 'reachable') {
                     this.catalogSyncResult = result.catalog_sync || null;
                     await this.loadProviderCapabilities();
                     await this.refreshModels();
+                    await this.loadOperationalReport();
+                } else {
                     await this.loadOperationalReport();
                 }
             } catch (error) {
@@ -221,6 +264,7 @@ function chatApp() {
                 if (!response.ok) throw new Error(data.detail || 'همگام‌سازی کاتالوگ ناموفق بود.');
                 this.catalogSyncResult = data.sync;
                 this.providerCatalogSnapshot = data.catalog;
+                this.intelligenceReport = data.report || data.connection?.intelligence_report || this.intelligenceReport;
                 await this.loadProviderCapabilities();
                 await this.refreshModels();
                 await this.loadOperationalReport();
