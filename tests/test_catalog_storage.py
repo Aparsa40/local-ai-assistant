@@ -231,3 +231,40 @@ def test_init_db_migrates_existing_provider_runtime_status_table(tmp_path, monke
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+
+def test_unchanged_intelligence_report_is_not_persisted_twice():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        first = {
+            "provider_id": "ollama",
+            "report_type": "runtime",
+            "generated_at": utcnow_naive().isoformat(),
+            "source_snapshot_at": utcnow_naive().isoformat(),
+            "overall_status": "healthy",
+            "summary": "same semantic report",
+            "fingerprint": "stable-fingerprint",
+            "models": [],
+        }
+        saved = save_intelligence_report(session, first)
+        duplicate = dict(first, generated_at=(utcnow_naive() + timedelta(seconds=1)).isoformat())
+
+        result = save_intelligence_report(session, duplicate)
+
+        assert saved["saved"] is True
+        assert result["saved"] is False
+        assert result["reason"] == "unchanged"
+        assert session.query(ProviderIntelligenceReport).filter_by(
+            provider_id="ollama", report_type="runtime"
+        ).count() == 1
+    finally:
+        session.close()
+        engine.dispose()
