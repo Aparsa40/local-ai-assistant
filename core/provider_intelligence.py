@@ -211,7 +211,9 @@ def _model_task_assessments(model: dict[str, Any]) -> list[dict[str, Any]]:
     }
     for task in TASK_TAXONOMY:
         provider_capabilities = capability_map.get(task, set())
-        if provider_capabilities.intersection(capabilities):
+        if task == "general_chat" and "completion" in capabilities:
+            status, evidence = "likely", "provider_reported"
+        elif provider_capabilities.intersection(capabilities):
             status, evidence = "supported", "provider_reported"
         elif task in curated_tasks:
             status, evidence = "likely", "curated_manifest"
