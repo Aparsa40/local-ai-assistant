@@ -200,8 +200,11 @@ TASK_TAXONOMY = (
 def _model_task_assessments(model: dict[str, Any]) -> list[dict[str, Any]]:
     metadata = model.get("catalog_data") or {}
     profile = model.get("operator_profile") or {}
-    curated_tasks = set(profile.get("tasks", []))
-    capabilities = {str(item).lower() for item in metadata.get("capabilities", [])}
+    curated_tasks = set(profile.get("tasks") or [])
+    raw_capabilities = metadata.get("capabilities") or []
+    if isinstance(raw_capabilities, str):
+        raw_capabilities = [raw_capabilities]
+    capabilities = {str(item).lower() for item in raw_capabilities}
     assessments = []
     capability_map = {
         "vision": {"vision"},
@@ -280,12 +283,12 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
 
     runtime_status = snapshot.get("provider_runtime", {}).get("status", "unknown")
     overall_status = (
-        runtime_status
-        if runtime_status in {"unavailable", "degraded"}
+        "unavailable"
+        if runtime_status in {"unavailable", "unreachable"}
+        else "degraded"
+        if runtime_status == "degraded" or freshness == "stale"
         else "unknown"
         if runtime_status == "unknown"
-        else "degraded"
-        if freshness == "stale"
         else "healthy"
     )
     models = _analyze_snapshot(snapshot)
