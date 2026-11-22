@@ -325,6 +325,30 @@
                         </select>
                     </label>
 
+                    <section class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="font-semibold">گزارش عملیاتی Interface Manager</h3>
+                                <p class="text-xs text-slate-500">نمای تجمیعی از وضعیت ثبت‌شده Providerها و تعداد مدل‌های فعال؛ اطلاعات ناموجود Unknown می‌ماند.</p>
+                            </div>
+                            <button @click="loadOperationalReport()" type="button" :disabled="operationalReportLoading"
+                                    class="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-2 text-xs">↻ بروزرسانی</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <template x-for="providerReport in (operationalReport?.providers || [])" :key="providerReport.provider_id">
+                                <div class="rounded border border-slate-800 p-2 text-xs space-y-1">
+                                    <div class="flex justify-between gap-2">
+                                        <span class="font-medium text-slate-200" x-text="providerReport.operator?.name || providerReport.provider_id"></span>
+                                        <span class="text-slate-400" x-text="providerReport.provider_runtime?.status || 'unknown'"></span>
+                                    </div>
+                                    <div class="text-slate-500" x-text="'مدل فعال: ' + (providerReport.live_models || []).filter(model => model.active).length"></div>
+                                    <div class="text-slate-500" x-text="'آخرین بررسی: ' + (providerReport.provider_runtime?.checked_at || 'Unknown')"></div>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="text-[10px] text-slate-600" x-show="operationalReport?.generated_at" x-text="'Generated: ' + operationalReport.generated_at"></p>
+                    </section>
+
                     <div class="rounded-lg border border-slate-700 p-3 space-y-2">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
