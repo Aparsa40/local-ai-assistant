@@ -13,17 +13,19 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Cloudflare Workers AI:** account-scoped inference, SSE streaming, and model discovery.
 - **Groq:** OpenAI-compatible streaming chat and model discovery.
 - **Cohere:** Chat v2 streaming and model discovery.
-- **Ollama:** local model discovery and streaming inference.
+- **Ollama:** local model discovery and streaming inference; explicit connection can reuse an active server or start the installed CLI when auto-start is enabled and the endpoint is loopback HTTP.
+- **Provider & Model Intelligence:** persisted runtime/offline reports, Ollama model metadata enrichment, evidence-aware task suitability, and explicit freshness/unknown states.
 - **Provider-specific model selection:** each provider retains its own selected model.
 - **Interface Manager foundation:** provider listing, operator-level catalog metadata, capability access, bounded model discovery, safe provider-neutral errors, quota visibility, and chat streaming through one service boundary.
 - **Operator Capability Catalog:** version-controlled provider manifests describe service type, discovery method, credential requirements, official documentation, task tags, and published free-tier policy separately from exact model IDs.
 - **Persistent Live Model Catalogs:** each provider has an independent SQLite namespace keyed by `(provider_id, model_id)`; active/retired state and first/last-seen timestamps are retained.
 - **Catalog synchronization:** the connection probe persists the model IDs it already discovered; manual refresh is a separate explicit action. Failed or ambiguous-empty refreshes preserve the last known-good catalog.
 - **Operational report:** `/api/operational-report` exposes provider reachability, live model inventory, model inference observations, quota snapshots, and sync history as a shared machine-readable read model.
+- **Intelligence reports:** `/api/intelligence/reports/latest` reads the latest persisted analysis; `/api/intelligence/reports/offline` builds a report from SQLite only, without network calls or process startup.
 - **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
 - **Quota diagnostics:** OpenRouter key usage can be read through its key endpoint; Groq/Cohere telemetry is shown only when response headers have actually been observed. Other unavailable balances remain unknown.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
-- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs, provider/model runtime status, quota snapshots, and catalog sync history are stored locally.
+- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, and bounded intelligence report history are stored locally.
 
 ## Project structure
 
@@ -36,7 +38,8 @@ local-ai-assistant/
 ├── core/database.py
 ├── core/orchestrator.py
 ├── core/interface_manager.py # provider-neutral service boundary
-├── core/catalog_storage.py  # durable operator/live catalog repository
+├── core/provider_intelligence.py # local runtime lifecycle and provider/model reports
+├── core/catalog_storage.py  # durable operator/live catalog and report repository
 ├── data/                    # local SQLite database (git-ignored)
 ├── docs/                    # architecture, principles, module contracts, roadmap
 ├── static/
@@ -68,7 +71,7 @@ The documents distinguish **Implemented**, **Accepted**, and **Planned** capabil
 ## Requirements
 
 - Python 3.10+
-- Ollama installed and running only when using local inference
+- Ollama installed when using local inference; the app can start its local server on explicit connection when auto-start is enabled
 - API credentials for whichever cloud providers you choose
 
 ## Install and run
@@ -126,9 +129,9 @@ Links: [REST API](https://developers.cloudflare.com/workers-ai/get-started/rest-
 
 ### Ollama
 
-1. Start Ollama.
-2. Pull a model, for example: `ollama pull llama3.2:1b`.
-3. Select Ollama and choose an installed model.
+1. Install Ollama and pull a model, for example: `ollama pull llama3.2:1b`.
+2. Select Ollama and use **Save, connect and discover models**. If the local server is not running, the app attempts to start it when Auto Start is enabled.
+3. Auto Start is limited to loopback HTTP endpoints. Remote Ollama endpoints are never started by the local application.
 
 Default URL: `http://localhost:11434`.
 
