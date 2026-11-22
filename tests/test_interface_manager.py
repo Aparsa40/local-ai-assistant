@@ -76,6 +76,29 @@ class InterfaceManagerTests(unittest.IsolatedAsyncioTestCase):
         catalog = manager.get_provider_catalog("groq")
         self.assertEqual(catalog["operator"]["catalog_mode"], "live_authenticated_catalog")
         self.assertEqual(catalog["model_metadata_evidence"], "curated_manifest")
+    async def test_quota_status_uses_provider_telemetry_when_available(self):
+        class FakeQuotaProvider(FakeProvider):
+            async def get_quota_status(self):
+                return {"status": "observed", "data": {"usage": 2.5, "limit_remaining": 7.5}}
+
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"openrouter": {}}},
+            provider_factories={"openrouter": FakeQuotaProvider},
+            capabilities_getter=lambda _provider_id: {},
+        )
+        result = await manager.get_quota_status("openrouter")
+        self.assertEqual(result["status"], "observed")
+        self.assertEqual(result["data"]["limit_remaining"], 7.5)
+
+    async def test_quota_status_does_not_invent_unavailable_balances(self):
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"cohere": {}}},
+            provider_factories={"cohere": FakeProvider},
+            capabilities_getter=lambda _provider_id: {"quota": {"runtime": {"status": "unknown"}}},
+        )
+        result = await manager.get_quota_status("cohere")
+        self.assertEqual(result["status"], "not_exposed")
+        self.assertNotIn("remaining", result)
 
 if __name__ == "__main__":
     unittest.main()
