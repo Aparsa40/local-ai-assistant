@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -201,6 +201,32 @@ class CatalogStorageTests(unittest.TestCase):
         snapshot = get_provider_catalog_snapshot(self.db, "ollama")
         self.assertTrue(snapshot["provider_runtime"]["runtime_details"]["started_by_application"])
         self.assertEqual(snapshot["provider_runtime"]["runtime_details"]["process_id"], 12345)
+
+
+def test_init_db_migrates_existing_provider_runtime_status_table(tmp_path, monkeypatch):
+    from core import database as database_module
+
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE provider_runtime_status ("
+            "provider_id VARCHAR(80) PRIMARY KEY, "
+            "status VARCHAR(40) NOT NULL, "
+            "probe VARCHAR(80), "
+            "model_count INTEGER, "
+            "checked_at DATETIME, "
+            "error JSON, "
+            "updated_at DATETIME NOT NULL)"
+        ))
+
+    monkeypatch.setattr(database_module, "engine", engine)
+    monkeypatch.setattr(database_module, "DATABASE_PATH", tmp_path / "chat_history.db")
+    try:
+        database_module.init_db()
+        columns = {column["name"] for column in inspect(engine).get_columns("provider_runtime_status")}
+        assert "runtime_details" in columns
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":
