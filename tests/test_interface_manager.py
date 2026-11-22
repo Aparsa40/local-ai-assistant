@@ -100,5 +100,60 @@ class InterfaceManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "not_exposed")
         self.assertNotIn("remaining", result)
 
+    async def test_stream_chat_preserves_cohere_adapter_default_temperature(self):
+        class CohereDefaultProvider(FakeProvider):
+            def __init__(self, config):
+                super().__init__(config)
+                self.received_temperature = None
+
+            async def chat_stream(self, messages, model, temperature=0.3):
+                self.received_temperature = temperature
+                yield "ok"
+
+        provider = CohereDefaultProvider({})
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"cohere": {}}},
+            provider_factories={"cohere": lambda _config: provider},
+            capabilities_getter=lambda _provider_id: {},
+        )
+
+        chunks = [
+            chunk async for chunk in manager.stream_chat(
+                "cohere", [{"role": "user", "content": "hello"}], "command-r"
+            )
+        ]
+
+        self.assertEqual(chunks, ["ok"])
+        self.assertEqual(provider.received_temperature, 0.3)
+
+    async def test_stream_chat_forwards_explicit_temperature_override(self):
+        class CohereDefaultProvider(FakeProvider):
+            def __init__(self, config):
+                super().__init__(config)
+                self.received_temperature = None
+
+            async def chat_stream(self, messages, model, temperature=0.3):
+                self.received_temperature = temperature
+                yield "ok"
+
+        provider = CohereDefaultProvider({})
+        manager = InterfaceManager(
+            config_loader=lambda: {"providers_config": {"cohere": {}}},
+            provider_factories={"cohere": lambda _config: provider},
+            capabilities_getter=lambda _provider_id: {},
+        )
+
+        chunks = [
+            chunk async for chunk in manager.stream_chat(
+                "cohere",
+                [{"role": "user", "content": "hello"}],
+                "command-r",
+                temperature=0.9,
+            )
+        ]
+
+        self.assertEqual(chunks, ["ok"])
+        self.assertEqual(provider.received_temperature, 0.9)
+
 if __name__ == "__main__":
     unittest.main()

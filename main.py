@@ -251,7 +251,6 @@ async def provider_quota_status(provider_id: str, db: Session = Depends(get_db))
         raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
 
 
-@app.get("/api/providers/{provider_id}/connection")
 @app.post("/api/providers/{provider_id}/connection")
 async def provider_connection_status(
     provider_id: str,

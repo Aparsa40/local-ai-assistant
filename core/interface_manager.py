@@ -187,14 +187,19 @@ class InterfaceManager:
         provider_id: str,
         messages: List[Dict[str, str]],
         model: str,
-        temperature: float = 0.7,
+        temperature: Optional[float] = None,
     ) -> AsyncIterator[str]:
         """Stream inference through the selected adapter without leaking raw errors."""
         provider = self._create_provider(provider_id)
         try:
-            async for chunk in provider.chat_stream(
-                messages=messages, model=model, temperature=temperature
-            ):
+            if temperature is None:
+                # Let each adapter retain its own established default (e.g. Cohere 0.3).
+                stream = provider.chat_stream(messages=messages, model=model)
+            else:
+                stream = provider.chat_stream(
+                    messages=messages, model=model, temperature=temperature
+                )
+            async for chunk in stream:
                 yield chunk
         except Exception as exc:
             raise InterfaceManagerError(

@@ -1,3 +1,4 @@
+from fastapi.testclient import TestClient
 import asyncio
 
 import pytest
@@ -75,3 +76,13 @@ def test_capability_and_operator_catalog_endpoints_do_not_trigger_remote_discove
     assert capabilities["quota"]["runtime"]["status"] == "unknown"
     assert operator_catalog["operator"]["catalog_mode"] == "live_authenticated_catalog"
     assert operator_catalog["catalog_source"] == "local_operator_manifest"
+
+
+def test_connection_probe_rejects_get_and_remains_post_only():
+    import main
+
+    response = TestClient(main.app).get("/api/providers/groq/connection")
+
+    assert response.status_code == 405
+    assert "POST" in response.headers.get("allow", "")
+    assert "GET" not in response.headers.get("allow", "")
