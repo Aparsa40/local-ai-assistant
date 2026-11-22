@@ -428,6 +428,8 @@
                         <p class="text-xs text-slate-400" x-text="'وظایف پیشنهادی اپراتور: ' + (providerCapabilities.operator?.task_tags || []).join('، ')"></p>
                         <p class="text-xs text-slate-400" x-text="'دامنه کشف مدل: ' + (providerCapabilities.operator?.discovery?.scope || 'نامشخص')"></p>
                         <p class="text-xs text-amber-400" x-text="providerCapabilities.operator?.quota?.notes || 'اطلاعات سهمیه در دسترس نیست.'"></p>
+                        <button @click="refreshProviderQuota()" type="button" class="rounded bg-slate-700 px-3 py-2 text-xs">به‌روزرسانی وضعیت سهمیه ↻</button>
+                        <p x-show="providerQuota" class="text-xs text-slate-400 break-words" x-text="providerQuota ? JSON.stringify(providerQuota) : ''"></p>
                         <p class="text-xs text-slate-400" x-text="'Streaming: ' + providerCapabilities.streaming + ' · Tool Calling: ' + providerCapabilities.tool_calling"></p>
                         <p class="text-xs text-slate-400" x-text="'سهمیه/مشاهده‌پذیری: ' + (providerCapabilities.quota?.allowance || providerCapabilities.operator?.quota?.visibility || 'نامشخص')"></p>
                         <p class="text-xs text-amber-400" x-text="'وضعیت سهمیه: ' + (providerCapabilities.quota?.status || 'نامشخص')"></p>
