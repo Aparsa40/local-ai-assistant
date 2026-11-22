@@ -11,6 +11,8 @@ from copy import deepcopy
 OPERATOR_CATALOG = {
     "ollama": {
         "name": "Ollama",
+        "description": "Local model runtime and model inventory on the user machine.",
+        "free_tier": {"status": "not_applicable", "published_allowance": None, "remaining": "not_applicable", "notes": "No hosted API free-tier quota; capacity depends on local hardware."},
         "category": "local_runtime",
         "catalog_mode": "live_local_inventory",
         "discovery": {"available": True, "scope": "installed_local_models", "requires_credentials": False},
@@ -22,6 +24,8 @@ OPERATOR_CATALOG = {
     },
     "openrouter": {
         "name": "OpenRouter",
+        "description": "Hosted model routing API with a unified catalog across supported model providers.",
+        "free_tier": {"status": "free_models_available", "published_allowance": "Free models are identified by provider catalog pricing metadata; account request limits are separate and may change.", "remaining": "unknown_unless_authoritatively_exposed", "notes": "Do not interpret openrouter/free as a concrete model ID or infer remaining free requests from key spend balance."},
         "category": "cloud_model_router",
         "catalog_mode": "live_catalog_and_router_alias",
         "discovery": {"available": True, "scope": "public_catalog_with_free_pricing_filter", "requires_credentials": False},
@@ -34,6 +38,8 @@ OPERATOR_CATALOG = {
     },
     "google_ai_studio": {
         "name": "Google AI Studio",
+        "description": "Gemini API platform with model discovery scoped to the API key and project.",
+        "free_tier": {"status": "model_and_project_dependent", "published_allowance": "Free-tier eligibility and request limits vary by model, project, and current policy.", "remaining": "not_exposed_by_models_api", "notes": "The Models API reports model metadata and supported actions, not remaining project quota."},
         "category": "cloud_model_provider",
         "catalog_mode": "live_authenticated_catalog",
         "discovery": {"available": True, "scope": "models_visible_to_api_key", "requires_credentials": True},
@@ -45,6 +51,8 @@ OPERATOR_CATALOG = {
     },
     "cloudflare_workers_ai": {
         "name": "Cloudflare Workers AI",
+        "description": "Account-scoped hosted inference catalog and serverless AI inference service.",
+        "free_tier": {"status": "published_daily_allowance", "published_allowance": "10,000 Neurons/day on the Workers Free plan (subject to current plan terms).", "remaining": "not_exposed_by_model_search", "notes": "A published daily allowance is not a live remaining balance."},
         "category": "cloud_model_provider",
         "catalog_mode": "account_scoped_live_catalog",
         "discovery": {"available": True, "scope": "account_catalog", "requires_credentials": True, "required_permission": "Workers AI Read or Workers AI Write"},
@@ -56,6 +64,8 @@ OPERATOR_CATALOG = {
     },
     "groq": {
         "name": "Groq",
+        "description": "Low-latency hosted inference API with account-visible model availability and per-model rate limits.",
+        "free_tier": {"status": "account_and_model_specific", "published_allowance": "Per-model RPM/RPD/TPM/TPD limits are shown in the Groq Console.", "remaining": "observed_from_response_headers_when_available", "notes": "Do not assume one universal free-tier quota; the organization dashboard is authoritative."},
         "category": "cloud_inference_provider",
         "catalog_mode": "live_authenticated_catalog",
         "discovery": {"available": True, "scope": "models_visible_to_api_key", "requires_credentials": True},
@@ -67,6 +77,8 @@ OPERATOR_CATALOG = {
     },
     "cohere": {
         "name": "Cohere",
+        "description": "Hosted language-model API with Chat, retrieval, reranking, and embedding model families.",
+        "free_tier": {"status": "trial_policy", "published_allowance": "Trial policy currently documented in this manifest: 1,000 API calls/month and Chat 20 requests/minute/model.", "remaining": "not_exposed_by_model_catalog", "notes": "Monthly remaining calls stay Unknown unless an authoritative usage endpoint exposes them."},
         "category": "cloud_inference_provider",
         "catalog_mode": "live_authenticated_catalog",
         "discovery": {"available": True, "scope": "chat_endpoint_compatible_models", "requires_credentials": True},
