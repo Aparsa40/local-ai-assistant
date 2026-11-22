@@ -24,7 +24,9 @@ The current repository contains:
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
 - Provider and chat tests in `tests/`.
 
-Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
+Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, local operator catalogs, capability access, bounded model discovery, catalog-reachability diagnostics, quota visibility, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
+
+Operator-level catalog metadata is maintained locally and separated from exact live model discovery. OpenRouter key usage and observed Groq/Cohere response-header telemetry are exposed where supported; unknown balances remain unknown.
 
 The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not yet implement user authentication. Do not expose the current development server to untrusted networks.
 
@@ -90,7 +92,7 @@ This is a logical architecture. It does not require a separate process or databa
 
 The provider/model control plane. It owns provider registration, model catalog access, connection and credential integration, health/quota metadata, adapter invocation, and normalized provider results.
 
-It does not decide whether a response is factually correct and does not own task planning.
+It exposes operator-level catalog metadata independently from optional live model discovery. Provider-level task tags are hints, not guarantees for every model. It does not decide whether a response is factually correct and does not own task planning.
 
 ### Agent Runtime (accepted target; not implemented)
 
