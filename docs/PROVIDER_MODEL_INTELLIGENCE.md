@@ -1,6 +1,18 @@
 # Provider & Model Intelligence
 
-**Status:** Accepted design; implementation is the next bounded increment on the Interface Manager foundation.
+**Status:** First implementation committed; pending CI validation and local Ollama smoke testing.
+
+### Implemented in the current increment
+
+- Ollama startup/reuse is coordinated during explicit POST connection or catalog-sync actions; opening Settings remains side-effect free.
+- Local startup is restricted to loopback HTTP endpoints, uses the installed Ollama CLI with shell execution disabled, and records process ownership only for processes started by this application.
+- Ollama discovery enriches live tags with size, digest, model family, parameter size, quantization, context metadata, and provider-reported capabilities.
+- Live metadata is persisted in the existing live-model catalog; partial enrichment does not erase prior metadata.
+- Runtime and offline report snapshots are stored in SQLite with bounded per-provider/type history.
+- Read-only latest-report and SQLite-only offline-report API endpoints are exposed, with a minimal Settings UI summary.
+- Automated tests cover lifecycle decisions, metadata parsing, report persistence, API access, and the offline no-network/no-subprocess contract.
+
+The code is not considered complete until CI passes and the user verifies Ollama startup against their installed Windows runtime.
 
 ## 1. Purpose
 
