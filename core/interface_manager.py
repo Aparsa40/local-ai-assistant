@@ -110,6 +110,33 @@ class InterfaceManager:
             "curated_manifest" if catalog.get("models") else "not_available"
         )
         return catalog
+    async def get_quota_status(self, provider_id: str) -> dict:
+        """Return live quota telemetry only when the provider exposes it; otherwise unknown."""
+        operator = get_operator_catalog(provider_id)
+        if not operator or provider_id not in self._provider_factories:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+
+        provider = self._create_provider(provider_id)
+        quota_reader = getattr(provider, "get_quota_status", None)
+        if callable(quota_reader):
+            try:
+                return await asyncio.wait_for(quota_reader(), timeout=self._timeout_seconds)
+            except asyncio.TimeoutError as exc:
+                raise InterfaceManagerError("timeout", "The provider quota request timed out.", provider_id) from exc
+            except Exception as exc:
+                raise InterfaceManagerError("quota_unavailable", "Provider quota information is unavailable.", provider_id) from exc
+
+        capabilities = self._capabilities_getter(provider_id) or {}
+        runtime = (capabilities.get("quota") or {}).get("runtime")
+        if runtime and runtime.get("status") not in {"unknown", "not_exposed"}:
+            return {"status": "observed", "source": "recent_inference_response", "data": runtime}
+        return {
+            "status": "not_exposed",
+            "source": operator.get("quota", {}).get("visibility", "unknown"),
+            "message": operator.get("quota", {}).get("notes", "The provider does not expose live remaining quota."),
+        }
     async def list_models(self, provider_id: str) -> List[str]:
         """Discover exact provider model IDs with a bounded catalog request."""
         provider = self._create_provider(provider_id)
