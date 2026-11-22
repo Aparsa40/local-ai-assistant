@@ -181,6 +181,7 @@ def record_provider_runtime(db: Session, provider_id: str, result: dict[str, Any
         else utcnow_naive()
     )
     row.error = result.get("error")
+    row.runtime_details = result.get("runtime")
     db.commit()
 
 
@@ -263,6 +264,7 @@ def get_provider_catalog_snapshot(db: Session, provider_id: str) -> dict[str, An
             "model_count": runtime.model_count,
             "checked_at": _iso(runtime.checked_at),
             "error": runtime.error,
+            "runtime_details": runtime.runtime_details,
         } if runtime else {"status": "unknown"},
         "quota": {
             "status": quota.status,
