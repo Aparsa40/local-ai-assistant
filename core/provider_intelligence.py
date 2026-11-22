@@ -297,7 +297,9 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
         age_seconds = max(0, int((datetime.now(timezone.utc) - latest_observation).total_seconds()))
         freshness = "fresh" if age_seconds <= 86400 else "stale"
 
-    runtime_status = snapshot.get("provider_runtime", {}).get("status", "unknown")
+    provider_runtime = dict(snapshot.get("provider_runtime", {}))
+    provider_runtime["startup"] = provider_runtime.pop("runtime_details", None)
+    runtime_status = provider_runtime.get("status", "unknown")
     overall_status = (
         "unavailable"
         if runtime_status in {"unavailable", "unreachable"}
@@ -316,7 +318,7 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
         "freshness": {"status": freshness, "age_seconds": age_seconds},
         "overall_status": overall_status,
         "summary": f"Offline snapshot: {len(models)} active models; source data freshness is {freshness}.",
-        "provider_runtime": snapshot.get("provider_runtime", {}),
+        "provider_runtime": provider_runtime,
         "models": models,
         "quota": snapshot.get("quota", {}),
         "sync_history": snapshot.get("sync_history", []),
@@ -345,7 +347,8 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
         else "healthy"
     )
     runtime = dict(snapshot.get("provider_runtime", {}))
-    runtime["startup"] = connection_result.get("runtime")
+    runtime["startup"] = connection_result.get("runtime") or runtime.get("runtime_details")
+    runtime.pop("runtime_details", None)
     return {
         "provider_id": provider_id,
         "report_type": "runtime",
