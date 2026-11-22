@@ -150,6 +150,15 @@ class CatalogStorageTests(unittest.TestCase):
         self.assertEqual(updated["live_models"][0]["catalog_data"]["size"], 456)
         self.assertEqual(updated["live_models"][0]["catalog_data"]["capabilities"], ["tools"])
 
+        sync_live_models(
+            self.db,
+            "ollama",
+            ["llama3.2:1b"],
+            model_metadata={"llama3.2:1b": {"size": 789, "details": {"family": "llama"}}},
+        )
+        partial = get_provider_catalog_snapshot(self.db, "ollama")
+        self.assertEqual(partial["live_models"][0]["catalog_data"]["capabilities"], ["tools"])
+
     def test_intelligence_report_history_is_bounded_per_provider_and_type(self):
         for index in range(3):
             generated = utcnow_naive().isoformat()
