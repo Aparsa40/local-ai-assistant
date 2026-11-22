@@ -10,6 +10,7 @@ from core import provider_intelligence
 from core.catalog_storage import (
     get_latest_intelligence_report,
     get_provider_catalog_snapshot,
+    record_provider_runtime,
     seed_operator_catalogs,
     sync_live_models,
 )
@@ -245,6 +246,14 @@ def test_offline_report_uses_only_persisted_data(monkeypatch):
                 }
             },
         )
+        record_provider_runtime(
+            db,
+            "ollama",
+            {
+                "status": "reachable",
+                "runtime": {"started_by_application": True, "process_id": 9876},
+            },
+        )
 
         def unexpected_io(*args, **kwargs):
             raise AssertionError("offline report must not perform network or process I/O")
@@ -257,6 +266,7 @@ def test_offline_report_uses_only_persisted_data(monkeypatch):
         assert report["report_type"] == "offline"
         assert report["models"][0]["model_id"] == "llama3.2:1b"
         assert report["models"][0]["task_suitability"][-1]["suitability"] == "supported"
+        assert report["provider_runtime"]["startup"]["started_by_application"] is True
         assert get_latest_intelligence_report(db, "ollama", "offline")["report_type"] == "offline"
     finally:
         db.close()
