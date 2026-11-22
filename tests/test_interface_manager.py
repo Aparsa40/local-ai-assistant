@@ -71,7 +71,7 @@ class InterfaceManagerTests(unittest.IsolatedAsyncioTestCase):
     def test_operator_catalog_does_not_invoke_model_discovery(self):
         manager = InterfaceManager(
             provider_factories={"groq": FakeProvider},
-            capabilities_getter=lambda _provider_id: {"models": {}},
+            capabilities_getter=lambda _provider_id: {"models": {"openai/gpt-oss-20b": {"tasks": ["analysis"]}}},
         )
         catalog = manager.get_provider_catalog("groq")
         self.assertEqual(catalog["operator"]["catalog_mode"], "live_authenticated_catalog")
