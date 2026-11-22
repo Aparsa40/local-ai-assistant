@@ -202,9 +202,15 @@ async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
 @app.get("/api/providers/{provider_id}/models")
 async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
     """Read the last successfully synchronized model IDs from SQLite; never performs network I/O."""
+    try:
+        operator_catalog = interface_manager.get_provider_catalog(provider_id).get("operator", {})
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
     snapshot = get_provider_catalog_snapshot(db, provider_id)
     active_models = [row["model_id"] for row in snapshot["live_models"] if row["active"]]
-    return {"provider": provider_id, "models": active_models, "source": "persistent_catalog"}
+    # Router aliases are operator-level selectors, not concrete live model IDs.
+    selectable_models = list(dict.fromkeys([*operator_catalog.get("router_aliases", []), *active_models]))
+    return {"provider": provider_id, "models": selectable_models, "live_models": active_models, "source": "persistent_catalog"}
 
 
 @app.post("/api/providers/{provider_id}/catalog/sync")
@@ -212,7 +218,10 @@ async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db))
     """Explicitly refresh a provider catalog and persist it only after successful discovery."""
     try:
         model_ids = await interface_manager.list_models(provider_id)
-        summary = sync_live_models(db, provider_id, model_ids)
+        operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
+        aliases = set(operator.get("router_aliases", []))
+        exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
+        summary = sync_live_models(db, provider_id, exact_model_ids)
         return {"sync": summary, "catalog": get_provider_catalog_snapshot(db, provider_id)}
     except InterfaceManagerError as exc:
         record_sync_failure(db, provider_id, {"category": exc.category, "message": exc.safe_message})
@@ -242,7 +251,10 @@ async def provider_connection_status(provider_id: str, db: Session = Depends(get
         model_ids = result.pop("models", [])
         record_provider_runtime(db, provider_id, result)
         if result.get("status") == "reachable":
-            result["catalog_sync"] = sync_live_models(db, provider_id, model_ids)
+            operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
+            aliases = set(operator.get("router_aliases", []))
+            exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
+            result["catalog_sync"] = sync_live_models(db, provider_id, exact_model_ids)
         return result
     except InterfaceManagerError as exc:
         raise HTTPException(status_code=404, detail=exc.safe_message) from exc
