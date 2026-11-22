@@ -14,6 +14,10 @@ from core.config_manager import ConfigManager
 from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
+from core.provider_intelligence import (
+    create_offline_intelligence_report,
+    refresh_provider_intelligence,
+)
 from core.catalog_storage import (
     get_operational_report,
     get_provider_catalog_snapshot,
@@ -23,6 +27,7 @@ from core.catalog_storage import (
     record_sync_failure,
     seed_operator_catalogs,
     sync_live_models,
+    get_latest_intelligence_report,
 )
 
 app = FastAPI(title="Local Modular AI Assistant")
@@ -222,22 +227,57 @@ async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
 
 @app.post("/api/providers/{provider_id}/catalog/sync")
 async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db)):
-    """Explicitly refresh a provider catalog and persist it only after successful discovery."""
+    """Refresh provider runtime, model inventory, and intelligence report."""
     try:
-        model_ids = await interface_manager.list_models(provider_id)
-        operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
-        aliases = set(operator.get("router_aliases", []))
-        exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
-        summary = sync_live_models(db, provider_id, exact_model_ids)
-        return {"sync": summary, "catalog": get_provider_catalog_snapshot(db, provider_id)}
+        result = await refresh_provider_intelligence(
+            db, interface_manager, provider_id, ConfigManager.load_config
+        )
     except InterfaceManagerError as exc:
-        record_sync_failure(db, provider_id, {"category": exc.category, "message": exc.safe_message})
         raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
+    snapshot = get_provider_catalog_snapshot(db, provider_id)
+    sync_result = result.get("catalog_sync") or {
+        "status": "failed",
+        "error": (result.get("error") or {}).get("message", "Provider catalog is unavailable."),
+    }
+    return {
+        "sync": sync_result,
+        "connection": result,
+        "catalog": snapshot,
+        "report": result.get("intelligence_report"),
+    }
 
 
 @app.get("/api/operational-report")
 async def operational_report(db: Session = Depends(get_db)):
     return get_operational_report(db)
+
+
+@app.get("/api/intelligence/reports/latest")
+async def latest_intelligence_report(
+    provider_id: str,
+    report_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        interface_manager.get_provider_catalog(provider_id)
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+    report = get_latest_intelligence_report(db, provider_id, report_type)
+    if report is None:
+        raise HTTPException(status_code=404, detail="No intelligence report has been generated for this provider yet.")
+    return report
+
+
+@app.post("/api/intelligence/reports/offline")
+async def generate_offline_intelligence_report(
+    provider_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        interface_manager.get_provider_catalog(provider_id)
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+    return create_offline_intelligence_report(db, provider_id)
 
 
 @app.get("/api/providers/{provider_id}/quota")
@@ -257,21 +297,15 @@ async def provider_connection_status(
     response: Response,
     db: Session = Depends(get_db),
 ):
-    # Connection checks discover and persist live models, so responses must never be cached.
+    # Connection checks may start a local runtime, discover models, and persist reports.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     try:
-        result = await interface_manager.check_connection(provider_id)
-        model_ids = result.pop("models", [])
-        record_provider_runtime(db, provider_id, result)
-        if result.get("status") == "reachable":
-            operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
-            aliases = set(operator.get("router_aliases", []))
-            exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
-            result["catalog_sync"] = sync_live_models(db, provider_id, exact_model_ids)
-        return result
+        return await refresh_provider_intelligence(
+            db, interface_manager, provider_id, ConfigManager.load_config
+        )
     except InterfaceManagerError as exc:
-        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+        raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
 
 
 @app.get("/api/sessions")
