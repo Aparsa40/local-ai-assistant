@@ -239,7 +239,10 @@ async def provider_quota_status(provider_id: str, db: Session = Depends(get_db))
 async def provider_connection_status(provider_id: str, db: Session = Depends(get_db)):
     try:
         result = await interface_manager.check_connection(provider_id)
+        model_ids = result.pop("models", [])
         record_provider_runtime(db, provider_id, result)
+        if result.get("status") == "reachable":
+            result["catalog_sync"] = sync_live_models(db, provider_id, model_ids)
         return result
     except InterfaceManagerError as exc:
         raise HTTPException(status_code=404, detail=exc.safe_message) from exc
