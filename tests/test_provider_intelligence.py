@@ -275,3 +275,59 @@ def test_offline_report_marks_missing_observations_unknown():
     finally:
         db.close()
         engine.dispose()
+
+
+def test_ollama_metadata_combines_tags_and_show_evidence(monkeypatch):
+    import httpx
+    from core.providers.ollama_provider import OllamaProvider
+
+    def handler(request):
+        if request.url.path == "/api/tags":
+            return httpx.Response(200, json={
+                "models": [{
+                    "name": "llama3.2:1b",
+                    "size": 987654,
+                    "digest": "abc123",
+                    "modified_at": "2026-11-22T10:00:00Z",
+                    "details": {
+                        "family": "llama",
+                        "parameter_size": "1B",
+                        "quantization_level": "Q4_K_M",
+                    },
+                }]
+            })
+        if request.url.path == "/api/show":
+            return httpx.Response(200, json={
+                "details": {
+                    "format": "gguf",
+                    "family": "llama",
+                    "families": ["llama"],
+                    "parameter_size": "1B",
+                    "quantization_level": "Q4_K_M",
+                },
+                "capabilities": ["completion", "tools", "vision"],
+                "model_info": {
+                    "llama.context_length": 8192,
+                    "llama.embedding_length": 2048,
+                    "llama.vocab_size": 128256,
+                },
+                "template": "{{ .Prompt }}",
+            })
+        return httpx.Response(404)
+
+    original_client = httpx.AsyncClient
+
+    def client_factory(*args, **kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return original_client(*args, **kwargs)
+
+    monkeypatch.setattr("core.providers.ollama_provider.httpx.AsyncClient", client_factory)
+    result = asyncio.run(
+        OllamaProvider().list_model_metadata(["llama3.2:1b"])
+    )
+    metadata = result["models"]["llama3.2:1b"]
+    assert metadata["size"] == 987654
+    assert metadata["details"]["quantization_level"] == "Q4_K_M"
+    assert metadata["context_length"] == 8192
+    assert metadata["capabilities"] == ["completion", "tools", "vision"]
+    assert result["errors"] == []
