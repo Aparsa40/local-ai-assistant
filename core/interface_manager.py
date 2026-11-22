@@ -13,6 +13,7 @@ from .config_manager import ConfigManager
 from .providers.base import BaseLLMProvider
 from .providers.capabilities import get_provider_capabilities
 from .providers.registry import PROVIDER_FACTORIES
+from .providers.operator_catalog import get_operator_catalog
 
 
 class InterfaceManagerError(Exception):
@@ -58,6 +59,9 @@ class InterfaceManager:
                     provider_id, provider_id.replace("_", " ").title()
                 ),
                 "capabilities_available": bool(self._capabilities_getter(provider_id)),
+                "catalog_mode": get_operator_catalog(provider_id).get("catalog_mode", "unsupported"),
+                "discovery_available": get_operator_catalog(provider_id).get("discovery", {}).get("available", False),
+                "task_tags": get_operator_catalog(provider_id).get("task_tags", []),
             }
             for provider_id in self._provider_factories
         ]
@@ -87,6 +91,25 @@ class InterfaceManager:
             )
         return self._capabilities_getter(provider_id)
 
+    def get_provider_catalog(self, provider_id: str) -> dict:
+        """Return the operator profile plus curated model metadata, without network I/O."""
+        operator = get_operator_catalog(provider_id)
+        if not operator or provider_id not in self._provider_factories:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+
+        capabilities = self._capabilities_getter(provider_id) or {}
+        catalog = dict(capabilities)
+        catalog.setdefault("name", operator["name"])
+        catalog.setdefault("streaming", "adapter/model dependent")
+        catalog.setdefault("tool_calling", "model dependent")
+        catalog["operator"] = operator
+        catalog["catalog_source"] = "local_operator_manifest"
+        catalog["model_metadata_evidence"] = (
+            "curated_manifest" if catalog.get("models") else "not_available"
+        )
+        return catalog
     async def list_models(self, provider_id: str) -> List[str]:
         """Discover exact provider model IDs with a bounded catalog request."""
         provider = self._create_provider(provider_id)
