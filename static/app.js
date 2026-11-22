@@ -114,6 +114,9 @@ function chatApp() {
             this.connectionResult = null;
             this.providerQuota = null;
             this.catalogSyncResult = null;
+            // Never leave the previous provider's options visible during a provider switch.
+            this.availableModels = [];
+            this.modelsError = '';
             await this.loadProviderCapabilities();
             await this.refreshModels();
         },
@@ -134,7 +137,7 @@ function chatApp() {
                 this.updateProviderKeyHints();
 
                 const provider = this.settings.active_provider;
-                const response = await fetch('/api/providers/' + encodeURIComponent(provider) + '/connection');
+                const response = await fetch('/api/providers/' + encodeURIComponent(provider) + '/connection', { method: 'POST', cache: 'no-store' });
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
                 this.connectionResult = result;
