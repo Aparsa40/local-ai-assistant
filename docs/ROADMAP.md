@@ -15,7 +15,7 @@ The application itself, its database, and its managed local files are the primar
 
 The repository currently contains a FastAPI application, a lightweight Alpine.js browser UI, SQLAlchemy-backed SQLite persistence, provider adapters, settings/configuration handling, chat streaming, and tests.
 
-Provider integrations present in the current codebase include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current chat experience still uses explicit provider/model selection. A first Interface Manager service boundary now handles provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The Model Manager, scheduled Updater, automatic routing, Agent Runtime, and Supervisor remain future work.
+Provider integrations present in the current codebase include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current chat experience still uses explicit provider/model selection. A first Interface Manager service boundary now handles provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The local operator catalog manifest and provider-neutral catalog/quota endpoints are implemented. Persistent model history, scheduled Updater, automatic routing, Agent Runtime, and Supervisor remain future work.
 
 The current application also has important limitations: credentials are stored in the ignored local settings JSON file, authentication is not implemented, and the current application must not be exposed to untrusted networks. See README and ARCHITECTURE for the implementation snapshot.
 
@@ -43,10 +43,13 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 - Introduce the Interface Manager service boundary.
 - Route provider listing, capability access, model discovery, and inference streaming through it.
 - Add bounded catalog diagnostics and safe provider-neutral errors.
+- Maintain operator-level catalogs independently from exact model IDs, including discovery scope, account permissions, task hints, and quota visibility.
+- Keep live model discovery optional and explicit; never infer model availability or remaining quota from a provider-level profile.
+- Expose live quota only when an authoritative endpoint or observed response headers provide it.
 - Preserve exact model IDs and existing user-selected provider/model behavior.
 - Keep Ollama/local inference behind the same provider-neutral contract as cloud providers.
 
-**Current implementation:** The first service boundary, catalog probe, and chat-stream delegation are implemented on the feature branch. Persistent model records, full health monitoring, normalized inference envelopes, retry/fallback policies, and an encrypted credential vault remain incomplete.
+**Current implementation:** The first service boundary, local operator catalogs, explicit live model discovery, catalog probe, normalized quota-visibility endpoint, and chat-stream delegation are implemented on the feature branch. OpenRouter key usage can be queried live; Groq/Cohere telemetry depends on observed response headers. Persistent model records, scheduled Updater, full health monitoring, normalized inference envelopes, retry/fallback policies, and an encrypted credential vault remain incomplete.
 
 **Exit criteria:** Internal modules can discover and invoke providers through Interface Manager without importing provider-specific adapters. Catalog diagnostics are bounded and accurately labeled.
 
