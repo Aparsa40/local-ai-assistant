@@ -366,12 +366,16 @@
                                     <span x-text="'تازگی: ' + (intelligenceReport.freshness?.status || 'unknown')"></span>
                                 </div>
                                 <p class="text-slate-400" x-text="intelligenceReport.summary"></p>
+                                <template x-for="warning in (intelligenceReport.warnings || [])" :key="warning">
+                                    <p class="text-amber-400" x-text="warning"></p>
+                                </template>
                                 <p x-show="intelligenceReport.provider_runtime?.startup" class="text-slate-500"
                                    x-text="intelligenceReport.provider_runtime.startup.started_by_application ? 'Ollama توسط برنامه راه‌اندازی شد.' : (intelligenceReport.provider_runtime.startup.already_running ? 'از سرور فعال Ollama استفاده شد.' : 'راه‌اندازی خودکار انجام نشد.')"></p>
                                 <template x-for="model in (intelligenceReport.models || [])" :key="model.model_id">
                                     <div class="rounded border border-slate-800 p-2">
                                         <div class="font-medium text-sky-300 break-all" dir="ltr" x-text="model.model_id"></div>
                                         <div class="text-slate-500" x-text="'Family: ' + (model.metadata?.family || 'Unknown') + ' · Parameters: ' + (model.metadata?.parameter_size || 'Unknown') + ' · Quantization: ' + (model.metadata?.quantization_level || 'Unknown')"></div>
+                                        <div class="text-slate-500" x-text="'Size: ' + (model.metadata?.size ? (model.metadata.size + ' bytes') : 'Unknown') + ' · Context: ' + (model.metadata?.context_length || 'Unknown')"></div>
                                         <div class="text-slate-400" x-text="'Tasks: ' + (model.task_suitability || []).filter(item => item.suitability !== 'unknown').map(item => item.task + ' (' + item.suitability + ')').join(', ')"></div>
                                     </div>
                                 </template>
