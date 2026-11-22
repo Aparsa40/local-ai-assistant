@@ -12,7 +12,7 @@ from core.catalog_storage import (
     seed_operator_catalogs,
     sync_live_models,
 )
-from core.database import Base, LiveModelCatalogEntry, to_utc_naive, utcnow_naive
+from core.database import Base, LiveModelCatalogEntry, OperatorModelProfile, to_utc_naive, utcnow_naive
 
 
 class CatalogStorageTests(unittest.TestCase):
@@ -62,6 +62,35 @@ class CatalogStorageTests(unittest.TestCase):
         self.assertEqual(snapshot["operator"]["name"], "Groq")
         self.assertTrue(snapshot["curated_models"])
         self.assertEqual(snapshot["live_models"], [])
+
+    def test_seed_retires_profiles_removed_from_current_manifest(self):
+        seed_operator_catalogs(self.db)
+
+        stale_model_id = "__retired_manifest_model__"
+        self.db.add(OperatorModelProfile(
+            provider_id="groq",
+            model_id=stale_model_id,
+            profile={"tasks": ["chat"]},
+        ))
+        self.db.add(LiveModelCatalogEntry(
+            provider_id="groq",
+            model_id=stale_model_id,
+            catalog_data={},
+            source="provider_api",
+            active=True,
+        ))
+        self.db.commit()
+
+        seed_operator_catalogs(self.db)
+
+        self.assertIsNone(self.db.get(OperatorModelProfile, ("groq", stale_model_id)))
+        snapshot = get_provider_catalog_snapshot(self.db, "groq")
+        live_model = next(
+            row for row in snapshot["live_models"]
+            if row["model_id"] == stale_model_id
+        )
+        self.assertIsNone(live_model["operator_profile"])
+        self.assertTrue(snapshot["curated_models"])
 
     def test_live_catalog_is_provider_scoped_and_tracks_retired_models(self):
         first = sync_live_models(self.db, "groq", ["model-a", "model-b"])
