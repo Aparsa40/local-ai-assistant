@@ -15,22 +15,20 @@ This directory is the architectural and engineering reference for Local AI Assis
 | --- | --- |
 | [Interface Manager](INTERFACE_MANAGER.md) | Provider/model control plane and internal service contract |
 | [Operator Catalogs](OPERATOR_CATALOGS.md) | Operator-level discovery, free-tier caveats, quota visibility, and evidence policy |
-| [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
-| [Model Manager](MODEL_MANAGER.md) | Model catalog, capability metadata, labels, and safe updates |
-| [Connector System](CONNECTOR_SYSTEM.md) | Optional external service integrations |
-| [Permissions](PERMISSIONS.md) | Default-deny access control, tool mediation, and approval gates |
-| [Memory Architecture](MEMORY_ARCHITECTURE.md) | Conversation history, model-private memory, and shared knowledge |
-| [Discord Sync](DISCORD_SYNC.md) | Optional Discord status/context synchronization |
-| [Document Ingestion](DOCUMENT_INGESTION.md) | Source ingestion and AI Librarian workflow |
+| [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
+| [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [AI Orchestration](AI_ORCHESTRATION.md) | Conversation Processing, online/offline engines, and Supervisor |
-| [Database Schema](DATABASE_SCHEMA.md) | SQLite/PostgreSQL direction, repositories, migrations, and search |
-| [Backup and Storage](BACKUP_AND_STORAGE.md) | Durable storage, snapshots, restore, and maintenance |
+| [Permissions](PERMISSIONS.md) | Default-deny access control, tool mediation, and approval gates |
 
 ## Supporting references
 
 - [Provider Capabilities](PROVIDER_CAPABILITIES.md) — provider capability notes and operational references.
 - [Versioning](VERSIONING.md) — semantic versioning policy.
+
+## Planned module contracts
+
+The following contracts are planned for their owning roadmap phases and are not yet documented as complete specifications: Connector System, Memory Architecture, Discord Sync, Document Ingestion / AI Librarian, Database Schema / migrations, and Backup & Storage.
 
 ## Status vocabulary
 
