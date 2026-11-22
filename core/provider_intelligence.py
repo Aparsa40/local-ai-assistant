@@ -365,9 +365,12 @@ async def refresh_provider_intelligence(db, interface_manager, provider_id: str,
     if connection.get("status") == "reachable":
         metadata_by_model: dict[str, dict[str, Any]] = {}
         if provider_id == "ollama" and model_ids:
-            metadata_result = await interface_manager.get_model_metadata(provider_id, model_ids)
-            metadata_by_model = metadata_result.get("models", {})
-            metadata_errors = metadata_result.get("errors", [])
+            try:
+                metadata_result = await interface_manager.get_model_metadata(provider_id, model_ids)
+                metadata_by_model = metadata_result.get("models", {})
+                metadata_errors = metadata_result.get("errors", [])
+            except Exception:
+                metadata_errors = [{"category": "metadata_unavailable"}]
         operator = interface_manager.get_provider_catalog(provider_id).get("operator", {})
         aliases = set(operator.get("router_aliases", []))
         exact_model_ids = [model_id for model_id in model_ids if model_id not in aliases]
@@ -375,6 +378,7 @@ async def refresh_provider_intelligence(db, interface_manager, provider_id: str,
             db,
             provider_id,
             exact_model_ids,
+            source="ollama_local_api" if provider_id == "ollama" else "provider_api",
             model_metadata=metadata_by_model,
         )
         connection["catalog_sync"] = sync_result
