@@ -1,6 +1,6 @@
 # Interface Manager
 
-**Status:** Provider-neutral service boundary and local operator catalog implemented; persistent model control plane remains incremental.
+**Status:** Provider-neutral service boundary, persistent operator/live catalogs, provider diagnostics, quota snapshots, and operational report implemented incrementally.
 
 ## 1. Purpose
 
@@ -41,7 +41,7 @@ Task planning belongs to Conversation Processing / Agent Runtime / Supervisor. O
 | get_capabilities(provider_id) | Returns the local capability manifest for a registered provider. |
 | get_provider_catalog(provider_id) | Returns the local operator profile and curated model metadata; performs no network request. |
 | get_quota_status(provider_id) | Returns observed provider quota telemetry when available; otherwise an explicit not-exposed/unknown state. |
-| list_models(provider_id) | Discovers exact model IDs with a bounded catalog request. |
+| list_models(provider_id) | Performs bounded provider discovery; API/UI read paths use the persisted catalog instead of triggering network I/O. |
 | check_connection(provider_id) | Probes model-catalog access and reports reachable/unreachable, model count, timestamp, and a safe error category. |
 | stream_chat(provider_id, messages, model) | Streams inference through the selected provider adapter behind the service boundary. |
 
@@ -49,12 +49,14 @@ HTTP endpoints:
 - GET /api/providers
 - GET /api/providers/{provider_id}/capabilities
 - GET /api/providers/{provider_id}/catalog
-- GET /api/providers/{provider_id}/models
+- GET /api/providers/{provider_id}/models (persisted read)
+- POST /api/providers/{provider_id}/catalog/sync (explicit live refresh)
 - GET /api/providers/{provider_id}/quota
 - GET /api/providers/{provider_id}/connection
+- GET /api/operational-report
 - POST /api/chat uses Interface Manager for provider streaming.
 
-The Provider settings panel exposes a “Save and check connection” action that persists the edited settings before calling the catalog diagnostic endpoint.
+The Provider settings panel exposes a “Save and check connection” action that persists the edited settings, probes the provider catalog, and persists the model IDs returned by that same probe. Manual catalog refresh is a separate action and does not run during ordinary UI reads.
 
 The connection endpoint currently performs a **model-catalog probe**. A successful catalog request proves that the provider's discovery endpoint is reachable; it does not prove that a subsequent inference request will succeed. The API must not label this as a full inference health check.
 
@@ -67,7 +69,7 @@ The following operations are accepted targets but are not fully implemented yet:
 | get_model(provider_id, model_id) | Resolve normalized model metadata and lifecycle state. |
 | get_connection_status(provider_id) | Return cached/observed connection state with freshness. |
 | invoke(request) | Accept a typed provider-neutral request and return normalized events/results. |
-| Catalog refresh/cache | Store last-known catalogs, timestamps, and change sets. |
+| Catalog refresh/cache | Implemented incrementally through SQLite live-model records, first/last-seen timestamps, active/retired state, and sync history. |
 | Capability evidence | Track provider-reported, catalog-reported, curated, experimentally verified, or unknown values. |
 | Resilience policy | Add bounded inference timeouts and carefully classified retry behavior. |
 | Credential service | Provide encrypted storage, rotation, explicit removal, and redaction. |
@@ -132,3 +134,18 @@ Current local provider credentials remain in the ignored settings file and are n
 This is an incremental implementation. Do not describe the complete Model Manager, Updater, credential vault, automatic routing, or full health monitoring as shipped.
 
 Related: OPERATOR_CATALOGS.md, PROVIDER_SYSTEM.md, MODEL_MANAGER.md, AGENT_RUNTIME.md, PERMISSIONS.md.
+
+
+## 8. Persistent catalog storage
+
+`core/catalog_storage.py` is the repository layer for the Interface Manager's catalog read models. The SQLAlchemy schema in `core/database.py` now includes:
+
+- `operator_catalogs` and `operator_model_profiles` for repository-owned operator manifests and curated model evidence.
+- `live_model_catalog` for provider-reported exact model IDs, keyed by `(provider_id, model_id)`.
+- `provider_runtime_status` and `model_runtime_status` for separately observed connection and inference facts.
+- `provider_quota_snapshots` for timestamped provider quota responses.
+- `catalog_sync_history` for successful, failed, and ambiguous-empty sync outcomes.
+
+Startup uses `Base.metadata.create_all()` to add these tables without replacing existing chat/profile tables, then seeds the version-controlled operator manifests. Existing SQLite data is preserved.
+
+The UI reads the persisted catalog. A provider API call is made only by the connection probe or explicit catalog-sync action. A failed sync never clears last-known-good records; ambiguous empty responses are also preserved when a prior catalog exists.
