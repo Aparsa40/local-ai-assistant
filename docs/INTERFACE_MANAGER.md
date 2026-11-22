@@ -1,6 +1,6 @@
 # Interface Manager
 
-**Status:** First provider-neutral service boundary implemented; full control-plane contract remains incremental.
+**Status:** Provider-neutral service boundary and local operator catalog implemented; persistent model control plane remains incremental.
 
 ## 1. Purpose
 
@@ -11,6 +11,7 @@ It is infrastructure, not an AI reasoning agent.
 ## 2. Responsibilities
 
 - Provider Registry: expose registered provider adapters and stable IDs.
+- Operator Catalog: expose provider-level discovery policy, account requirements, task tags, quota visibility, and authoritative documentation links without requiring network access.
 - Model Catalog: discover and preserve exact provider model identifiers.
 - Capability Registry: expose known capability metadata and its evidence/freshness.
 - Connection Diagnostics: report bounded connectivity probes without exposing credentials.
@@ -38,6 +39,8 @@ Task planning belongs to Conversation Processing / Agent Runtime / Supervisor. O
 | --- | --- |
 | list_providers() | Returns registered provider IDs, display names, and whether capability metadata exists. |
 | get_capabilities(provider_id) | Returns the local capability manifest for a registered provider. |
+| get_provider_catalog(provider_id) | Returns the local operator profile and curated model metadata; performs no network request. |
+| get_quota_status(provider_id) | Returns observed provider quota telemetry when available; otherwise an explicit not-exposed/unknown state. |
 | list_models(provider_id) | Discovers exact model IDs with a bounded catalog request. |
 | check_connection(provider_id) | Probes model-catalog access and reports reachable/unreachable, model count, timestamp, and a safe error category. |
 | stream_chat(provider_id, messages, model) | Streams inference through the selected provider adapter behind the service boundary. |
@@ -45,7 +48,9 @@ Task planning belongs to Conversation Processing / Agent Runtime / Supervisor. O
 HTTP endpoints:
 - GET /api/providers
 - GET /api/providers/{provider_id}/capabilities
+- GET /api/providers/{provider_id}/catalog
 - GET /api/providers/{provider_id}/models
+- GET /api/providers/{provider_id}/quota
 - GET /api/providers/{provider_id}/connection
 - POST /api/chat uses Interface Manager for provider streaming.
 
@@ -88,6 +93,8 @@ Do not fabricate missing usage, quota, or capability values. Represent unknown e
 
 ## 7. Capability metadata
 
+Operator profiles are local static metadata and are not a substitute for live model discovery. The Settings UI must display them even when discovery is unavailable. Exact model IDs should come from live discovery when supported; curated fallbacks must be visibly labeled and must never be represented as account-verified.
+
 Capability metadata should distinguish provider-level facts from model-level facts. Potential fields include modalities, context/output limits, streaming, tool/function calling, structured output, task suitability, embeddings/reranking, pricing, and account-specific availability.
 
 Each field should indicate its evidence class and last-checked time where practical. A provider supporting a feature does not prove every model supports it.
@@ -117,10 +124,11 @@ Current local provider credentials remain in the ignored settings file and are n
 - core/providers/base.py: current provider adapter contract.
 - core/providers/registry.py: provider factories and registration.
 - core/providers/capabilities.py: current capability/quota metadata.
+- core/providers/operator_catalog.py: local operator-level catalog and discovery/quota policy.
 - core/orchestrator.py: explicit user-selected provider/model resolution.
 - main.py: API boundary; provider discovery and chat streaming delegate through Interface Manager.
 - tests/test_interface_manager.py: isolated service contract tests.
 
 This is an incremental implementation. Do not describe the complete Model Manager, Updater, credential vault, automatic routing, or full health monitoring as shipped.
 
-Related: PROVIDER_SYSTEM.md, MODEL_MANAGER.md, AGENT_RUNTIME.md, PERMISSIONS.md.
+Related: OPERATOR_CATALOGS.md, PROVIDER_SYSTEM.md, MODEL_MANAGER.md, AGENT_RUNTIME.md, PERMISSIONS.md.
