@@ -475,6 +475,7 @@
                             <a x-show="providerCapabilities?.operator?.source_url" :href="providerCapabilities.operator.source_url"
                                target="_blank" rel="noopener noreferrer" class="text-xs text-sky-400 hover:text-sky-300">مستندات رسمی ↗</a>
                         </div>
+                        <p class="text-xs text-slate-400" x-text="providerCapabilities.operator?.description || ''"></p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                             <div><span class="text-slate-500">نوع سرویس:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.category || 'نامشخص'"></span></div>
                             <div><span class="text-slate-500">روش کاتالوگ:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.catalog_mode || 'نامشخص'"></span></div>
@@ -488,6 +489,11 @@
                                     <span class="rounded bg-slate-800 px-2 py-1 text-[11px] text-sky-200" x-text="task"></span>
                                 </template>
                             </div>
+                        </div>
+                        <div class="rounded border border-slate-800 p-2 space-y-1">
+                            <div class="text-xs font-medium text-slate-300">سیاست Free Tier منتشرشده</div>
+                            <p class="text-xs text-slate-400" x-text="providerCapabilities.operator?.free_tier?.published_allowance || 'اطلاعات سهمیه منتشرشده در دسترس نیست.'"></p>
+                            <p class="text-[11px] text-amber-300" x-text="'Remaining: ' + (providerCapabilities.operator?.free_tier?.remaining || 'Unknown')"></p>
                         </div>
                         <p class="text-xs text-amber-300" x-text="providerCapabilities.operator?.quota?.notes || 'اطلاعات سهمیه مستند نشده است.'"></p>
                         <div class="border-t border-slate-800 pt-3">
