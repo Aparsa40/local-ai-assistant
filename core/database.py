@@ -9,6 +9,7 @@ try:
         DateTime,
         ForeignKey,
         Integer,
+        JSON,
         LargeBinary,
         String,
         Text,
@@ -57,6 +58,79 @@ class UserProfile(Base):
     email = Column(String(254), nullable=False, default="")
     avatar_data = Column(LargeBinary, nullable=True)
     avatar_mime = Column(String(50), nullable=True)
+
+
+
+class OperatorCatalogEntry(Base):
+    __tablename__ = "operator_catalogs"
+    provider_id = Column(String(80), primary_key=True)
+    name = Column(String(160), nullable=False)
+    manifest = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OperatorModelProfile(Base):
+    __tablename__ = "operator_model_profiles"
+    provider_id = Column(String(80), primary_key=True)
+    model_id = Column(String(255), primary_key=True)
+    profile = Column(JSON, nullable=False, default=dict)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class LiveModelCatalogEntry(Base):
+    __tablename__ = "live_model_catalog"
+    provider_id = Column(String(80), primary_key=True)
+    model_id = Column(String(255), primary_key=True)
+    catalog_data = Column(JSON, nullable=False, default=dict)
+    source = Column(String(80), nullable=False, default="provider_api")
+    active = Column(Boolean, nullable=False, default=True)
+    first_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProviderRuntimeStatus(Base):
+    __tablename__ = "provider_runtime_status"
+    provider_id = Column(String(80), primary_key=True)
+    status = Column(String(40), nullable=False, default="unknown")
+    probe = Column(String(80), nullable=True)
+    model_count = Column(Integer, nullable=True)
+    checked_at = Column(DateTime, nullable=True)
+    error = Column(JSON, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ModelRuntimeStatus(Base):
+    __tablename__ = "model_runtime_status"
+    provider_id = Column(String(80), primary_key=True)
+    model_id = Column(String(255), primary_key=True)
+    availability = Column(String(40), nullable=False, default="unknown")
+    last_successful_request = Column(DateTime, nullable=True)
+    last_error = Column(JSON, nullable=True)
+    observed_limits = Column(JSON, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProviderQuotaSnapshot(Base):
+    __tablename__ = "provider_quota_snapshots"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider_id = Column(String(80), nullable=False, index=True)
+    status = Column(JSON, nullable=False, default=dict)
+    source = Column(String(160), nullable=True)
+    observed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class CatalogSyncHistory(Base):
+    __tablename__ = "catalog_sync_history"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    provider_id = Column(String(80), nullable=False, index=True)
+    status = Column(String(40), nullable=False)
+    source = Column(String(80), nullable=False, default="provider_api")
+    discovered_count = Column(Integer, nullable=False, default=0)
+    added_count = Column(Integer, nullable=False, default=0)
+    retired_count = Column(Integer, nullable=False, default=0)
+    error = Column(JSON, nullable=True)
+    synced_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
 
 def init_db():
