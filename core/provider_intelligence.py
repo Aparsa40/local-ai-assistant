@@ -329,7 +329,21 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
     models = _analyze_snapshot(snapshot)
     status = connection_result.get("status", "unknown")
     errors = metadata_errors or []
-    overall_status = "unavailable" if status != "reachable" else "degraded" if errors else "healthy"
+    sync_status = (connection_result.get("catalog_sync") or {}).get("status")
+    warnings = []
+    if status != "reachable":
+        warnings.append("Provider is unreachable; model records represent the last persisted inventory.")
+    if errors:
+        warnings.append("Some model metadata could not be refreshed; prior known metadata was retained where available.")
+    if sync_status == "empty_response_preserved":
+        warnings.append("The provider returned an empty inventory; the last-known-good model catalog was preserved.")
+    overall_status = (
+        "unavailable"
+        if status != "reachable"
+        else "degraded"
+        if errors or sync_status not in {None, "success"}
+        else "healthy"
+    )
     runtime = dict(snapshot.get("provider_runtime", {}))
     runtime["startup"] = connection_result.get("runtime")
     return {
@@ -340,6 +354,7 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
         "freshness": {"status": "fresh" if status == "reachable" else "unknown", "age_seconds": 0 if status == "reachable" else None},
         "overall_status": overall_status,
         "summary": f"{provider_id}: {status}; {len(models)} active models; {len(errors)} metadata errors.",
+        "warnings": warnings,
         "provider_runtime": runtime,
         "models": models,
         "quota": snapshot.get("quota", {}),
