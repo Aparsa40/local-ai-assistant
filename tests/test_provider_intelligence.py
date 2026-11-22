@@ -331,3 +331,45 @@ def test_ollama_metadata_combines_tags_and_show_evidence(monkeypatch):
     assert metadata["context_length"] == 8192
     assert metadata["capabilities"] == ["completion", "tools", "vision"]
     assert result["errors"] == []
+
+
+def test_ollama_provider_normalizes_localhost_and_default_port():
+    from core.providers.ollama_provider import OllamaProvider
+
+    provider = OllamaProvider(base_url="http://localhost")
+    assert provider.base_url == "http://127.0.0.1:11434"
+
+
+def test_local_runtime_reuses_its_owned_process_after_startup_timeout(monkeypatch):
+    probes = iter([False, False])
+
+    async def probe(_url):
+        return next(probes)
+
+    async def no_wait(_seconds):
+        return None
+
+    class FakeProcess:
+        pid = 4323
+
+        def poll(self):
+            return None
+
+    calls = []
+    monkeypatch.setattr(LocalRuntimeController, "_probe", staticmethod(probe))
+    monkeypatch.setattr(LocalRuntimeController, "_find_executable", staticmethod(lambda: "ollama"))
+    monkeypatch.setattr(provider_intelligence.asyncio, "sleep", no_wait)
+    monkeypatch.setattr(
+        subprocess,
+        "Popen",
+        lambda args, **kwargs: calls.append((args, kwargs)) or FakeProcess(),
+    )
+
+    controller = LocalRuntimeController(startup_timeout=0)
+    first = asyncio.run(controller.ensure_running("http://localhost:11434"))
+    second = asyncio.run(controller.ensure_running("http://localhost:11434"))
+
+    assert first["error"]["category"] == "startup_timeout"
+    assert second["error"]["category"] == "startup_timeout"
+    assert len(calls) == 1
+    assert calls[0][1]["env"]["OLLAMA_HOST"] == "127.0.0.1:11434"
