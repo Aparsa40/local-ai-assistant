@@ -103,6 +103,14 @@ class LocalRuntimeController:
                 }
 
             if self._owned_process is not None and self._owned_process.poll() is None:
+                if self._owned_endpoint != endpoint:
+                    return {
+                        "status": "unavailable",
+                        "endpoint_scope": "local",
+                        "already_running": False,
+                        "started_by_application": False,
+                        "error": {"category": "runtime_managed_for_different_endpoint", "message": "This application already manages an Ollama process for a different endpoint."},
+                    }
                 process = self._owned_process
             else:
                 executable = self._find_executable()
@@ -115,6 +123,15 @@ class LocalRuntimeController:
                         "error": {"category": "ollama_not_installed", "message": "The Ollama executable was not found. Install Ollama or add its CLI to PATH."},
                     }
                 creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+                parsed_endpoint = urlparse(endpoint)
+                bind_host = parsed_endpoint.hostname or "127.0.0.1"
+                if bind_host == "localhost":
+                    bind_host = "127.0.0.1"
+                if ":" in bind_host and not bind_host.startswith("["):
+                    bind_host = f"[{bind_host}]"
+                bind_port = parsed_endpoint.port or (443 if parsed_endpoint.scheme == "https" else 80)
+                child_environment = os.environ.copy()
+                child_environment["OLLAMA_HOST"] = f"{bind_host}:{bind_port}"
                 try:
                     process = subprocess.Popen(
                         [executable, "serve"],
@@ -124,7 +141,10 @@ class LocalRuntimeController:
                         shell=False,
                         close_fds=True,
                         creationflags=creation_flags,
+                        env=child_environment,
                     )
+                    self._owned_process = process
+                    self._owned_endpoint = endpoint
                 except OSError:
                     return {
                         "status": "error",
