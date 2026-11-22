@@ -200,13 +200,13 @@ def _model_task_assessments(model: dict[str, Any]) -> list[dict[str, Any]]:
     capabilities = {str(item).lower() for item in metadata.get("capabilities", [])}
     assessments = []
     capability_map = {
-        "vision": "vision",
-        "embeddings": "embeddings",
-        "tool_calling": "tools",
+        "vision": {"vision"},
+        "embeddings": {"embedding", "embeddings"},
+        "tool_calling": {"tools", "tool_calling"},
     }
     for task in TASK_TAXONOMY:
-        provider_capability = capability_map.get(task)
-        if provider_capability and provider_capability in capabilities:
+        provider_capabilities = capability_map.get(task, set())
+        if provider_capabilities.intersection(capabilities):
             status, evidence = "supported", "provider_reported"
         elif task in curated_tasks:
             status, evidence = "likely", "curated_manifest"
