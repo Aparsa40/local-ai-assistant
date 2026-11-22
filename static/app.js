@@ -30,6 +30,8 @@ function chatApp() {
         catalogSyncLoading: false,
         catalogSyncResult: null,
         providerCatalogSnapshot: null,
+        operationalReport: null,
+        operationalReportLoading: false,
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -50,6 +52,7 @@ function chatApp() {
             await this.loadProfile();
             await this.loadSettings();
             await this.loadProviders();
+            await this.loadOperationalReport();
             await this.loadProviderCapabilities();
             await this.refreshModels();
             await this.loadSessions();
@@ -93,6 +96,20 @@ function chatApp() {
             if (response.ok) this.availableProviders = await response.json();
         },
 
+        async loadOperationalReport() {
+            this.operationalReportLoading = true;
+            try {
+                const response = await fetch('/api/operational-report');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'بارگذاری گزارش عملیاتی ناموفق بود.');
+                this.operationalReport = data;
+            } catch (error) {
+                console.warn('Operational report unavailable:', error);
+            } finally {
+                this.operationalReportLoading = false;
+            }
+        },
+
         async onProviderChange() {
             this.connectionResult = null;
             this.providerQuota = null;
@@ -125,6 +142,7 @@ function chatApp() {
                     this.catalogSyncResult = result.catalog_sync || null;
                     await this.loadProviderCapabilities();
                     await this.refreshModels();
+                    await this.loadOperationalReport();
                 }
             } catch (error) {
                 this.connectionResult = {
@@ -157,6 +175,7 @@ function chatApp() {
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || 'دریافت وضعیت سهمیه ناموفق بود.');
                 this.providerQuota = data;
+                await this.loadOperationalReport();
             } catch (error) {
                 this.providerQuota = { status: 'error', message: error.message };
             }
@@ -201,6 +220,7 @@ function chatApp() {
                 this.providerCatalogSnapshot = data.catalog;
                 await this.loadProviderCapabilities();
                 await this.refreshModels();
+                await this.loadOperationalReport();
             } catch (error) {
                 // A failed refresh does not clear the previously stored catalog.
                 this.catalogSyncResult = { status: 'failed', error: error.message };
