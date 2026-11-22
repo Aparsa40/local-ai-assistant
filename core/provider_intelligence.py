@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import ipaddress
+import json
 import os
 import shutil
 import subprocess
@@ -213,25 +215,28 @@ TASK_TAXONOMY = (
 
 
 def _model_task_assessments(model: dict[str, Any]) -> list[dict[str, Any]]:
+    """Assess model tasks only from model-level evidence, never provider-wide hints."""
     metadata = model.get("catalog_data") or {}
     profile = model.get("operator_profile") or {}
-    curated_tasks = set(profile.get("tasks") or [])
+    curated_tasks = {str(task).lower() for task in (profile.get("tasks") or [])}
     raw_capabilities = metadata.get("capabilities") or []
     if isinstance(raw_capabilities, str):
         raw_capabilities = [raw_capabilities]
     capabilities = {str(item).lower() for item in raw_capabilities}
-    assessments = []
     capability_map = {
         "vision": {"vision"},
         "embeddings": {"embedding", "embeddings"},
         "tool_calling": {"tools", "tool_calling"},
+        "reasoning": {"thinking", "reasoning"},
+        "coding": {"coding", "code"},
     }
+    assessments = []
     for task in TASK_TAXONOMY:
-        provider_capabilities = capability_map.get(task, set())
-        if task == "general_chat" and "completion" in capabilities:
-            status, evidence = "likely", "provider_reported"
-        elif provider_capabilities.intersection(capabilities):
+        direct = capability_map.get(task, set()).intersection(capabilities)
+        if direct:
             status, evidence = "supported", "provider_reported"
+        elif task == "general_chat" and "completion" in capabilities:
+            status, evidence = "likely", "provider_reported"
         elif task in curated_tasks:
             status, evidence = "likely", "curated_manifest"
         else:
@@ -245,30 +250,124 @@ def _model_task_assessments(model: dict[str, Any]) -> list[dict[str, Any]]:
     return assessments
 
 
-def _analyze_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _analyze_snapshot(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     analyzed_models = []
     for model in snapshot.get("live_models", []):
         if not model.get("active"):
             continue
         metadata = model.get("catalog_data") or {}
         details = metadata.get("details") or {}
+        capabilities = {
+            str(item).lower()
+            for item in (metadata.get("capabilities") or [])
+        }
+        has_completion = "completion" in capabilities
+        has_embeddings = bool({"embedding", "embeddings"}.intersection(capabilities))
+        has_tools = bool({"tools", "tool_calling"}.intersection(capabilities))
+        has_vision = "vision" in capabilities
+        runtime_observation = metadata.get("runtime_observation") or {}
+        runtime = model.get("runtime") or {}
+        if has_embeddings and not has_completion:
+            model_kind = "embedding"
+        elif has_completion and has_vision:
+            model_kind = "multimodal_generative"
+        elif has_completion:
+            model_kind = "generative"
+        elif capabilities:
+            model_kind = "specialized"
+        else:
+            model_kind = "unknown"
+        roles = []
+        if has_embeddings:
+            roles.append("embedding_indexer")
+        if has_completion:
+            roles.append("conversation_candidate")
+        if has_tools and has_completion:
+            roles.append("tool_using_conversation")
+        if has_vision:
+            roles.append("vision_analyzer")
+        assessments = _model_task_assessments(model)
         analyzed_models.append({
             "model_id": model["model_id"],
             "source": model.get("source"),
+            "model_kind": model_kind,
+            "model_roles": roles,
+            "chat_eligible": True if has_completion else False if has_embeddings else None,
             "metadata": {
                 "family": details.get("family"),
                 "families": details.get("families"),
                 "parameter_size": details.get("parameter_size"),
                 "quantization_level": details.get("quantization_level"),
                 "size": metadata.get("size"),
+                "digest": metadata.get("digest"),
+                "modified_at": metadata.get("modified_at"),
                 "context_length": metadata.get("context_length"),
                 "capabilities": metadata.get("capabilities", []),
+                "runtime_observation": runtime_observation,
             },
-            "task_suitability": _model_task_assessments(model),
+            "runtime": {
+                "installed": bool(model.get("active")),
+                "loaded": runtime_observation.get("loaded"),
+                "inference_status": runtime.get("availability", "unknown"),
+                "last_successful_request": runtime.get("last_successful_request"),
+            },
+            "task_suitability": assessments,
             "metadata_status": "available" if metadata else "unknown",
             "last_seen_at": model.get("last_seen_at"),
         })
     return analyzed_models
+
+
+def _report_fingerprint(report: dict[str, Any]) -> str:
+    """Hash semantic report facts while excluding timestamps and volatile sync history."""
+    runtime = report.get("provider_runtime") or {}
+    startup = runtime.get("startup") or {}
+    quota = report.get("quota") or {}
+    stable = {
+        "provider_id": report.get("provider_id"),
+        "report_type": report.get("report_type"),
+        "overall_status": report.get("overall_status"),
+        "provider_runtime": {
+            "status": runtime.get("status"),
+            "probe": runtime.get("probe"),
+            "error": runtime.get("error"),
+            "startup": {
+                key: startup.get(key)
+                for key in ("status", "endpoint_scope", "already_running", "started_by_application", "error")
+                if key in startup
+            },
+        },
+        "models": [
+            {
+                "model_id": model.get("model_id"),
+                "model_kind": model.get("model_kind"),
+                "model_roles": model.get("model_roles"),
+                "chat_eligible": model.get("chat_eligible"),
+                "metadata": {
+                    key: model.get("metadata", {}).get(key)
+                    for key in (
+                        "family", "families", "parameter_size", "quantization_level",
+                        "size", "digest", "modified_at", "context_length", "capabilities",
+                        "runtime_observation",
+                    )
+                },
+                "runtime": model.get("runtime"),
+                "task_suitability": model.get("task_suitability"),
+                "metadata_status": model.get("metadata_status"),
+            }
+            for model in report.get("models", [])
+        ],
+        "quota": {
+            "status": quota.get("status"),
+            "source": quota.get("source"),
+            "data": quota.get("data"),
+        },
+        "warnings": report.get("warnings", []),
+        "metadata_errors": report.get("metadata_errors", []),
+        "limitations": report.get("limitations", []),
+    }
+    encoded = json.dumps(stable, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 def build_offline_report(db, provider_id: str) -> dict[str, Any]:
@@ -311,7 +410,7 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
         else "healthy"
     )
     models = _analyze_snapshot(snapshot)
-    return {
+    report = {
         "provider_id": provider_id,
         "report_type": "offline",
         "generated_at": generated_at,
@@ -325,6 +424,8 @@ def build_offline_report(db, provider_id: str) -> dict[str, Any]:
         "sync_history": snapshot.get("sync_history", []),
         "limitations": ["This report reflects the last persisted observations and does not verify current provider reachability."],
     }
+    report["fingerprint"] = _report_fingerprint(report)
+    return report
 
 
 def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any], metadata_errors: list[dict[str, str]] | None = None) -> dict[str, Any]:
@@ -350,7 +451,7 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
     runtime = dict(snapshot.get("provider_runtime", {}))
     runtime["startup"] = connection_result.get("runtime") or runtime.get("runtime_details")
     runtime.pop("runtime_details", None)
-    return {
+    report = {
         "provider_id": provider_id,
         "report_type": "runtime",
         "generated_at": utcnow_naive().isoformat(),
@@ -365,6 +466,8 @@ def build_runtime_report(db, provider_id: str, connection_result: dict[str, Any]
         "metadata_errors": errors,
         "sync_history": snapshot.get("sync_history", []),
     }
+    report["fingerprint"] = _report_fingerprint(report)
+    return report
 
 
 
