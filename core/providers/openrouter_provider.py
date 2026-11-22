@@ -1,5 +1,6 @@
 import importlib
 import json
+from datetime import datetime, timezone
 from typing import AsyncGenerator, Dict, List
 
 from .base import BaseLLMProvider
@@ -95,6 +96,30 @@ class OpenRouterProvider(BaseLLMProvider):
         delta = choice.get("delta") or {}
         content = delta.get("content")
         return content if isinstance(content, str) else ""
+
+    async def get_quota_status(self) -> Dict:
+        """Read usage/remaining spend for the current API key when OpenRouter exposes it."""
+        if not self.api_key:
+            return {"status": "credentials_missing", "source": "GET /api/v1/key"}
+        httpx = self._client_module()
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{self.base_url}/key",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+            )
+            if response.is_error:
+                raise RuntimeError(f"OpenRouter key usage endpoint returned HTTP {response.status_code}")
+            payload = response.json().get("data", {})
+        allowed = (
+            "is_free_tier", "usage", "usage_daily", "usage_weekly",
+            "usage_monthly", "limit", "limit_remaining", "limit_reset", "expires_at"
+        )
+        return {
+            "status": "observed",
+            "source": "GET /api/v1/key",
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "data": {key: payload[key] for key in allowed if key in payload},
+        }
 
     async def list_models(self) -> List[str]:
         """Return the currently available free chat models plus the free router."""
