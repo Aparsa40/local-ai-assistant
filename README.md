@@ -56,6 +56,7 @@ Important documents:
 - [AI contribution/delegation guide](docs/AI_CONTRIBUTION_GUIDE.md)
 - [Interface Manager](docs/INTERFACE_MANAGER.md)
 - [Operator Catalogs and Discovery Policy](docs/OPERATOR_CATALOGS.md)
+- [Catalog Storage Schema](docs/CATALOG_STORAGE.md)
 - [Provider system](docs/PROVIDER_SYSTEM.md)
 - [Model Manager](docs/MODEL_MANAGER.md)
 - [Permissions](docs/PERMISSIONS.md)
