@@ -128,16 +128,15 @@ function chatApp() {
         async loadProviderCapabilities() {
             this.providerCapabilities = null;
             const provider = this.settings.active_provider;
-            if (!['cloudflare_workers_ai', 'groq', 'cohere'].includes(provider)) return;
             try {
-                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/capabilities`);
-                if (!response.ok) return;
+                // The operator catalog is local metadata; it must never trigger network discovery.
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/catalog`);
+                if (!response.ok) throw new Error('بارگذاری کاتالوگ اپراتور ناموفق بود.');
                 this.providerCapabilities = await response.json();
             } catch (error) {
-                console.warn('Provider capability discovery failed:', error);
+                console.warn('Operator catalog could not be loaded:', error);
             }
         },
-
         async refreshModels() {
             this.modelsLoading = true;
             this.modelsError = '';
