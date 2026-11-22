@@ -130,10 +130,6 @@ class CatalogStorageTests(unittest.TestCase):
         self.assertEqual(snapshot["sync_history"][0]["status"], "failed")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
     def test_live_model_metadata_is_persisted_and_updated(self):
         sync_live_models(
             self.db,
@@ -177,3 +173,7 @@ if __name__ == "__main__":
             ).count(),
             2,
         )
+
+
+if __name__ == "__main__":
+    unittest.main()
