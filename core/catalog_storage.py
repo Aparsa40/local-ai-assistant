@@ -295,7 +295,25 @@ def get_operational_report(db: Session) -> dict[str, Any]:
 
 
 def save_intelligence_report(db: Session, report: dict[str, Any], history_limit: int = 20) -> dict[str, Any]:
-    """Persist a complete report snapshot and retain bounded per-provider/type history."""
+    """Persist changed report snapshots only and retain bounded per-provider/type history."""
+    latest = (
+        db.query(ProviderIntelligenceReport)
+        .filter_by(provider_id=report["provider_id"], report_type=report["report_type"])
+        .order_by(ProviderIntelligenceReport.generated_at.desc(), ProviderIntelligenceReport.id.desc())
+        .first()
+    )
+    fingerprint = report.get("fingerprint")
+    latest_fingerprint = (latest.report_data or {}).get("fingerprint") if latest else None
+    if fingerprint and latest_fingerprint == fingerprint:
+        return {
+            "saved": False,
+            "reason": "unchanged",
+            "id": latest.id,
+            "provider_id": latest.provider_id,
+            "report_type": latest.report_type,
+            "generated_at": latest.generated_at.isoformat(),
+        }
+
     source_value = report.get("source_snapshot_at")
     source_time = None
     if source_value:
@@ -326,7 +344,14 @@ def save_intelligence_report(db: Session, report: dict[str, Any], history_limit:
         db.delete(stale)
     db.commit()
     db.refresh(row)
-    return {"id": row.id, "provider_id": row.provider_id, "report_type": row.report_type, "generated_at": row.generated_at.isoformat()}
+    return {
+        "saved": True,
+        "reason": "changed",
+        "id": row.id,
+        "provider_id": row.provider_id,
+        "report_type": row.report_type,
+        "generated_at": row.generated_at.isoformat(),
+    }
 
 
 def get_latest_intelligence_report(db: Session, provider_id: str, report_type: str | None = None) -> dict[str, Any] | None:
