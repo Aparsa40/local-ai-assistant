@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import AsyncGenerator, Dict, List
 
@@ -61,7 +62,7 @@ class OllamaProvider(BaseLLMProvider):
                 if item.get("name") in set(model_ids)
             }
 
-            semaphore = __import__("asyncio").Semaphore(3)
+            semaphore = asyncio.Semaphore(3)
 
             async def collect(model_id):
                 tag = tags.get(model_id, {})
@@ -110,7 +111,6 @@ class OllamaProvider(BaseLLMProvider):
                     except Exception:
                         return model_id, base, {"model_id": model_id, "category": "metadata_unavailable"}
 
-            import asyncio
             results = await asyncio.gather(*(collect(model_id) for model_id in model_ids))
         return {
             "models": {model_id: metadata for model_id, metadata, _error in results},
