@@ -140,35 +140,24 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["error"]["category"], "runtime_request_timeout")
 
     async def test_timeout_includes_waiting_for_concurrency_slot(self):
-        class HangingAdapter(FakeRuntimeAdapter):
-            def __init__(self):
-                super().__init__()
-                self.started = asyncio.Event()
-
-            async def ensure_available(self, auto_start=True):
-                self.ensure_calls.append(auto_start)
-                self.started.set()
-                await asyncio.sleep(0.5)
-                return RuntimeResult(True, self.runtime_id, "ready")
-
-        first = HangingAdapter()
-        second = HangingAdapter()
-        second.runtime_id = "second"
+        adapter = FakeRuntimeAdapter()
         manager = RuntimeManager(
-            [first, second],
-            operation_timeout=0.1,
+            [adapter],
+            operation_timeout=0.01,
             max_concurrent_operations=1,
         )
+        await manager._operation_semaphore.acquire()
+        try:
+            result = await manager._run_adapter(
+                "fake", "queued_operation", adapter.ensure_available
+            )
+        finally:
+            manager._operation_semaphore.release()
 
-        first_task = asyncio.create_task(manager.ensure_runtime("fake"))
-        await first.started.wait()
-        second_result = await manager.ensure_runtime("second")
-        first_result = await first_task
-
-        self.assertEqual(first_result["error"]["category"], "runtime_request_timeout")
-        self.assertEqual(second_result["error"]["category"], "runtime_request_timeout")
-        # The second adapter times out in the queue and is never invoked.
-        self.assertEqual(second.ensure_calls, [])
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error["category"], "runtime_request_timeout")
+        # The adapter callback is deferred until a slot is actually acquired.
+        self.assertEqual(adapter.ensure_calls, [])
 
     async def test_invalid_adapter_result_is_normalized(self):
         class InvalidAdapter(FakeRuntimeAdapter):
