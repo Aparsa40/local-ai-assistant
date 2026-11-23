@@ -33,6 +33,7 @@ class RuntimeRepository:
                 row.details = model
                 row.error = None
 
+            runtime_state_changed = False
             if result.model_id:
                 row = session.get(RuntimeModelState, (result.runtime_id, result.model_id))
                 if row is None:
@@ -52,6 +53,13 @@ class RuntimeRepository:
                 if runtime_row is None:
                     runtime_row = RuntimeStatus(runtime_id=result.runtime_id)
                     session.add(runtime_row)
+                    runtime_state_changed = True
+                else:
+                    runtime_state_changed = (
+                        runtime_row.state != result.state
+                        or runtime_row.endpoint_scope != data.get("endpoint_scope")
+                        or runtime_row.error != result.error
+                    )
                 runtime_row.state = result.state
                 runtime_row.endpoint_scope = data.get("endpoint_scope")
                 runtime_row.observed_at = now
@@ -59,7 +67,10 @@ class RuntimeRepository:
                 runtime_row.error = result.error
 
             # Polling/inspection refreshes update snapshots but do not grow the event log.
-            if event_type not in {"model_inventory", "model_inspection"}:
+            if (
+                event_type not in {"model_inventory", "model_inspection"}
+                and (event_type != "runtime_probe" or runtime_state_changed)
+            ):
                 session.add(RuntimeEvent(
                     runtime_id=result.runtime_id,
                     model_id=result.model_id,
