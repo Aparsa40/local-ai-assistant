@@ -141,9 +141,14 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_timeout_includes_waiting_for_concurrency_slot(self):
         class HangingAdapter(FakeRuntimeAdapter):
+            def __init__(self):
+                super().__init__()
+                self.started = asyncio.Event()
+
             async def ensure_available(self, auto_start=True):
                 self.ensure_calls.append(auto_start)
-                await asyncio.sleep(0.05)
+                self.started.set()
+                await asyncio.sleep(0.5)
                 return RuntimeResult(True, self.runtime_id, "ready")
 
         first = HangingAdapter()
@@ -151,12 +156,12 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
         second.runtime_id = "second"
         manager = RuntimeManager(
             [first, second],
-            operation_timeout=0.02,
+            operation_timeout=0.1,
             max_concurrent_operations=1,
         )
 
         first_task = asyncio.create_task(manager.ensure_runtime("fake"))
-        await asyncio.sleep(0.002)
+        await first.started.wait()
         second_result = await manager.ensure_runtime("second")
         first_result = await first_task
 
