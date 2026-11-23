@@ -1,9 +1,9 @@
 # Local Model Runtime — Execution Contract
 
-**Status:** Accepted implementation contract (Phase 2 foundation)  
+**Status:** Implemented foundation; Windows hardware-constrained load validation recorded below  
 **Branch:** `feat/local-model-runtime-foundation`  
 **Scope:** Local model process/runtime lifecycle, beginning with Ollama  
-**Last reviewed:** 2026-11-23
+**Last reviewed:** 2026-11-24
 
 ## 1. Purpose
 
@@ -172,7 +172,23 @@ Failures must not erase last-known-good catalog records. A failed load/unload re
 - All new failure paths are bounded, normalized, and tested.
 - Existing tests remain green; no tests are removed, skipped, or weakened.
 
-## 14. Non-goals for this increment
+## 14. Windows smoke validation and environment constraints
+
+The Windows smoke test confirmed that the application can connect to an already-running local Ollama instance, report the runtime as `ready`, enumerate all four installed models, and inspect the selected model as `installed` and `loaded=false`. The application correctly reported `started_by_application=false` because Ollama had been started independently; the application-owned shutdown endpoint was therefore intentionally not invoked.
+
+An explicit load request for `qwen2.5-coder:0.5b` returned the normalized `load_failed` result. A subsequent inspection and combined snapshot continued to report the model as installed but not loaded, while runtime readiness and inventory remained healthy. The observed Windows test machine has 4 GB RAM while Chrome and VS Code are running, leaving insufficient practical memory headroom for local model loading. Larger models such as DeepSeek or Llama were deliberately not attempted to avoid system-wide memory pressure or a Windows freeze.
+
+The machine also uses a mechanical HDD. Windows paging/pagefile may move memory pressure to disk, but a mechanical disk is not a practical substitute for RAM: sustained paging can cause severe latency and make the system effectively unresponsive. This is an environment limitation, not evidence of a Runtime Manager or Ollama adapter defect. No claim is made that every 4 GB machine or every HDD configuration must fail; the observed load attempt is recorded as hardware-constrained and inconclusive for load success on adequately provisioned hardware.
+
+**Validation classification:**
+- Runtime discovery, local connectivity, installed inventory, model inspection, process-ownership safety, and snapshot behavior: verified on Windows.
+- Load failure under the observed memory constraint: recorded as environment-limited; successful load on adequately provisioned hardware remains unverified.
+- Unload: not run because the model never reached the loaded state.
+- CI and deterministic tests remain the authoritative software regression checks for lifecycle success/failure semantics.
+
+Do not repeatedly retry local model loads on this machine or use larger models as a diagnostic. Revisit live load/unload validation when sufficient RAM and a suitable storage environment are available.
+
+## 15. Non-goals for this increment
 
 - Automatic model download/pull.
 - Automatic model selection or routing.
