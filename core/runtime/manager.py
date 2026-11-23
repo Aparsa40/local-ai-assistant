@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import math
+from collections.abc import Awaitable, Callable
 
 from .contracts import RuntimeAdapter, RuntimeResult
 from .resource_manager import ResourceManager
@@ -17,7 +19,7 @@ class RuntimeManager:
         operation_timeout: float = 30.0,
         max_concurrent_operations: int = 4,
     ):
-        if operation_timeout <= 0 or max_concurrent_operations < 1:
+        if not math.isfinite(operation_timeout) or operation_timeout <= 0 or max_concurrent_operations < 1:
             raise ValueError("Runtime timeout and concurrency limit must be positive.")
         self._adapters = {adapter.runtime_id: adapter for adapter in (adapters or [])}
         self.repository = repository
@@ -45,11 +47,23 @@ class RuntimeManager:
     def _model_lock(self, runtime_id: str, model_id: str) -> asyncio.Lock:
         return self._model_locks.setdefault((runtime_id, model_id), asyncio.Lock())
 
-    async def _run_adapter(self, runtime_id: str, operation: str, awaitable) -> RuntimeResult:
-        """Bound adapter execution and normalize timeout/protocol failures."""
-        try:
+    async def _run_adapter(
+        self,
+        runtime_id: str,
+        operation: str,
+        invoke: Callable[[], Awaitable[RuntimeResult]],
+    ) -> RuntimeResult:
+        """Bound queueing and adapter execution; normalize timeout/protocol failures."""
+        async def execute() -> RuntimeResult:
             async with self._operation_semaphore:
-                return await asyncio.wait_for(awaitable, timeout=self.operation_timeout)
+                result = await invoke()
+                if not isinstance(result, RuntimeResult):
+                    raise TypeError("Runtime adapters must return RuntimeResult.")
+                return result
+
+        try:
+            # The timeout includes time spent waiting for an available concurrency slot.
+            return await asyncio.wait_for(execute(), timeout=self.operation_timeout)
         except asyncio.TimeoutError:
             return RuntimeResult(
                 False,
@@ -81,7 +95,7 @@ class RuntimeManager:
         adapter = self.get_adapter(runtime_id)
         async with self._runtime_lock(runtime_id):
             result = await self._run_adapter(
-                runtime_id, "ensure_available", adapter.ensure_available(auto_start=auto_start)
+                runtime_id, "ensure_available", lambda: adapter.ensure_available(auto_start=auto_start)
             )
             self._persist(result, "runtime_probe")
             return result.to_dict()
@@ -92,21 +106,21 @@ class RuntimeManager:
             ready = await self.ensure_runtime(runtime_id, auto_start=False)
             if not ready["ok"]:
                 return ready
-        result = await self._run_adapter(runtime_id, "list_models", adapter.list_models())
-        self._persist(result, "model_inventory")
+        result = await self._run_adapter(runtime_id, "list_models", adapter.list_models)
+        self._persist(result, "model_inventory" if result.ok else "model_inventory_failed")
         return result.to_dict()
 
     async def inspect_model(self, runtime_id: str, model_id: str) -> dict:
         adapter = self.get_adapter(runtime_id)
         result = await self._run_adapter(
-            runtime_id, "inspect_model", adapter.inspect_model(model_id)
+            runtime_id, "inspect_model", lambda: adapter.inspect_model(model_id)
         )
         if result.model_id is None:
             result = RuntimeResult(
                 result.ok, result.runtime_id, result.state, model_id,
                 data=result.data, error=result.error, observed_at=result.observed_at,
             )
-        self._persist(result, "model_inspection")
+        self._persist(result, "model_inspection" if result.ok else "model_inspection_failed")
         return result.to_dict()
 
     async def load_model(
@@ -119,7 +133,7 @@ class RuntimeManager:
                 return ready
             async with self._runtime_lock(runtime_id):
                 inventory = await self._run_adapter(
-                    runtime_id, "list_models", adapter.list_models()
+                    runtime_id, "list_models", adapter.list_models
                 )
                 if not inventory.ok:
                     self._persist(inventory, "model_inventory_failed")
@@ -148,7 +162,7 @@ class RuntimeManager:
                     return result.to_dict()
                 self.lifecycle.transition("installed", "loading")
                 result = await self._run_adapter(
-                    runtime_id, "load_model", adapter.load_model(model_id, options or {})
+                    runtime_id, "load_model", lambda: adapter.load_model(model_id, options or {})
                 )
                 if result.model_id is None:
                     result = RuntimeResult(
@@ -164,7 +178,7 @@ class RuntimeManager:
         async with self._model_lock(runtime_id, model_id):
             async with self._runtime_lock(runtime_id):
                 before = await self._run_adapter(
-                    runtime_id, "inspect_model", adapter.inspect_model(model_id)
+                    runtime_id, "inspect_model", lambda: adapter.inspect_model(model_id)
                 )
                 if before.model_id is None:
                     before = RuntimeResult(
@@ -178,7 +192,7 @@ class RuntimeManager:
                     return before.to_dict()
                 self.lifecycle.transition(before.state, "unloading")
                 result = await self._run_adapter(
-                    runtime_id, "unload_model", adapter.unload_model(model_id)
+                    runtime_id, "unload_model", lambda: adapter.unload_model(model_id)
                 )
                 if result.model_id is None:
                     result = RuntimeResult(
@@ -197,7 +211,7 @@ class RuntimeManager:
                 result = await self._run_adapter(
                     adapter.runtime_id,
                     "shutdown_owned_process",
-                    adapter.shutdown_owned_process(),
+                    adapter.shutdown_owned_process,
                 )
                 self._persist(result, "runtime_shutdown")
                 results.append(result.to_dict())
