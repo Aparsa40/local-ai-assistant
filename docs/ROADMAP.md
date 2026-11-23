@@ -1,232 +1,243 @@
-# Product and Engineering Roadmap
+# Local AI Assistant — 11-Phase Project Roadmap
 
-**Status:** Target roadmap; implementation status is called out separately.  
-**Last reviewed:** 2026-11-24
+**Status:** Canonical top-level roadmap  
+**Last reviewed:** 2026-11-24  
+**Project:** Local AI Assistant
 
-This roadmap describes the intended evolution of the Local AI Assistant. It must not be read as a claim that every listed capability already exists.
+This document is the single source of truth for the project's top-level phase numbering. Technical work packages, implementation increments, and module contracts belong inside these 11 phases; they must not create a competing top-level phase sequence.
 
 ## Product direction
 
-Build a local-first, provider-agnostic AI workspace with durable conversations, controlled access to local knowledge, replaceable online and offline execution paths, permissioned tools/connectors, and an auditable knowledge lifecycle.
+Build a local-first, provider-agnostic AI workspace with durable conversations, controlled access to local knowledge, replaceable online/offline model execution, permissioned tools, goal-oriented agents, an auditable AI Librarian workflow, and reliable backup/maintenance.
 
-The application itself, its database, and its managed local files are the primary data foundation. External services such as Discord and NotebookLM are optional connectors, not the system of record.
+The local application and its managed data are the system of record. Cloud inference and external integrations are optional. Planned architecture must never be presented as shipped functionality.
 
 ## Current implementation baseline
 
-The repository currently contains a FastAPI application, a lightweight Alpine.js browser UI, SQLAlchemy-backed SQLite persistence, provider adapters, settings/configuration handling, chat streaming, and tests.
+The repository currently contains a FastAPI backend, lightweight Alpine.js browser UI, SQLAlchemy/SQLite persistence, provider adapters, settings/configuration handling, chat streaming, a provider-neutral Interface Manager foundation, and a provider-neutral Local Model Runtime foundation with Ollama as its first adapter.
 
-Provider integrations present in the current codebase include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current chat experience still uses explicit provider/model selection. A first Interface Manager service boundary now handles provider listing, capability access, bounded model discovery, catalog-reachability diagnostics, and chat streaming. The local operator catalog manifest and provider-neutral catalog/quota endpoints are implemented. Persistent model history, scheduled Updater, automatic routing, Agent Runtime, and Supervisor remain future work.
+The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
 
-The current application also has important limitations: credentials are stored in the ignored local settings JSON file, authentication is not implemented, and the current application must not be exposed to untrusted networks. See README and ARCHITECTURE for the implementation snapshot.
+Important limitations remain: credentials are not stored in a dedicated encrypted vault, authentication is not implemented, the complete Storage & Memory architecture is not implemented, and Agent Runtime/Permission Manager/AI Librarian are not implemented as complete systems. Do not expose the current development server to untrusted networks.
 
-## Target phases
+## Phase 1 — Architecture & Contracts Foundation
 
-Phases are dependency-oriented milestones. Their exact size and release boundaries may be adjusted after design review, but later phases must not bypass the foundations they depend on.
+**Status:** Completed.
 
-### Phase 0 — Architecture and documentation baseline
+**Goal:** Establish shared product direction, architectural boundaries, data ownership, trust rules, service contracts, and engineering discipline before implementation.
 
-**Goal:** Establish a shared contract before delegating implementation.
+**Execution plan:** [PHASE_01_EXECUTION_PLAN.md](PHASE_01_EXECUTION_PLAN.md)
 
-- Maintain the project principles and target architecture.
-- Define module responsibilities, data ownership, internal APIs, permission boundaries, and acceptance criteria.
-- Separate implemented behavior from accepted design and planned work.
-- Provide an AI contribution guide so delegated models do not invent requirements.
-- Review existing code and tests before each implementation task.
+**Core deliverables:**
+- Local-first and provider-agnostic product direction.
+- Current implementation versus accepted target design versus planned capability distinction.
+- Module responsibilities, dependencies, and non-responsibilities.
+- Communication, data ownership, provenance, and security constraints.
+- Contribution, testing, documentation, and delivery rules.
+- Canonical 11-phase roadmap.
 
-**Exit criteria:** The architecture documents agree with one another; each planned module has a clear owner, inputs, outputs, dependencies, and explicit non-goals.
+**Exit criteria:** architectural principles and contracts are documented, consistent, and used to scope later phases.
 
-### Phase 1 — Interface Manager and provider/model control plane
+## Phase 2 — Interface Manager
 
-**Goal:** Turn existing provider adapters into a provider-neutral service before adding autonomous workflows.
+**Status:** Completed and merged through PR #6.
 
-- Keep provider adapters isolated behind the registry.
-- Introduce the Interface Manager service boundary.
-- Route provider listing, capability access, model discovery, and inference streaming through it.
-- Add bounded catalog diagnostics and safe provider-neutral errors.
-- Maintain operator-level catalogs independently from exact model IDs, including discovery scope, account permissions, task hints, and quota visibility.
-- Keep live model discovery optional and explicit; never infer model availability or remaining quota from a provider-level profile.
-- Expose live quota only when an authoritative endpoint or observed response headers provide it.
-- Preserve exact model IDs and existing user-selected provider/model behavior.
-- Keep Ollama/local inference behind the same provider-neutral contract as cloud providers.
+**Goal:** Provide a provider-neutral control plane for provider/model discovery, capability metadata, safe diagnostics, quota visibility, and model invocation.
 
-**Current implementation:** The first service boundary, local operator catalogs, explicit live model discovery, catalog probe, normalized quota-visibility endpoint, and chat-stream delegation are implemented on the feature branch. OpenRouter key usage can be queried live; Groq/Cohere telemetry depends on observed response headers. Persistent model records, scheduled Updater, full health monitoring, normalized inference envelopes, retry/fallback policies, and an encrypted credential vault remain incomplete.
+**Execution plan:** [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md)  
+**Module contract:** [INTERFACE_MANAGER.md](INTERFACE_MANAGER.md)
 
-**Exit criteria:** Internal modules can discover and invoke providers through Interface Manager without importing provider-specific adapters. Catalog diagnostics are bounded and accurately labeled.
+**Core deliverables:**
+- Provider adapter contract and registry.
+- Interface Manager service boundary.
+- Provider/operator catalog and capability access.
+- Bounded live model discovery and explicit catalog synchronization.
+- Safe connection diagnostics and provider-neutral error categories.
+- Evidence-aware quota visibility.
+- Chat streaming through the service boundary.
+- Persistent operator/live catalog and operational read models.
 
-### Phase 2A — Local Model Runtime foundation
+**Exit criteria:** internal application code uses the provider-neutral service boundary; provider-specific details remain inside adapters; exact model IDs and user selections are preserved; catalog reachability is not confused with inference success.
 
-**Goal:** Add a provider-neutral control plane for local inference runtimes before autonomous conversation or agent execution.
+**Completion evidence:** PR #6 merged with commit `2657b41e3fec1675b29e1612c358e6583ebfb137`.
 
-- Define the Runtime Adapter and Runtime Manager contracts.
-- Reuse the existing safe Ollama process controller and register Ollama as the first runtime adapter.
-- Distinguish installed, loaded, and inference-available model states.
-- Support explicit load/unload operations, bounded timeouts, process ownership, and conservative resource admission.
-- Persist runtime lifecycle state and events separately from provider catalog and inference status.
-- Keep runtime inspection read-only and lifecycle mutations on explicit POST endpoints.
+## Phase 3 — Local Model Runtime
 
-**Current implementation — complete (software foundation):** The provider-neutral Runtime Manager, Ollama adapter, SQLite lifecycle state/event persistence, and runtime status/snapshot/model/load/unload/owned-shutdown APIs are implemented on `feat/local-model-runtime-foundation`. Load/unload success is reported only after the requested lifecycle state is verified; unavailable telemetry is never promoted to success. GitHub Actions PR CI run #614 passed with 109 tests, and Python compilation plus frontend JavaScript syntax validation passed. Windows smoke validation confirmed local connectivity, runtime readiness, installed-model inventory, inspection, and safe process-ownership behavior. The explicit Qwen 0.5B load attempt failed in the observed 4 GB RAM environment while Chrome and VS Code were running; the model remained installed and unloaded, and the runtime/inventory remained healthy. The machine's mechanical HDD makes sustained paging an impractical RAM substitute. This load result is classified as hardware-constrained/inconclusive, not as a code defect; successful live load/unload on adequately provisioned hardware remains unverified. No larger models were attempted. **Phase 2A's software implementation and CI acceptance are complete; the hardware-dependent live load validation is explicitly deferred.** Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
+**Status:** Software implementation completed and merged through PR #7. Successful live load/unload on adequately provisioned hardware remains unverified.
 
-**Exit criteria:** Runtime Manager is provider-agnostic; Ollama lifecycle operations are bounded and tested; only application-owned processes can be stopped; installed and loaded state are distinct; all existing tests remain green.
+**Goal:** Provide a provider-neutral control plane for local inference-engine readiness and model lifecycle.
 
-### Phase 2 — Persistence and repository foundation
+**Execution plan:** [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md)  
+**Module contract:** [LOCAL_MODEL_RUNTIME.md](LOCAL_MODEL_RUNTIME.md)
 
-**Goal:** Establish durable, replaceable data access before storing catalog history, agent runs, and knowledge artifacts.
+**Core deliverables:**
+- Runtime Manager and Runtime Adapter contracts.
+- Ollama Runtime Adapter.
+- Runtime readiness, installed inventory, model inspection, and explicit load/unload.
+- Bounded operations, normalized errors, and conservative resource admission.
+- Application-owned process shutdown only.
+- Runtime lifecycle persistence separate from provider catalog and inference status.
+- Read-only status/snapshot APIs and explicit POST lifecycle operations.
 
-- Keep SQLite as the local database target.
-- Design PostgreSQL compatibility for hosted/online deployment.
-- Introduce versioned migrations and a repository/data-access boundary.
-- Keep original files in independent file storage.
-- Define stable identifiers, timestamps, ownership, and provenance conventions.
-- Add SQLite FTS5 as the initial lexical search option.
-- Keep vector indexing behind a replaceable adapter.
-- Avoid speculative tables until an owning workflow is ready.
+**Exit criteria:** lifecycle behavior is provider-neutral, bounded, accurately verified, safely persisted, and regression-tested.
 
-**Exit criteria:** Migrations are repeatable and tested; modules do not issue uncontrolled cross-domain SQL; file storage is independent of database storage.
+**Completion evidence:** PR #7 merged with commit `d30621e85f7f58096f57cf0e40f7dace23a60b21`; PR CI recorded 109 passing tests. Windows smoke checks verified local connectivity, inventory, inspection, and process ownership. The Qwen 0.5B load attempt was hardware-constrained on the observed 4 GB RAM / mechanical-HDD machine; larger models were deliberately not attempted. This is an environment validation gap, not a demonstrated code defect. Do not repeat resource-intensive tests on that machine.
 
-### Phase 3 — Model and Provider Updater
+## Phase 4 — Storage & Memory Services
 
-**Goal:** Detect provider/model catalog changes without silently changing user choices.
+**Status:** Planned — implementation has not started.
 
-- Refresh supported provider catalogs on explicit request and, later, on a configurable schedule.
-- Compare new catalog results with last-known state.
-- Report added, changed, deprecated, unavailable, or removed models.
-- Track catalog source, retrieval time, and capability evidence.
-- Make updates visible and explain their impact.
-- Never replace a user's selected model without explicit policy/confirmation.
-- Treat pricing and free-tier eligibility as time-sensitive metadata.
+**Goal:** Consolidate persistence boundaries and introduce domain repositories, conversation storage, durable memory, request context assembly, and knowledge metadata while preserving existing SQLite data.
 
-**Exit criteria:** Catalog refresh is observable, repeatable, and safe; unknown quota/capability values remain unknown.
+**Execution plan:** [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md)  
+**Existing storage reference:** [CATALOG_STORAGE.md](CATALOG_STORAGE.md)
 
-### Phase 4 — Permission and credential foundations
+**Work packages:**
+1. WP-4.1 — Storage Audit & Contracts.
+2. WP-4.2 — Storage Manager.
+3. WP-4.3 — Repository Services.
+4. WP-4.4 — Conversation Storage.
+5. WP-4.5 — Memory Service.
+6. WP-4.6 — Context Manager.
+7. WP-4.7 — Knowledge Storage & Migration.
 
-**Goal:** Enforce access control before autonomous tools, connectors, or ingestion are introduced.
+**Core deliverables:**
+- Centralized Storage Manager with SQLite adapter and future PostgreSQL-compatible boundary.
+- Domain-owned Repository Services.
+- Conversation and message persistence service.
+- Short-term, long-term, episodic, and semantic memory lifecycle.
+- Context assembly, relevance ranking, provenance, and token budgets.
+- Knowledge source/file metadata and lexical retrieval foundation.
+- Versioned migrations tested against an existing database copy.
 
-- Define permission subjects, resources, scopes, operations, grants, expiry, revocation, and audit events.
-- Centralize credential access and redaction; plan encrypted local secret storage.
-- Keep secrets out of browser responses, logs, prompts, and ordinary backups.
-- Require permission checks for connector, file, conversation, memory, and tool access.
-- Define explicit user approval for sensitive write operations.
-- Keep model-generated tool calls as proposals, never as authorization.
+**Exit criteria:** existing data and Phase 2/3 behavior are preserved; repositories enforce ownership; Memory and Context are independent services; migrations are repeatable; tests and documentation agree with implementation.
 
-**Exit criteria:** Unauthorized access is denied by default and covered by tests; permission decisions are auditable.
+## Phase 5 — Tool Runtime & Permission Manager
 
-### Phase 5 — Conversation Processing and online/offline execution
+**Status:** Planned.
 
-**Goal:** Build one conversation lifecycle that can use either cloud or local inference.
+**Goal:** Mediate every protected data access and tool action through application-owned authorization and execution boundaries.
 
-- Introduce request analysis, context assembly, task planning, execution routing, and conversation recording.
-- Provide an Online Execution Strategy using Interface Manager.
-- Provide an Offline Execution Strategy using local provider adapters and permitted local knowledge.
-- Use deterministic dispatch for basic routing, fixed workflows, policy checks, and fallback.
-- Preserve task checkpoints and re-check model capabilities when switching engines.
-- Never send private local data to a cloud provider as an implicit fallback.
-- Keep complex LLM-based planning optional.
+**Core deliverables:**
+- Permission subjects, resources, operations, scopes, grants, expiry, revocation, and audit events.
+- Default-deny policy evaluation.
+- Tool registry and normalized tool contracts.
+- Isolated/bounded Tool Runtime.
+- Approval gates for destructive or externally visible operations.
+- Credential access/redaction integration.
+- Permission checks for conversations, memories, knowledge, files, tools, and connectors.
 
-**Exit criteria:** Online and offline execution share the same lifecycle and validation boundary; eligible local workflows remain usable without internet.
+**Exit criteria:** no protected read or tool action occurs without an application-side authorization decision; permissions are scoped, revocable, and tested.
 
-### Phase 6 — Response validation and safe tool execution
+## Phase 6 — Agent Runtime
 
-**Goal:** Validate model outputs and mediate every tool action.
+**Status:** Planned.
 
-- Add Response Validator & Composer independently from provider adapters.
-- Validate structure, completeness, policy, references, and execution outcomes.
-- Introduce a permissioned tool registry and isolated Tool Runtime.
-- Treat model tool calls as proposals, not authorization.
-- Record tool activity, arguments, results, and failures with sensitive-value redaction.
-- Require explicit approval for sensitive or externally visible actions.
+**Goal:** Host bounded goal-oriented agents with deterministic lifecycle and state management.
 
-**Exit criteria:** No tool executes without an application-side permission decision; unvalidated output is not promoted to trusted knowledge.
+**Core deliverables:**
+- Versioned Agent, Task, Run, State, Input, Output, and Completion Criteria contracts.
+- Agent Registry and lifecycle manager.
+- Task manager, state/checkpoint manager, and bounded execution controller.
+- Pause, resume, cancellation, iteration limits, and auditable outcomes.
+- Scoped context and permissioned tool access.
+- One initial specialized agent with no autonomous external side effects.
 
-### Phase 7 — Agent Runtime and the first single-agent workflow
+**Exit criteria:** one agent completes a bounded task, preserves state, stops safely, and passes deterministic lifecycle and permission tests.
 
-**Goal:** Execute one bounded goal-oriented workflow reliably before introducing multiple agents.
+## Phase 7 — Supervisor & Orchestrator
 
-- Define versioned Agent, Task, Run, State, Input, Output, and Completion Criteria contracts.
-- Add Agent Registry, Lifecycle Manager, Task Manager, State Manager, and bounded Execution Controller.
-- Support pause, resume, cancellation, iteration limits, and auditable outcomes.
-- Host one specialized agent using online or offline inference through the same Interface Manager boundary.
-- Enforce least-privilege context and permissioned tools.
-- Start with a workflow that has no autonomous external side effects.
+**Status:** Planned.
 
-**Exit criteria:** One agent can complete a bounded task, preserve state, stop safely, and pass deterministic lifecycle and permission tests.
+**Goal:** Coordinate complex work through task decomposition, dependency management, and controlled handoffs.
 
-### Phase 8 — Supervisor and Multi-Agent orchestration
+**Core deliverables:**
+- Supervisor as a specialized agent hosted by Agent Runtime.
+- Task decomposition and dependency tracking.
+- Agent/model capability selection through stable contracts.
+- Structured handoff payloads and result aggregation.
+- Conflict, incomplete-result, and provenance reporting.
+- Bounded orchestration, cancellation, and stop conditions.
 
-**Goal:** Coordinate multiple specialized agents through explicit task contracts.
+**Exit criteria:** the Supervisor coordinates bounded workflows without bypassing Agent Runtime, Permission Manager, Tool Runtime, or validation boundaries.
 
-- Implement Supervisor as a specialized agent hosted by Agent Runtime.
-- Add agent selection, task decomposition, dependencies, structured handoffs, and result aggregation.
-- Support different models per agent without making model count the definition of Multi-Agent.
-- Preserve provenance and expose disagreements or incomplete results.
-- Prevent agents from inheriting or expanding permissions implicitly.
-- Add concurrency only after sequential handoffs and cancellation are reliable.
+## Phase 8 — Conversation Agent
 
-**Exit criteria:** Multiple agents can collaborate on a bounded task with traceable handoffs, enforced permissions, and validated final output.
+**Status:** Planned.
 
-### Phase 9 — Knowledge Access and managed data
+**Goal:** Build the user-facing conversational workflow on top of the completed storage, context, permission, tool, and agent foundations.
 
-**Goal:** Expose controlled retrieval over application-owned data.
+**Core deliverables:**
+- Conversation Agent contract and lifecycle.
+- Request intake, intent classification, and deterministic dispatch.
+- Conversation history and authorized context retrieval.
+- Online and offline execution strategies through Interface Manager.
+- Direct-response versus agent-task handoff.
+- Response validation/composition and conversation event recording.
+- Explicit fallback behavior that never leaks private local context to cloud providers.
 
-- Add a Knowledge Access Layer with permission-aware search and retrieval.
-- Keep source files, extracted text, chunks, indexes, and approved knowledge distinct.
-- Add metadata, versioning, hashing, and source locators.
-- Start with lexical search; add vector retrieval only behind a replaceable adapter.
-- Preserve provenance for every derived record.
+**Exit criteria:** the conversational workflow supports direct answers and bounded agent delegation through one auditable lifecycle, with safe online/offline behavior.
 
-**Exit criteria:** Retrieval respects source permissions and can return traceable references to original material.
+## Phase 9 — Multi-Agent System and Specialized Agents
 
-### Phase 10 — Document ingestion and AI Librarian
+**Status:** Planned.
 
-**Goal:** Provide user-controlled analysis and curation of project knowledge.
+**Goal:** Expand from one bounded agent to multiple specialized agents collaborating through explicit contracts.
 
-- Add document extraction and incremental change detection.
-- Add the Librarian workspace, analysis, classification, cross-reference, conflict detection, and report generation.
-- Require source ingestion permission before reading/extracting a source.
-- Validate reports and source coverage.
-- Require user review and explicit approval before publishing to Approved Knowledge.
-- Keep training-dataset preparation separate from RAG/knowledge retrieval.
+**Core deliverables:**
+- Specialized agent registry and versioned contracts.
+- Task assignment, dependencies, structured handoffs, and shared scoped state.
+- Sequential collaboration before optional concurrency.
+- Supervisor coordination and result evaluation.
+- Per-agent model/capability selection.
+- Provenance, disagreement, incomplete result, and permission isolation.
 
-**Exit criteria:** No source is ingested without a grant; no report is published as approved knowledge without user approval and provenance.
+**Exit criteria:** multiple agents collaborate on bounded tasks with traceable handoffs, least-privilege context, enforced permissions, and validated output.
 
-### Phase 11 — Connectors and Discord synchronization
+## Phase 10 — AI Librarian
 
-**Goal:** Add optional integrations without making them authoritative dependencies.
+**Status:** Planned.
 
-- Define connector contracts and scoped credentials.
-- Add Discord synchronization as an optional adapter for selected project status/context.
-- Support explicit sync direction, scope, conflict handling, and audit logs.
-- Consider Notebook integrations only when a supported, maintainable integration path exists.
-- Never make an external service the only copy of project knowledge.
+**Goal:** Provide user-controlled source ingestion, analysis, classification, cross-referencing, and knowledge curation.
 
-**Exit criteria:** Disconnecting a connector does not make local project data unavailable; synchronization is scoped and traceable.
+**Core deliverables:**
+- Explicitly authorized source ingestion.
+- File/document extraction and incremental change detection.
+- Private Librarian Workspace for extracted and derived material.
+- Classification, cross-reference, conflict detection, and report generation.
+- Source coverage and provenance validation.
+- Review and approval workflow before publishing to Approved Knowledge.
+- Separation of retrieval knowledge from training-dataset preparation.
 
-### Phase 12 — Backup, maintenance, and hosted deployment
+**Exit criteria:** no source is ingested without permission; no Librarian report becomes Approved Knowledge without validation and explicit user approval.
 
-**Goal:** Protect user data and support an optional online deployment.
+## Phase 11 — Backup, Maintenance & Integrations
 
-- Add consistent snapshots of all persistent application data.
-- Back up original files and database state with a manifest.
-- Encrypt sensitive backup material and define recovery procedures.
-- Restrict maintenance cleanup to explicitly designated cache/temporary data.
-- Add authentication, authorization, secure sessions, HTTPS, rate limits, and operational monitoring before public multi-user exposure.
-- Use PostgreSQL for hosted deployment while retaining SQLite for local use.
+**Status:** Planned.
 
-**Exit criteria:** Restore is tested; secrets are protected; public deployment has authentication and security controls.
+**Goal:** Protect persistent user data, support safe maintenance, and add optional external integrations without making them authoritative dependencies.
 
-### Phase 13 — Quality and release readiness
+**Core deliverables:**
+- Consistent snapshots of database and managed file storage.
+- Backup manifests, integrity verification, and tested restore procedures.
+- Encryption and access control for sensitive backup material.
+- Retention policies and safe cleanup restricted to designated temporary/cache data.
+- Optional connector framework and scoped credentials.
+- Discord project-status synchronization and other approved integrations.
+- Sync direction, scope, conflict handling, and audit records.
+- Optional hosted deployment readiness, including PostgreSQL, authentication, authorization, HTTPS, rate limits, and monitoring.
 
-- Add integration and browser-level tests for critical workflows.
-- Test Persian RTL, keyboard navigation, accessibility, and responsive layouts.
-- Add privacy-aware diagnostics and structured logging.
-- Keep release notes, migrations, and documentation synchronized with code.
-- Define measurable acceptance criteria for each release.
+**Exit criteria:** backup restoration is verified; maintenance cannot delete user records; integrations are optional, scoped, auditable, and disconnectable without losing local data.
 
-## Cross-phase rules
+## Cross-phase execution rules
 
-- Never mark planned functionality as implemented.
+- Follow the dedicated execution plan for the active phase.
+- Do not skip dependencies or silently change phase numbering.
+- Do not mark planned functionality as implemented.
 - Do not introduce a module without documenting its boundary and data ownership.
-- Do not add large sets of speculative database tables before their owning workflows exist.
-- Every destructive operation requires an explicit scope and safe transaction/rollback strategy.
-- Every AI-derived artifact must retain provenance and a validation state.
-- External connectors remain optional.
-- A phase is not complete merely because code exists; tests, documentation, and acceptance criteria must also pass.
+- Do not add speculative database tables before the owning workflow exists.
+- Every destructive operation requires explicit scope and safe transaction/rollback strategy.
+- Every AI-derived artifact retains provenance and validation state.
+- External services remain optional and are never the only copy of project knowledge.
+- Every phase requires implementation evidence, tests, documentation, and acceptance review.
+- Do not merge pull requests or alter repository protections without explicit authorization.
