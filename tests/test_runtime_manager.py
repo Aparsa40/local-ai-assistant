@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from core.database import Base, RuntimeEvent, RuntimeModelState, RuntimeStatus
 from core.runtime.contracts import RuntimeAdapter, RuntimeResult
 from core.runtime.manager import RuntimeManager
+from core.runtime.model_lifecycle import ModelLifecycle
 from core.runtime.ollama_adapter import OllamaRuntimeAdapter
 from core.runtime.repository import RuntimeRepository
 from core.runtime.resource_manager import ResourceManager
@@ -107,10 +108,36 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["error"]["category"], "resource_limit_exceeded")
         self.assertEqual(adapter.load_calls, [])
 
+    async def test_unload_uses_inspected_state_and_calls_adapter(self):
+        adapter = FakeRuntimeAdapter([{"model_id": "local-model", "loaded": True}])
+        manager = RuntimeManager([adapter])
+
+        result = await manager.unload_model("fake", "local-model")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(adapter.unload_calls, ["local-model"])
+
+    async def test_unload_is_idempotent_for_installed_model(self):
+        adapter = FakeRuntimeAdapter([{"model_id": "local-model", "loaded": False}])
+        manager = RuntimeManager([adapter])
+
+        result = await manager.unload_model("fake", "local-model")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(adapter.unload_calls, [])
+
     async def test_unknown_runtime_is_rejected(self):
         manager = RuntimeManager()
         with self.assertRaises(KeyError):
             await manager.ensure_runtime("missing")
+
+
+class ModelLifecycleTests(unittest.TestCase):
+    def test_valid_and_invalid_transitions(self):
+        self.assertEqual(ModelLifecycle.transition("installed", "loading"), "loading")
+        self.assertEqual(ModelLifecycle.transition("loading", "loaded"), "loaded")
+        with self.assertRaises(ValueError):
+            ModelLifecycle.transition("installed", "running")
 
 
 class RuntimeRepositoryTests(unittest.TestCase):
