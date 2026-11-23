@@ -38,8 +38,15 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
         host = parsed.hostname or ""
         try:
             is_loopback = host.lower() == "localhost" or ipaddress.ip_address(host).is_loopback
+            port = parsed.port
         except ValueError:
             is_loopback = False
+            port = None
+        if parsed.scheme == "http" and is_loopback:
+            bind_host = "127.0.0.1" if host.lower() == "localhost" else host
+            if ":" in bind_host and not bind_host.startswith("["):
+                bind_host = f"[{bind_host}]"
+            self.base_url = parsed._replace(netloc=f"{bind_host}:{port or 11434}").geturl().rstrip("/")
         self._trust_env = not (parsed.scheme == "http" and is_loopback)
 
     async def _request(self, method: str, path: str, **kwargs):
