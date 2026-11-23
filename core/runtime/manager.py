@@ -68,37 +68,38 @@ class RuntimeManager:
             ready = await self.ensure_runtime(runtime_id, auto_start=auto_start)
             if not ready["ok"]:
                 return ready
-            inventory = await adapter.list_models()
-            if not inventory.ok:
-                self._persist(inventory, "model_inventory_failed")
-                return inventory.to_dict()
-            models = inventory.data.get("models", [])
-            target = next((item for item in models if item.get("model_id") == model_id), None)
-            if target is None:
-                result = RuntimeResult(
-                    False, runtime_id, "failed", model_id,
-                    error={"category": "model_not_installed", "message": "The requested model is not installed in this runtime.", "retryable": False},
-                )
-                self._persist(result, "load_failed")
+            async with self._runtime_lock(runtime_id):
+                inventory = await adapter.list_models()
+                if not inventory.ok:
+                    self._persist(inventory, "model_inventory_failed")
+                    return inventory.to_dict()
+                models = inventory.data.get("models", [])
+                target = next((item for item in models if item.get("model_id") == model_id), None)
+                if target is None:
+                    result = RuntimeResult(
+                        False, runtime_id, "failed", model_id,
+                        error={"category": "model_not_installed", "message": "The requested model is not installed in this runtime.", "retryable": False},
+                    )
+                    self._persist(result, "load_failed")
+                    return result.to_dict()
+                if target.get("loaded") is True:
+                    result = RuntimeResult(True, runtime_id, "loaded", model_id, data={**target, "already_loaded": True})
+                    self._persist(result, "model_load")
+                    return result.to_dict()
+                currently_loaded = sum(1 for item in models if item.get("loaded") is True)
+                allowed, reason = self.resources.can_load(currently_loaded)
+                if not allowed:
+                    result = RuntimeResult(
+                        False, runtime_id, "installed", model_id,
+                        error={"category": "resource_limit_exceeded", "message": reason, "retryable": True},
+                    )
+                    self._persist(result, "load_rejected")
+                    return result.to_dict()
+                self.lifecycle.transition("installed", "loading")
+                result = await adapter.load_model(model_id, options or {})
+                self.lifecycle.transition("loading", result.state if result.ok else "failed")
+                self._persist(result, "model_load" if result.ok else "load_failed")
                 return result.to_dict()
-            if target.get("loaded") is True:
-                result = RuntimeResult(True, runtime_id, "loaded", model_id, data={**target, "already_loaded": True})
-                self._persist(result, "model_load")
-                return result.to_dict()
-            currently_loaded = sum(1 for item in models if item.get("loaded") is True)
-            allowed, reason = self.resources.can_load(currently_loaded)
-            if not allowed:
-                result = RuntimeResult(
-                    False, runtime_id, "installed", model_id,
-                    error={"category": "resource_limit_exceeded", "message": reason, "retryable": True},
-                )
-                self._persist(result, "load_rejected")
-                return result.to_dict()
-            self.lifecycle.transition("installed", "loading")
-            result = await adapter.load_model(model_id, options or {})
-            self.lifecycle.transition("loading", result.state if result.ok else "failed")
-            self._persist(result, "model_load" if result.ok else "load_failed")
-            return result.to_dict()
 
     async def unload_model(self, runtime_id: str, model_id: str) -> dict:
         adapter = self.get_adapter(runtime_id)
