@@ -1,7 +1,7 @@
 # System Architecture
 
 **Status:** Accepted target architecture plus current implementation notes  
-**Last reviewed:** 2026-11-23
+**Last reviewed:** 2026-11-24
 
 ## 1. Architectural goals
 
@@ -99,7 +99,7 @@ It exposes operator-level catalog metadata independently from optional live mode
 
 Owns local inference-engine lifecycle operations through a provider-neutral Runtime Manager and Runtime Adapter contract. The first adapter controls Ollama process readiness and model installed/loaded state. Runtime lifecycle persistence is separate from provider catalog metadata and inference-success status. Runtime inspection is read-only; model load/unload are explicit operations. See [LOCAL_MODEL_RUNTIME.md](LOCAL_MODEL_RUNTIME.md).
 
-The current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.
+The software foundation and CI acceptance are complete. Windows smoke validation verified runtime connectivity, inventory, inspection, and process-ownership safety. Live Qwen loading could not be verified on the observed 4 GB RAM machine while Chrome and VS Code were active; the mechanical HDD is not a practical substitute for RAM because sustained paging can make the system unresponsive. This is recorded as an environment-constrained validation gap, not a demonstrated implementation defect. Successful live load/unload on adequately provisioned hardware remains unverified. The current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.
 
 ### Agent Runtime (accepted target; not implemented)
 
