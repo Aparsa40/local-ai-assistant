@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from ..database import RuntimeEvent, RuntimeModelState
+from ..database import RuntimeEvent, RuntimeModelState, RuntimeStatus
 
 
 class RuntimeRepository:
@@ -27,6 +27,16 @@ class RuntimeRepository:
                 row.observed_at = now
                 row.details = model
                 row.error = None
+            if not result.model_id:
+                runtime_row = session.get(RuntimeStatus, result.runtime_id)
+                if runtime_row is None:
+                    runtime_row = RuntimeStatus(runtime_id=result.runtime_id)
+                    session.add(runtime_row)
+                runtime_row.state = result.state
+                runtime_row.endpoint_scope = (result.data or {}).get("endpoint_scope")
+                runtime_row.observed_at = now
+                runtime_row.details = result.data or {}
+                runtime_row.error = result.error
             if result.model_id:
                 row = session.get(RuntimeModelState, (result.runtime_id, result.model_id))
                 if row is None:
@@ -36,16 +46,17 @@ class RuntimeRepository:
                 row.observed_at = now
                 row.details = result.data or {}
                 row.error = result.error
-            session.add(RuntimeEvent(
-                runtime_id=result.runtime_id,
+            if event_type not in {"model_inventory", "model_inspection"}:
+                session.add(RuntimeEvent(
+                    runtime_id=result.runtime_id,
                 model_id=result.model_id,
                 event_type=event_type,
                 state=result.state,
                 success=result.ok,
                 details=result.data or {},
                 error=result.error,
-                created_at=now,
-            ))
+                    created_at=now,
+                ))
             session.commit()
         except Exception:
             session.rollback()
