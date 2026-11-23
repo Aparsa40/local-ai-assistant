@@ -199,7 +199,7 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
                 },
             )
             inspected = await self.inspect_model(model_id)
-            if not inspected.ok:
+            if not inspected.ok or inspected.state != "loaded":
                 return self._failure(
                     "load_verification_failed",
                     "Ollama accepted the load request but the resulting model state could not be verified.",
@@ -266,7 +266,7 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
                 json={"model": model_id, "prompt": "", "stream": False, "keep_alive": 0},
             )
             inspected = await self.inspect_model(model_id)
-            if not inspected.ok:
+            if not inspected.ok or inspected.state != "installed":
                 return self._failure(
                     "unload_verification_failed",
                     "Ollama accepted the unload request but the resulting model state could not be verified.",
