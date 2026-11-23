@@ -223,6 +223,14 @@ class RuntimeRepositoryTests(unittest.TestCase):
 
 
 class OllamaRuntimeAdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_loopback_endpoint_gets_ollama_default_port(self):
+        adapter = OllamaRuntimeAdapter(
+            base_url="http://localhost",
+            config_loader=lambda: {"providers_config": {"ollama": {"base_url": "http://localhost"}}},
+        )
+        self.assertEqual(adapter.base_url, "http://127.0.0.1:11434")
+        self.assertFalse(adapter._trust_env)
+
     async def test_model_inventory_distinguishes_installed_and_loaded(self):
         adapter = OllamaRuntimeAdapter()
         async def fake_request(method, path, **kwargs):
