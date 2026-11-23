@@ -14,6 +14,19 @@ class RuntimeRepository:
         session = self.session_factory()
         try:
             now = datetime.now(timezone.utc).replace(tzinfo=None)
+            models = result.data.get("models", []) if isinstance(result.data, dict) else []
+            for model in models:
+                model_id = model.get("model_id")
+                if not model_id:
+                    continue
+                row = session.get(RuntimeModelState, (result.runtime_id, model_id))
+                if row is None:
+                    row = RuntimeModelState(runtime_id=result.runtime_id, model_id=model_id)
+                    session.add(row)
+                row.state = "loaded" if model.get("loaded") is True else "installed" if model.get("loaded") is False else "unknown"
+                row.observed_at = now
+                row.details = model
+                row.error = None
             if result.model_id:
                 row = session.get(RuntimeModelState, (result.runtime_id, result.model_id))
                 if row is None:
