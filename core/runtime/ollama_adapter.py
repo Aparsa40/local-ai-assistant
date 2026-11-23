@@ -203,6 +203,32 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
                 retryable=True,
             )
 
+    async def shutdown_owned_process(self) -> RuntimeResult:
+        if self.controller is None:
+            return RuntimeResult(
+                True,
+                self.runtime_id,
+                "ready",
+                data={"process_stopped": False, "reason": "no_process_controller"},
+            )
+        result = await self.controller.shutdown_owned_process()
+        if result.get("status") == "failed":
+            error = result.get("error") or {}
+            return self._failure(
+                error.get("category", "shutdown_failed"),
+                error.get("message", "The application-owned Ollama process could not be stopped."),
+                retryable=True,
+            )
+        return RuntimeResult(
+            True,
+            self.runtime_id,
+            "stopped",
+            data={
+                "process_stopped": bool(result.get("process_stopped")),
+                "reason": result.get("reason"),
+            },
+        )
+
     async def unload_model(self, model_id: str) -> RuntimeResult:
         before = await self.inspect_model(model_id)
         if not before.ok:
