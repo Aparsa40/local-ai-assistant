@@ -222,8 +222,15 @@ class LocalRuntimeController:
                 process.terminate()
                 await asyncio.to_thread(process.wait, timeout=5)
             except subprocess.TimeoutExpired:
-                process.kill()
-                await asyncio.to_thread(process.wait, timeout=5)
+                try:
+                    process.kill()
+                    await asyncio.to_thread(process.wait, timeout=5)
+                except (OSError, subprocess.TimeoutExpired):
+                    return {
+                        "status": "failed",
+                        "process_stopped": False,
+                        "error": {"category": "shutdown_failed", "message": "The application-owned Ollama process did not stop after termination."},
+                    }
             except OSError:
                 return {
                     "status": "failed",
