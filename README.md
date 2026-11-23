@@ -14,7 +14,8 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Groq:** OpenAI-compatible streaming chat and model discovery.
 - **Cohere:** Chat v2 streaming and model discovery.
 - **Ollama:** local model discovery and streaming inference; explicit connection can reuse an active server or start the installed CLI when auto-start is enabled and the endpoint is loopback HTTP.
-- **Provider & Model Intelligence:** persisted runtime/offline reports, Ollama model metadata enrichment, evidence-aware task suitability, and explicit freshness/unknown states.
+- **Provider & Model Intelligence:** persisted provider intelligence reports, Ollama model metadata enrichment, evidence-aware task suitability, and explicit freshness/unknown states.
+- **Local Model Runtime:** implemented provider-neutral runtime lifecycle management with Ollama as the first adapter, installed/loaded model inspection, explicit load/unload, owned-process shutdown, SQLite lifecycle history, bounded operations, and read-only status/snapshot APIs. CI passes (109 tests); Windows runtime connectivity and inventory were verified. Live model loading remains hardware-constrained and unverified on the observed 4 GB RAM / mechanical-HDD machine; see [Local Model Runtime validation](docs/LOCAL_MODEL_RUNTIME.md#14-windows-smoke-validation-and-environment-constraints).
 - **Provider-specific model selection:** each provider retains its own selected model.
 - **Interface Manager foundation:** provider listing, operator-level catalog metadata, capability access, bounded model discovery, safe provider-neutral errors, quota visibility, and chat streaming through one service boundary.
 - **Operator Capability Catalog:** version-controlled provider manifests describe service type, discovery method, credential requirements, official documentation, task tags, and published free-tier policy separately from exact model IDs.
@@ -38,6 +39,7 @@ local-ai-assistant/
 ├── core/database.py
 ├── core/orchestrator.py
 ├── core/interface_manager.py # provider-neutral service boundary
+├── core/runtime/            # local runtime adapters, lifecycle manager and persistence
 ├── core/provider_intelligence.py # local runtime lifecycle and provider/model reports
 ├── core/catalog_storage.py  # durable operator/live catalog and report repository
 ├── data/                    # local SQLite database (git-ignored)
@@ -58,6 +60,7 @@ Important documents:
 - [Roadmap](docs/ROADMAP.md)
 - [AI contribution/delegation guide](docs/AI_CONTRIBUTION_GUIDE.md)
 - [Interface Manager](docs/INTERFACE_MANAGER.md)
+- [Local Model Runtime](docs/LOCAL_MODEL_RUNTIME.md)
 - [Operator Catalogs and Discovery Policy](docs/OPERATOR_CATALOGS.md)
 - [Catalog Storage Schema](docs/CATALOG_STORAGE.md)
 - [Provider system](docs/PROVIDER_SYSTEM.md)

@@ -519,3 +519,49 @@ def test_remote_ollama_endpoint_retains_environment_proxy_support():
     provider = OllamaProvider(base_url="https://ollama.example.test:11434")
     assert provider._trust_env is True
     assert provider.base_url == "https://ollama.example.test:11434"
+
+
+
+def test_local_runtime_shutdown_stops_only_application_owned_process():
+    class FakeProcess:
+        pid = 9876
+
+        def __init__(self):
+            self.terminated = False
+            self.killed = False
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            self.terminated = True
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout):
+            return 0
+
+    controller = LocalRuntimeController()
+    process = FakeProcess()
+    controller._owned_process = process
+    controller._owned_endpoint = "http://127.0.0.1:11434"
+
+    result = asyncio.run(controller.shutdown_owned_process())
+
+    assert result["status"] == "stopped"
+    assert result["process_stopped"] is True
+    assert process.terminated is True
+    assert process.killed is False
+    assert controller._owned_process is None
+    assert controller._owned_endpoint is None
+
+
+def test_local_runtime_shutdown_does_not_touch_unowned_processes():
+    controller = LocalRuntimeController()
+
+    result = asyncio.run(controller.shutdown_owned_process())
+
+    assert result["status"] == "stopped"
+    assert result["process_stopped"] is False
+    assert result["reason"] == "not_owned"

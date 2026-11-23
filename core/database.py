@@ -4,18 +4,8 @@ from pathlib import Path
 
 try:
     from sqlalchemy import (
-        Boolean,
-        Column,
-        DateTime,
-        ForeignKey,
-        Integer,
-        JSON,
-        LargeBinary,
-        String,
-        Text,
-        create_engine,
-        inspect,
-        text,
+        Boolean, Column, DateTime, ForeignKey, Integer, JSON, LargeBinary,
+        String, Text, create_engine, inspect, text,
     )
     from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 except ImportError as exc:
@@ -146,7 +136,6 @@ class CatalogSyncHistory(Base):
     synced_at = Column(DateTime, nullable=False, default=utcnow_naive)
 
 
-
 class ProviderIntelligenceReport(Base):
     __tablename__ = "provider_intelligence_reports"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -158,6 +147,43 @@ class ProviderIntelligenceReport(Base):
     summary = Column(Text, nullable=False, default="")
     report_data = Column(JSON, nullable=False, default=dict)
     schema_version = Column(Integer, nullable=False, default=1)
+
+
+class RuntimeModelState(Base):
+    """Latest observed lifecycle state, separate from inference availability."""
+    __tablename__ = "runtime_model_states"
+    runtime_id = Column(String(80), primary_key=True)
+    model_id = Column(String(255), primary_key=True)
+    state = Column(String(40), nullable=False, default="unknown")
+    observed_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    details = Column(JSON, nullable=False, default=dict)
+    error = Column(JSON, nullable=True)
+
+
+class RuntimeStatus(Base):
+    """Latest observed status for one local runtime adapter."""
+    __tablename__ = "runtime_statuses"
+    runtime_id = Column(String(80), primary_key=True)
+    state = Column(String(40), nullable=False, default="unknown")
+    endpoint_scope = Column(String(40), nullable=True)
+    observed_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    details = Column(JSON, nullable=False, default=dict)
+    error = Column(JSON, nullable=True)
+
+
+class RuntimeEvent(Base):
+    """Append-only local runtime lifecycle event."""
+    __tablename__ = "runtime_events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    runtime_id = Column(String(80), nullable=False, index=True)
+    model_id = Column(String(255), nullable=True, index=True)
+    event_type = Column(String(80), nullable=False)
+    state = Column(String(40), nullable=False)
+    success = Column(Boolean, nullable=False)
+    details = Column(JSON, nullable=False, default=dict)
+    error = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive, index=True)
+
 
 def init_db():
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)

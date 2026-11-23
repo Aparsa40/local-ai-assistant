@@ -1,7 +1,7 @@
 # System Architecture
 
 **Status:** Accepted target architecture plus current implementation notes  
-**Last reviewed:** 2026-11-21
+**Last reviewed:** 2026-11-24
 
 ## 1. Architectural goals
 
@@ -22,6 +22,7 @@ The current repository contains:
 - SQLAlchemy/SQLite persistence in `core/database.py`.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
+- An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations, including a combined read-only health/inventory snapshot.
 - Provider and chat tests in `tests/`.
 
 Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, local operator catalogs, capability access, bounded model discovery, catalog-reachability diagnostics, quota visibility, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
@@ -93,6 +94,12 @@ This is a logical architecture. It does not require a separate process or databa
 The provider/model control plane. It owns provider registration, model catalog access, connection and credential integration, health/quota metadata, adapter invocation, and normalized provider results.
 
 It exposes operator-level catalog metadata independently from optional live model discovery. Provider-level task tags are hints, not guarantees for every model. It does not decide whether a response is factually correct and does not own task planning.
+
+### Local Model Runtime (initial foundation implemented)
+
+Owns local inference-engine lifecycle operations through a provider-neutral Runtime Manager and Runtime Adapter contract. The first adapter controls Ollama process readiness and model installed/loaded state. Runtime lifecycle persistence is separate from provider catalog metadata and inference-success status. Runtime inspection is read-only; model load/unload are explicit operations. See [LOCAL_MODEL_RUNTIME.md](LOCAL_MODEL_RUNTIME.md).
+
+The software foundation and CI acceptance are complete. Windows smoke validation verified runtime connectivity, inventory, inspection, and process-ownership safety. Live Qwen loading could not be verified on the observed 4 GB RAM machine while Chrome and VS Code were active; the mechanical HDD is not a practical substitute for RAM because sustained paging can make the system unresponsive. This is recorded as an environment-constrained validation gap, not a demonstrated implementation defect. Successful live load/unload on adequately provisioned hardware remains unverified. The current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.
 
 ### Agent Runtime (accepted target; not implemented)
 

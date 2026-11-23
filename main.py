@@ -18,6 +18,8 @@ from core.provider_intelligence import (
     create_offline_intelligence_report,
     refresh_provider_intelligence,
 )
+from core.runtime.factory import build_runtime_manager
+from core.runtime.monitor import RuntimeMonitor
 from core.catalog_storage import (
     get_operational_report,
     get_provider_catalog_snapshot,
@@ -30,6 +32,8 @@ from core.catalog_storage import (
 app = FastAPI(title="Local Modular AI Assistant")
 interface_manager = InterfaceManager()
 init_db()
+runtime_manager = build_runtime_manager(ConfigManager.load_config, SessionLocal)
+runtime_monitor = RuntimeMonitor(runtime_manager)
 with SessionLocal() as _catalog_seed_db:
     seed_operator_catalogs(_catalog_seed_db)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -56,6 +60,10 @@ class ProfileUpdate(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
     username: str = Field(min_length=1, max_length=50)
     email: str = Field(default="", max_length=254)
+
+
+class RuntimeLoadRequest(BaseModel):
+    keep_alive: str | int = "5m"
 
 
 def get_or_create_profile(db: Session) -> UserProfile:
@@ -303,6 +311,76 @@ async def provider_connection_status(
         )
     except InterfaceManagerError as exc:
         raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
+
+
+@app.get("/api/runtime/{runtime_id}/status")
+async def get_local_runtime_status(runtime_id: str):
+    """Read runtime readiness without starting a local process."""
+    try:
+        return await runtime_manager.ensure_runtime(runtime_id, auto_start=False)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/runtime/{runtime_id}/snapshot")
+async def get_local_runtime_snapshot(runtime_id: str):
+    """Return one read-only runtime-health and model-inventory snapshot."""
+    try:
+        return await runtime_monitor.snapshot(runtime_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/runtime/{runtime_id}/models")
+async def get_local_runtime_models(runtime_id: str):
+    """Read installed/loaded model state without starting a local process."""
+    try:
+        return await runtime_manager.list_models(runtime_id, refresh=False)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/runtime/{runtime_id}/models/{model_id:path}")
+async def get_local_runtime_model(runtime_id: str, model_id: str):
+    try:
+        return await runtime_manager.inspect_model(runtime_id, model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/runtime/{runtime_id}/models/{model_id:path}/load")
+async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest):
+    """Explicitly load a model; this may start Ollama when configured to do so."""
+    try:
+        config = ConfigManager.load_config() or {}
+        ollama_config = (config.get("providers_config") or {}).get("ollama", {})
+        return await runtime_manager.load_model(
+            runtime_id,
+            model_id,
+            options={"keep_alive": data.keep_alive},
+            auto_start=bool(ollama_config.get("auto_start", True)),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/runtime/{runtime_id}/models/{model_id:path}/unload")
+async def unload_local_runtime_model(runtime_id: str, model_id: str):
+    """Explicitly unload a model; never stops the Ollama server process."""
+    try:
+        return await runtime_manager.unload_model(runtime_id, model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/runtime/{runtime_id}/shutdown")
+async def shutdown_local_runtime(runtime_id: str):
+    """Stop only a runtime process explicitly owned by this application."""
+    try:
+        results = await runtime_manager.shutdown(runtime_id)
+        return results[0] if results else {"ok": True, "runtime_id": runtime_id, "state": "stopped"}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/sessions")

@@ -1,7 +1,7 @@
 # Product and Engineering Roadmap
 
 **Status:** Target roadmap; implementation status is called out separately.  
-**Last reviewed:** 2026-11-21
+**Last reviewed:** 2026-11-24
 
 This roadmap describes the intended evolution of the Local AI Assistant. It must not be read as a claim that every listed capability already exists.
 
@@ -52,6 +52,21 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 **Current implementation:** The first service boundary, local operator catalogs, explicit live model discovery, catalog probe, normalized quota-visibility endpoint, and chat-stream delegation are implemented on the feature branch. OpenRouter key usage can be queried live; Groq/Cohere telemetry depends on observed response headers. Persistent model records, scheduled Updater, full health monitoring, normalized inference envelopes, retry/fallback policies, and an encrypted credential vault remain incomplete.
 
 **Exit criteria:** Internal modules can discover and invoke providers through Interface Manager without importing provider-specific adapters. Catalog diagnostics are bounded and accurately labeled.
+
+### Phase 2A — Local Model Runtime foundation
+
+**Goal:** Add a provider-neutral control plane for local inference runtimes before autonomous conversation or agent execution.
+
+- Define the Runtime Adapter and Runtime Manager contracts.
+- Reuse the existing safe Ollama process controller and register Ollama as the first runtime adapter.
+- Distinguish installed, loaded, and inference-available model states.
+- Support explicit load/unload operations, bounded timeouts, process ownership, and conservative resource admission.
+- Persist runtime lifecycle state and events separately from provider catalog and inference status.
+- Keep runtime inspection read-only and lifecycle mutations on explicit POST endpoints.
+
+**Current implementation — complete (software foundation):** The provider-neutral Runtime Manager, Ollama adapter, SQLite lifecycle state/event persistence, and runtime status/snapshot/model/load/unload/owned-shutdown APIs are implemented on `feat/local-model-runtime-foundation`. Load/unload success is reported only after the requested lifecycle state is verified; unavailable telemetry is never promoted to success. GitHub Actions PR CI run #614 passed with 109 tests, and Python compilation plus frontend JavaScript syntax validation passed. Windows smoke validation confirmed local connectivity, runtime readiness, installed-model inventory, inspection, and safe process-ownership behavior. The explicit Qwen 0.5B load attempt failed in the observed 4 GB RAM environment while Chrome and VS Code were running; the model remained installed and unloaded, and the runtime/inventory remained healthy. The machine's mechanical HDD makes sustained paging an impractical RAM substitute. This load result is classified as hardware-constrained/inconclusive, not as a code defect; successful live load/unload on adequately provisioned hardware remains unverified. No larger models were attempted. **Phase 2A's software implementation and CI acceptance are complete; the hardware-dependent live load validation is explicitly deferred.** Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
+
+**Exit criteria:** Runtime Manager is provider-agnostic; Ollama lifecycle operations are bounded and tested; only application-owned processes can be stopped; installed and loaded state are distinct; all existing tests remain green.
 
 ### Phase 2 — Persistence and repository foundation
 
