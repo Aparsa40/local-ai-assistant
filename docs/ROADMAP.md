@@ -1,7 +1,7 @@
 # Product and Engineering Roadmap
 
 **Status:** Target roadmap; implementation status is called out separately.  
-**Last reviewed:** 2026-11-23
+**Last reviewed:** 2026-11-24
 
 This roadmap describes the intended evolution of the Local AI Assistant. It must not be read as a claim that every listed capability already exists.
 
@@ -64,7 +64,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 - Persist runtime lifecycle state and events separately from provider catalog and inference status.
 - Keep runtime inspection read-only and lifecycle mutations on explicit POST endpoints.
 
-**Current implementation:** The initial Runtime Manager, Ollama adapter, SQLite lifecycle state/event tables, and runtime status/snapshot/model/load/unload/shutdown API are implemented on `feat/local-model-runtime-foundation`. Load/unload success is reported only after the requested lifecycle state is verified; unavailable loaded-model telemetry remains `unknown`. GitHub Actions pull-request CI run #610 passed with 109 tests, including bounded Runtime Adapter queue/execution timeout, normalized adapter failures, inventory-failure persistence, verified model lifecycle outcomes, and read-only snapshot API coverage; Windows Ollama smoke validation remains pending. Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
+**Current implementation — complete (software foundation):** The provider-neutral Runtime Manager, Ollama adapter, SQLite lifecycle state/event persistence, and runtime status/snapshot/model/load/unload/owned-shutdown APIs are implemented on `feat/local-model-runtime-foundation`. Load/unload success is reported only after the requested lifecycle state is verified; unavailable telemetry is never promoted to success. GitHub Actions PR CI run #614 passed with 109 tests, and Python compilation plus frontend JavaScript syntax validation passed. Windows smoke validation confirmed local connectivity, runtime readiness, installed-model inventory, inspection, and safe process-ownership behavior. The explicit Qwen 0.5B load attempt failed in the observed 4 GB RAM environment while Chrome and VS Code were running; the model remained installed and unloaded, and the runtime/inventory remained healthy. The machine's mechanical HDD makes sustained paging an impractical RAM substitute. This load result is classified as hardware-constrained/inconclusive, not as a code defect; successful live load/unload on adequately provisioned hardware remains unverified. No larger models were attempted. **Phase 2A's software implementation and CI acceptance are complete; the hardware-dependent live load validation is explicitly deferred.** Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
 
 **Exit criteria:** Runtime Manager is provider-agnostic; Ollama lifecycle operations are bounded and tested; only application-owned processes can be stopped; installed and loaded state are distinct; all existing tests remain green.
 
