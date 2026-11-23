@@ -133,6 +133,7 @@ The existing safe process-start controller is reused. It may start Ollama only f
 
 Runtime inspection endpoints are read-only GETs. Lifecycle mutations use POST:
 - `GET /api/runtime/{runtime_id}/status`
+- `GET /api/runtime/{runtime_id}/snapshot` (combined read-only health and inventory snapshot)
 - `GET /api/runtime/{runtime_id}/models`
 - `GET /api/runtime/{runtime_id}/models/{model_id}`
 - `POST /api/runtime/{runtime_id}/models/{model_id}/load`
