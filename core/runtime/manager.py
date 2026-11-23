@@ -5,6 +5,7 @@ import asyncio
 
 from .contracts import RuntimeAdapter, RuntimeResult
 from .resource_manager import ResourceManager
+from .model_lifecycle import ModelLifecycle
 
 
 class RuntimeManager:
@@ -12,6 +13,7 @@ class RuntimeManager:
         self._adapters = {adapter.runtime_id: adapter for adapter in (adapters or [])}
         self.repository = repository
         self.resources = resource_manager or ResourceManager()
+        self.lifecycle = ModelLifecycle()
         self._runtime_locks: dict[str, asyncio.Lock] = {}
         self._model_locks: dict[tuple[str, str], asyncio.Lock] = {}
 
@@ -92,14 +94,24 @@ class RuntimeManager:
                 )
                 self._persist(result, "load_rejected")
                 return result.to_dict()
+            self.lifecycle.transition("installed", "loading")
             result = await adapter.load_model(model_id, options or {})
+            self.lifecycle.transition("loading", result.state if result.ok else "failed")
             self._persist(result, "model_load" if result.ok else "load_failed")
             return result.to_dict()
 
     async def unload_model(self, runtime_id: str, model_id: str) -> dict:
         adapter = self.get_adapter(runtime_id)
         async with self._model_lock(runtime_id, model_id):
+            before = await adapter.inspect_model(model_id)
+            if not before.ok:
+                self._persist(before, "unload_failed")
+                return before.to_dict()
+            if before.state == "installed":
+                return before.to_dict()
+            self.lifecycle.transition(before.state, "unloading")
             result = await adapter.unload_model(model_id)
+            self.lifecycle.transition("unloading", result.state if result.ok else "failed")
             self._persist(result, "model_unload" if result.ok else "unload_failed")
             return result.to_dict()
 
