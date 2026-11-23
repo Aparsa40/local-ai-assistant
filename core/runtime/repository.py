@@ -38,10 +38,15 @@ class RuntimeRepository:
                 if row is None:
                     row = RuntimeModelState(runtime_id=result.runtime_id, model_id=result.model_id)
                     session.add(row)
-                row.state = result.state
                 row.observed_at = now
-                row.details = data
-                row.error = result.error
+                if result.ok:
+                    row.state = result.state
+                    row.details = data
+                    row.error = None
+                else:
+                    # Keep the last trustworthy lifecycle observation; store the failed
+                    # operation separately so a failed load does not erase "installed".
+                    row.error = result.error
             else:
                 runtime_row = session.get(RuntimeStatus, result.runtime_id)
                 if runtime_row is None:
