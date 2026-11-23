@@ -48,7 +48,7 @@ class RuntimeRepository:
                     # Keep the last trustworthy lifecycle observation; store the failed
                     # operation separately so a failed load does not erase "installed".
                     row.error = result.error
-            else:
+            elif event_type not in {"model_inventory", "model_inspection"}:
                 runtime_row = session.get(RuntimeStatus, result.runtime_id)
                 if runtime_row is None:
                     runtime_row = RuntimeStatus(runtime_id=result.runtime_id)
@@ -57,13 +57,18 @@ class RuntimeRepository:
                 else:
                     runtime_state_changed = (
                         runtime_row.state != result.state
-                        or runtime_row.endpoint_scope != data.get("endpoint_scope")
+                        or (
+                            data.get("endpoint_scope") is not None
+                            and runtime_row.endpoint_scope != data.get("endpoint_scope")
+                        )
                         or runtime_row.error != result.error
                     )
                 runtime_row.state = result.state
-                runtime_row.endpoint_scope = data.get("endpoint_scope")
+                if data.get("endpoint_scope") is not None:
+                    runtime_row.endpoint_scope = data.get("endpoint_scope")
                 runtime_row.observed_at = now
-                runtime_row.details = data
+                if event_type != "runtime_probe" or data:
+                    runtime_row.details = data
                 runtime_row.error = result.error
 
             # Polling/inspection refreshes update snapshots but do not grow the event log.
