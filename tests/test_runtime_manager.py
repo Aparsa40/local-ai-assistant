@@ -1,6 +1,8 @@
 import asyncio
 import unittest
 
+import httpx
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -326,6 +328,47 @@ class OllamaRuntimeAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.state, "stopped")
         self.assertTrue(result.data["process_stopped"])
+
+    async def test_load_does_not_claim_success_when_loaded_state_is_unknown(self):
+        adapter = OllamaRuntimeAdapter()
+
+        async def fake_request(method, path, **kwargs):
+            if path == "/api/generate":
+                return {}
+            if path == "/api/tags":
+                return {"models": [{"name": "llama3.2:1b"}]}
+            if path == "/api/ps":
+                raise httpx.ConnectError("loaded telemetry unavailable")
+            raise AssertionError(path)
+
+        adapter._request = fake_request
+        result = await adapter.load_model("llama3.2:1b")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error["category"], "load_verification_failed")
+
+    async def test_unload_does_not_claim_success_when_loaded_state_is_unknown(self):
+        adapter = OllamaRuntimeAdapter()
+        ps_calls = 0
+
+        async def fake_request(method, path, **kwargs):
+            nonlocal ps_calls
+            if path == "/api/tags":
+                return {"models": [{"name": "llama3.2:1b"}]}
+            if path == "/api/ps":
+                ps_calls += 1
+                if ps_calls == 1:
+                    return {"models": [{"name": "llama3.2:1b"}]}
+                raise httpx.ConnectError("loaded telemetry unavailable")
+            if path == "/api/generate":
+                return {}
+            raise AssertionError(path)
+
+        adapter._request = fake_request
+        result = await adapter.unload_model("llama3.2:1b")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error["category"], "unload_verification_failed")
 
     async def test_unload_sends_explicit_zero_keep_alive(self):
         adapter = OllamaRuntimeAdapter()
