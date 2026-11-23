@@ -145,7 +145,7 @@ Responses expose normalized envelopes only. Model IDs must be treated as path da
 ## 11. Failure handling
 
 Expected categories include:
-`runtime_not_registered`, `runtime_unavailable`, `runtime_not_installed`, `model_not_installed`, `model_not_found`, `load_failed`, `unload_failed`, `runtime_request_timeout`, `runtime_protocol_error`, `resource_limit_exceeded`.
+`runtime_not_registered`, `runtime_unavailable`, `ollama_not_installed`, `model_not_installed`, `model_not_found`, `load_failed`, `unload_failed`, `load_verification_failed`, `unload_verification_failed`, `runtime_request_timeout`, `runtime_protocol_error`, `resource_limit_exceeded`.
 
 Failures must not erase last-known-good catalog records. A failed load/unload records a failed lifecycle event and preserves the last trustworthy observed state separately from the operation result.
 
