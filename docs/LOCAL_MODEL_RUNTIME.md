@@ -137,7 +137,7 @@ Runtime inspection endpoints are read-only GETs. Lifecycle mutations use POST:
 - `GET /api/runtime/{runtime_id}/models`
 - `GET /api/runtime/{runtime_id}/models/{model_id}`
 - `POST /api/runtime/{runtime_id}/models/{model_id}/load`
-- `POST /api/runtime/{runtime_id}/models/{model_id}/unload`
+- `POST /api/runtime/{runtime_id}/models/{model_id}/unload`\n- `POST /api/runtime/{runtime_id}/shutdown` (stops only an application-owned process)
 
 Responses expose normalized envelopes only. Model IDs must be treated as path data and safely URL-encoded by clients.
 
