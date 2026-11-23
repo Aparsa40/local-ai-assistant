@@ -101,7 +101,11 @@ class RuntimeManager:
         result = await self._run_adapter(
             runtime_id, "inspect_model", adapter.inspect_model(model_id)
         )
-        result.model_id = model_id
+        if result.model_id is None:
+            result = RuntimeResult(
+                result.ok, result.runtime_id, result.state, model_id,
+                data=result.data, error=result.error, observed_at=result.observed_at,
+            )
         self._persist(result, "model_inspection")
         return result.to_dict()
 
@@ -146,7 +150,11 @@ class RuntimeManager:
                 result = await self._run_adapter(
                     runtime_id, "load_model", adapter.load_model(model_id, options or {})
                 )
-                result.model_id = model_id
+                if result.model_id is None:
+                    result = RuntimeResult(
+                        result.ok, result.runtime_id, result.state, model_id,
+                        data=result.data, error=result.error, observed_at=result.observed_at,
+                    )
                 self.lifecycle.transition("loading", result.state if result.ok else "failed")
                 self._persist(result, "model_load" if result.ok else "load_failed")
                 return result.to_dict()
@@ -158,7 +166,11 @@ class RuntimeManager:
                 before = await self._run_adapter(
                     runtime_id, "inspect_model", adapter.inspect_model(model_id)
                 )
-                before.model_id = model_id
+                if before.model_id is None:
+                    before = RuntimeResult(
+                        before.ok, before.runtime_id, before.state, model_id,
+                        data=before.data, error=before.error, observed_at=before.observed_at,
+                    )
                 if not before.ok:
                     self._persist(before, "unload_failed")
                     return before.to_dict()
@@ -168,7 +180,11 @@ class RuntimeManager:
                 result = await self._run_adapter(
                     runtime_id, "unload_model", adapter.unload_model(model_id)
                 )
-                result.model_id = model_id
+                if result.model_id is None:
+                    result = RuntimeResult(
+                        result.ok, result.runtime_id, result.state, model_id,
+                        data=result.data, error=result.error, observed_at=result.observed_at,
+                    )
                 self.lifecycle.transition("unloading", result.state if result.ok else "failed")
                 self._persist(result, "model_unload" if result.ok else "unload_failed")
                 return result.to_dict()
