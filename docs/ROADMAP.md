@@ -64,7 +64,7 @@ Phases are dependency-oriented milestones. Their exact size and release boundari
 - Persist runtime lifecycle state and events separately from provider catalog and inference status.
 - Keep runtime inspection read-only and lifecycle mutations on explicit POST endpoints.
 
-**Current implementation:** The initial Runtime Manager, Ollama adapter, SQLite lifecycle state/event tables, and runtime status/snapshot/model/load/unload/shutdown API are implemented on `feat/local-model-runtime-foundation`. GitHub Actions Python CI run #575 passed with 102 tests, including bounded Runtime Adapter timeout coverage; Windows Ollama smoke validation remains pending. Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
+**Current implementation:** The initial Runtime Manager, Ollama adapter, SQLite lifecycle state/event tables, and runtime status/snapshot/model/load/unload/shutdown API are implemented on `feat/local-model-runtime-foundation`. GitHub Actions Python CI run #597 passed with 107 tests, including bounded Runtime Adapter queue/execution timeout, normalized adapter failures, inventory-failure persistence, and read-only snapshot API coverage; Windows Ollama smoke validation remains pending. Hardware telemetry, automatic eviction, model downloads, and other local engines remain deferred.
 
 **Exit criteria:** Runtime Manager is provider-agnostic; Ollama lifecycle operations are bounded and tested; only application-owned processes can be stopped; installed and loaded state are distinct; all existing tests remain green.
 
