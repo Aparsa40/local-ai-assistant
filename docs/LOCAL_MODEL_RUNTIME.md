@@ -21,8 +21,8 @@ This contract is both the design decision and the acceptance checklist for this 
 | Runtime Manager | Local runtime selection, lifecycle orchestration, concurrency, normalized results | Provider catalog curation, conversation history, agent planning |
 | Runtime Adapter | Engine-specific process/API operations | Application policy, database schema, UI |
 | Runtime Repository | Durable runtime state and lifecycle events | Runtime decisions or process control |
-| Runtime Monitor | Read-only health/resource observations | Starting/stopping processes or changing model state |
-| Resource Manager | Admission decisions from configured resource limits and observed capacity | Guessing unavailable RAM/VRAM values |
+| Runtime Monitor | Read-only runtime health and model-inventory snapshots | Starting/stopping processes or changing model state |
+| Resource Manager | Admission decisions from configured loaded-model limits | Guessing unavailable RAM/VRAM values |
 | Conversation/Agent layers | Request intent and task execution | Calling Ollama endpoints directly |
 
 The existing provider adapter remains responsible for chat streaming and catalog discovery through Interface Manager. Runtime Adapter is a separate control-plane adapter for process/model lifecycle. These two adapter contracts must not be conflated.
@@ -58,7 +58,6 @@ Do not translate `installed` into `loaded`, or `loaded` into successful inferenc
 Every adapter exposes:
 
 - `runtime_id` and `capabilities`
-- `probe()`: normalized availability result
 - `ensure_available(auto_start)`: reuse an existing runtime; start only an explicitly managed local process when permitted
 - `list_models()`: installed inventory with exact engine model IDs
 - `inspect_model(model_id)`: current lifecycle and metadata observation
@@ -79,7 +78,7 @@ The provider-neutral manager exposes asynchronous operations:
 - `unload_model(runtime_id, model_id)`
 - `shutdown(runtime_id=None)`
 
-The manager serializes conflicting operations per runtime/model, enforces timeouts and resource admission, persists state transitions/events, and returns stable result envelopes. It does not perform chat inference; inference continues through Interface Manager.
+The manager serializes conflicting operations per runtime/model, bounds each adapter operation to 30 seconds by default, limits adapter concurrency to four operations by default, enforces configured resource admission, persists state transitions/events, and returns stable result envelopes. It does not perform chat inference; inference continues through Interface Manager.
 
 ## 6. Normalized result envelope
 
@@ -137,14 +136,15 @@ Runtime inspection endpoints are read-only GETs. Lifecycle mutations use POST:
 - `GET /api/runtime/{runtime_id}/models`
 - `GET /api/runtime/{runtime_id}/models/{model_id}`
 - `POST /api/runtime/{runtime_id}/models/{model_id}/load`
-- `POST /api/runtime/{runtime_id}/models/{model_id}/unload`\n- `POST /api/runtime/{runtime_id}/shutdown` (stops only an application-owned process)
+- `POST /api/runtime/{runtime_id}/models/{model_id}/unload`
+- `POST /api/runtime/{runtime_id}/shutdown` (stops only an application-owned process)
 
 Responses expose normalized envelopes only. Model IDs must be treated as path data and safely URL-encoded by clients.
 
 ## 11. Failure handling
 
 Expected categories include:
-`runtime_not_registered`, `runtime_unavailable`, `runtime_not_installed`, `model_not_installed`, `model_not_found`, `load_failed`, `unload_failed`, `operation_timeout`, `resource_limit_exceeded`, `adapter_error`.
+`runtime_not_registered`, `runtime_unavailable`, `runtime_not_installed`, `model_not_installed`, `model_not_found`, `load_failed`, `unload_failed`, `runtime_request_timeout`, `runtime_protocol_error`, `resource_limit_exceeded`.
 
 Failures must not erase last-known-good catalog records. A failed load/unload records a failed lifecycle event and preserves the last trustworthy observed state separately from the operation result.
 
