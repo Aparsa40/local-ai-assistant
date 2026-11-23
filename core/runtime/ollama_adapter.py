@@ -21,10 +21,19 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
         base_url: str = "http://localhost:11434",
         controller=None,
         request_timeout: float = 20.0,
+        config_loader=None,
     ):
         self.base_url = base_url.rstrip("/")
         self.controller = controller
         self.request_timeout = request_timeout
+        self.config_loader = config_loader
+        self._refresh_config()
+
+    def _refresh_config(self) -> None:
+        if self.config_loader is not None:
+            config = self.config_loader() or {}
+            provider_config = (config.get("providers_config") or {}).get("ollama", {})
+            self.base_url = provider_config.get("base_url", self.base_url).rstrip("/")
         parsed = urlparse(self.base_url)
         host = parsed.hostname or ""
         try:
@@ -34,6 +43,7 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
         self._trust_env = not (parsed.scheme == "http" and is_loopback)
 
     async def _request(self, method: str, path: str, **kwargs):
+        self._refresh_config()
         async with httpx.AsyncClient(
             timeout=self.request_timeout,
             trust_env=self._trust_env,
@@ -61,6 +71,7 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
         )
 
     async def ensure_available(self, auto_start: bool = True) -> RuntimeResult:
+        self._refresh_config()
         if self.controller is not None:
             startup = await self.controller.ensure_running(self.base_url, auto_start=auto_start)
             if startup.get("status") != "ready":
