@@ -119,7 +119,7 @@ class OllamaRuntimeAdapter:
 
     async def list_installed_models(self) -> list[ModelObservation]:
         data = await self._get_json("/api/tags")
-        models = data.get("models") or []
+        models = data.get("models")
         if not isinstance(models, list):
             raise RuntimeOperationError(
                 "runtime_protocol_error", "Ollama returned an invalid model catalog.", self.runtime_id
