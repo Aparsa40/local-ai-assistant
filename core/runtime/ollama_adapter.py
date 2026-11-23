@@ -33,7 +33,7 @@ class OllamaRuntimeAdapter(RuntimeAdapter):
         if self.config_loader is not None:
             config = self.config_loader() or {}
             provider_config = (config.get("providers_config") or {}).get("ollama", {})
-            self.base_url = provider_config.get("base_url", self.base_url).rstrip("/")
+            self.base_url = str(provider_config.get("base_url") or self.base_url).rstrip("/")
         parsed = urlparse(self.base_url)
         host = parsed.hostname or ""
         try:
