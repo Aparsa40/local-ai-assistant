@@ -208,6 +208,33 @@ class LocalRuntimeController:
             }
 
 
+    async def shutdown_owned_process(self) -> dict[str, Any]:
+        """Stop only the Ollama process this controller created."""
+        async with self._lock:
+            process = self._owned_process
+            if process is None:
+                return {"status": "stopped", "process_stopped": False, "reason": "not_owned"}
+            if process.poll() is not None:
+                self._owned_process = None
+                self._owned_endpoint = None
+                return {"status": "stopped", "process_stopped": False, "reason": "already_exited"}
+            try:
+                process.terminate()
+                await asyncio.to_thread(process.wait, timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                await asyncio.to_thread(process.wait, timeout=5)
+            except OSError:
+                return {
+                    "status": "failed",
+                    "process_stopped": False,
+                    "error": {"category": "shutdown_failed", "message": "The application-owned Ollama process could not be stopped."},
+                }
+            self._owned_process = None
+            self._owned_endpoint = None
+            return {"status": "stopped", "process_stopped": True}
+
+
 TASK_TAXONOMY = (
     "general_chat", "coding", "reasoning", "summarization", "translation",
     "vision", "embeddings", "tool_calling",
