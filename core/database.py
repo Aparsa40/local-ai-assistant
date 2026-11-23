@@ -160,6 +160,17 @@ class RuntimeModelState(Base):
     error = Column(JSON, nullable=True)
 
 
+class RuntimeStatus(Base):
+    """Latest observed status for one local runtime adapter."""
+    __tablename__ = "runtime_statuses"
+    runtime_id = Column(String(80), primary_key=True)
+    state = Column(String(40), nullable=False, default="unknown")
+    endpoint_scope = Column(String(40), nullable=True)
+    observed_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    details = Column(JSON, nullable=False, default=dict)
+    error = Column(JSON, nullable=True)
+
+
 class RuntimeEvent(Base):
     """Append-only local runtime lifecycle event."""
     __tablename__ = "runtime_events"
