@@ -48,7 +48,12 @@ class RuntimeRepository:
                     # Keep the last trustworthy lifecycle observation; store the failed
                     # operation separately so a failed load does not erase "installed".
                     row.error = result.error
-            elif event_type not in {"model_inventory", "model_inspection"}:
+            elif event_type not in {
+                "model_inventory",
+                "model_inspection",
+                "model_inventory_failed",
+                "model_inspection_failed",
+            }:
                 runtime_row = session.get(RuntimeStatus, result.runtime_id)
                 if runtime_row is None:
                     runtime_row = RuntimeStatus(runtime_id=result.runtime_id)
