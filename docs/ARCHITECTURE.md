@@ -22,7 +22,7 @@ The current repository contains:
 - SQLAlchemy/SQLite persistence in `core/database.py`.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
-- An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations.
+- An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations, including a combined read-only health/inventory snapshot.
 - Provider and chat tests in `tests/`.
 
 Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, local operator catalogs, capability access, bounded model discovery, catalog-reachability diagnostics, quota visibility, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
