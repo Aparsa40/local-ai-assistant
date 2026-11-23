@@ -1,7 +1,7 @@
 # System Architecture
 
 **Status:** Accepted target architecture plus current implementation notes  
-**Last reviewed:** 2026-11-21
+**Last reviewed:** 2026-11-23
 
 ## 1. Architectural goals
 
@@ -21,7 +21,8 @@ The current repository contains:
 - Configuration handling in `core/config_manager.py`.
 - SQLAlchemy/SQLite persistence in `core/database.py`.
 - A current chat orchestrator in `core/orchestrator.py`.
-- A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.\n- An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations.
+- A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
+- An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations.
 - Provider and chat tests in `tests/`.
 
 Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, local operator catalogs, capability access, bounded model discovery, catalog-reachability diagnostics, quota visibility, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
@@ -94,7 +95,13 @@ The provider/model control plane. It owns provider registration, model catalog a
 
 It exposes operator-level catalog metadata independently from optional live model discovery. Provider-level task tags are hints, not guarantees for every model. It does not decide whether a response is factually correct and does not own task planning.
 
-### Local Model Runtime (initial foundation implemented)\n\nOwns local inference-engine lifecycle operations through a provider-neutral Runtime Manager and Runtime Adapter contract. The first adapter controls Ollama process readiness and model installed/loaded state. Runtime lifecycle persistence is separate from provider catalog metadata and inference-success status. Runtime inspection is read-only; model load/unload are explicit operations. See [LOCAL_MODEL_RUNTIME.md](LOCAL_MODEL_RUNTIME.md).\n\nThe current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.\n\n### Agent Runtime (accepted target; not implemented)
+### Local Model Runtime (initial foundation implemented)
+
+Owns local inference-engine lifecycle operations through a provider-neutral Runtime Manager and Runtime Adapter contract. The first adapter controls Ollama process readiness and model installed/loaded state. Runtime lifecycle persistence is separate from provider catalog metadata and inference-success status. Runtime inspection is read-only; model load/unload are explicit operations. See [LOCAL_MODEL_RUNTIME.md](LOCAL_MODEL_RUNTIME.md).
+
+The current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.
+
+### Agent Runtime (accepted target; not implemented)
 
 Hosts goal-oriented agents and manages their task lifecycle, state, bounded execution loops, handoffs, and completion evaluation. The Supervisor is a specialized agent hosted by this runtime, not the runtime itself. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md).
 
