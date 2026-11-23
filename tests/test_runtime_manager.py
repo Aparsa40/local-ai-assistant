@@ -139,6 +139,42 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["category"], "runtime_request_timeout")
 
+    async def test_timeout_includes_waiting_for_concurrency_slot(self):
+        class HangingAdapter(FakeRuntimeAdapter):
+            async def ensure_available(self, auto_start=True):
+                self.ensure_calls.append(auto_start)
+                await asyncio.sleep(0.05)
+                return RuntimeResult(True, self.runtime_id, "ready")
+
+        first = HangingAdapter()
+        second = HangingAdapter()
+        second.runtime_id = "second"
+        manager = RuntimeManager(
+            [first, second],
+            operation_timeout=0.02,
+            max_concurrent_operations=1,
+        )
+
+        first_task = asyncio.create_task(manager.ensure_runtime("fake"))
+        await asyncio.sleep(0.002)
+        second_result = await manager.ensure_runtime("second")
+        first_result = await first_task
+
+        self.assertEqual(first_result["error"]["category"], "runtime_request_timeout")
+        self.assertEqual(second_result["error"]["category"], "runtime_request_timeout")
+        # The second adapter times out in the queue and is never invoked.
+        self.assertEqual(second.ensure_calls, [])
+
+    async def test_invalid_adapter_result_is_normalized(self):
+        class InvalidAdapter(FakeRuntimeAdapter):
+            async def ensure_available(self, auto_start=True):
+                return {"ok": True}
+
+        result = await RuntimeManager([InvalidAdapter()]).ensure_runtime("fake")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["category"], "runtime_protocol_error")
+
     async def test_unknown_runtime_is_rejected(self):
         manager = RuntimeManager()
         with self.assertRaises(KeyError):
@@ -218,6 +254,31 @@ class RuntimeRepositoryTests(unittest.TestCase):
             row = session.get(RuntimeModelState, ("ollama", "llama3.2:1b"))
             self.assertEqual(row.state, "installed")
             self.assertEqual(row.error["category"], "load_failed")
+        finally:
+            session.close()
+
+    def test_failed_inventory_records_event_without_overwriting_runtime_status(self):
+        ready = RuntimeResult(
+            True, "ollama", "ready", data={"endpoint_scope": "local"}
+        )
+        failed_inventory = RuntimeResult(
+            False,
+            "ollama",
+            "unavailable",
+            error={"category": "model_inventory_unavailable", "message": "tags failed"},
+        )
+        self.repository.record(ready, "runtime_probe")
+        self.repository.record(failed_inventory, "model_inventory_failed")
+
+        session = self.Session()
+        try:
+            runtime_row = session.get(RuntimeStatus, "ollama")
+            self.assertEqual(runtime_row.state, "ready")
+            events = session.query(RuntimeEvent).filter_by(
+                event_type="model_inventory_failed"
+            ).all()
+            self.assertEqual(len(events), 1)
+            self.assertFalse(events[0].success)
         finally:
             session.close()
 
