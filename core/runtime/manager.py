@@ -104,17 +104,18 @@ class RuntimeManager:
     async def unload_model(self, runtime_id: str, model_id: str) -> dict:
         adapter = self.get_adapter(runtime_id)
         async with self._model_lock(runtime_id, model_id):
-            before = await adapter.inspect_model(model_id)
-            if not before.ok:
-                self._persist(before, "unload_failed")
-                return before.to_dict()
-            if before.state == "installed":
-                return before.to_dict()
-            self.lifecycle.transition(before.state, "unloading")
-            result = await adapter.unload_model(model_id)
-            self.lifecycle.transition("unloading", result.state if result.ok else "failed")
-            self._persist(result, "model_unload" if result.ok else "unload_failed")
-            return result.to_dict()
+            async with self._runtime_lock(runtime_id):
+                before = await adapter.inspect_model(model_id)
+                if not before.ok:
+                    self._persist(before, "unload_failed")
+                    return before.to_dict()
+                if before.state == "installed":
+                    return before.to_dict()
+                self.lifecycle.transition(before.state, "unloading")
+                result = await adapter.unload_model(model_id)
+                self.lifecycle.transition("unloading", result.state if result.ok else "failed")
+                self._persist(result, "model_unload" if result.ok else "unload_failed")
+                return result.to_dict()
 
     async def shutdown(self, runtime_id: str | None = None) -> list[dict]:
         adapters = [self.get_adapter(runtime_id)] if runtime_id else list(self._adapters.values())
