@@ -14,7 +14,7 @@ This directory is the architectural and engineering reference for Local AI Assis
 | Document | Scope |
 | --- | --- |
 | [Interface Manager](INTERFACE_MANAGER.md) | Provider/model control plane and internal service contract |
-| [Provider & Model Intelligence](PROVIDER_MODEL_INTELLIGENCE.md) | Ollama lifecycle, model evidence analysis, runtime/offline reports, and bounded implementation plan |
+| [Provider & Model Intelligence](PROVIDER_MODEL_INTELLIGENCE.md) | Model evidence analysis, runtime/offline reports, and provider intelligence |\n| [Local Model Runtime](LOCAL_MODEL_RUNTIME.md) | Provider-neutral local runtime lifecycle, Ollama adapter, persistence, API, and acceptance criteria |
 | [Operator Catalogs](OPERATOR_CATALOGS.md) | Operator-level discovery, free-tier caveats, quota visibility, and evidence policy |
 | [Catalog Storage Schema](CATALOG_STORAGE.md) | Persistent operator/live catalog tables, sync lifecycle, and evidence rules |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
