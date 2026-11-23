@@ -16,6 +16,7 @@ def build_runtime_manager(config_loader, session_factory) -> RuntimeManager:
     adapter = OllamaRuntimeAdapter(
         base_url=ollama_config.get("base_url", "http://localhost:11434"),
         controller=_LOCAL_RUNTIME_CONTROLLER,
+        config_loader=config_loader,
     )
     return RuntimeManager(
         adapters=[adapter],
