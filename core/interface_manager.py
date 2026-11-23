@@ -1,0 +1,256 @@
+"""Provider-neutral service boundary for model discovery and inference.
+
+This is the first incremental Interface Manager implementation. Provider-specific
+behavior remains inside adapters registered in core.providers.registry.
+"""
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timezone
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+
+from .config_manager import ConfigManager
+from .providers.base import BaseLLMProvider
+from .providers.capabilities import get_provider_capabilities
+from .providers.registry import PROVIDER_FACTORIES
+from .providers.operator_catalog import get_operator_catalog
+
+
+class InterfaceManagerError(Exception):
+    """Safe, provider-neutral error exposed to application/API layers."""
+
+    def __init__(self, category: str, message: str, provider_id: str):
+        super().__init__(message)
+        self.category = category
+        self.provider_id = provider_id
+        self.safe_message = message
+
+
+class InterfaceManager:
+    """Central boundary for provider registry, catalog, diagnostics and inference."""
+
+    DISPLAY_NAMES = {
+        "ollama": "Ollama",
+        "openrouter": "OpenRouter",
+        "google_ai_studio": "Google AI Studio",
+        "cloudflare_workers_ai": "Cloudflare Workers AI",
+        "groq": "Groq",
+        "cohere": "Cohere",
+    }
+
+    def __init__(
+        self,
+        config_loader: Optional[Callable[[], Dict[str, Any]]] = None,
+        provider_factories: Optional[Dict[str, Callable[[dict], BaseLLMProvider]]] = None,
+        capabilities_getter: Optional[Callable[[str], dict]] = None,
+        timeout_seconds: float = 15.0,
+    ):
+        self._config_loader = config_loader or ConfigManager.load_config
+        self._provider_factories = provider_factories if provider_factories is not None else PROVIDER_FACTORIES
+        self._capabilities_getter = capabilities_getter or get_provider_capabilities
+        self._timeout_seconds = timeout_seconds
+
+    def list_providers(self) -> List[dict]:
+        """Return registered providers without exposing configuration or secrets."""
+        return [
+            {
+                "id": provider_id,
+                "name": self.DISPLAY_NAMES.get(
+                    provider_id, provider_id.replace("_", " ").title()
+                ),
+                "capabilities_available": bool(self._capabilities_getter(provider_id)),
+                "catalog_mode": get_operator_catalog(provider_id).get("catalog_mode", "unsupported"),
+                "discovery_available": get_operator_catalog(provider_id).get("discovery", {}).get("available", False),
+                "task_tags": get_operator_catalog(provider_id).get("task_tags", []),
+            }
+            for provider_id in self._provider_factories
+        ]
+
+    def _create_provider(self, provider_id: str) -> BaseLLMProvider:
+        factory = self._provider_factories.get(provider_id)
+        if factory is None:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+
+        config = self._config_loader() or {}
+        provider_config = config.get("providers_config", {}).get(provider_id, {})
+        try:
+            return factory(provider_config)
+        except Exception as exc:
+            raise InterfaceManagerError(
+                "invalid_configuration",
+                "The provider configuration could not be loaded.",
+                provider_id,
+            ) from exc
+
+    def get_capabilities(self, provider_id: str) -> dict:
+        if provider_id not in self._provider_factories:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+        return self._capabilities_getter(provider_id)
+
+    def get_provider_catalog(self, provider_id: str) -> dict:
+        """Return the operator profile plus curated model metadata, without network I/O."""
+        operator = get_operator_catalog(provider_id)
+        if not operator or provider_id not in self._provider_factories:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+
+        capabilities = self._capabilities_getter(provider_id) or {}
+        catalog = dict(capabilities)
+        catalog.setdefault("name", operator["name"])
+        catalog.setdefault("streaming", "adapter/model dependent")
+        catalog.setdefault("tool_calling", "model dependent")
+        catalog["operator"] = operator
+        catalog["catalog_source"] = "local_operator_manifest"
+        catalog["model_metadata_evidence"] = (
+            "curated_manifest" if catalog.get("models") else "not_available"
+        )
+        return catalog
+    async def get_quota_status(self, provider_id: str) -> dict:
+        """Return live quota telemetry only when the provider exposes it; otherwise unknown."""
+        operator = get_operator_catalog(provider_id)
+        if not operator or provider_id not in self._provider_factories:
+            raise InterfaceManagerError(
+                "unknown_provider", "The requested provider is not registered.", provider_id
+            )
+
+        provider = self._create_provider(provider_id)
+        quota_reader = getattr(provider, "get_quota_status", None)
+        if callable(quota_reader):
+            try:
+                return await asyncio.wait_for(quota_reader(), timeout=self._timeout_seconds)
+            except asyncio.TimeoutError as exc:
+                raise InterfaceManagerError("timeout", "The provider quota request timed out.", provider_id) from exc
+            except Exception as exc:
+                raise InterfaceManagerError("quota_unavailable", "Provider quota information is unavailable.", provider_id) from exc
+
+        capabilities = self._capabilities_getter(provider_id) or {}
+        runtime = (capabilities.get("quota") or {}).get("runtime")
+        if runtime and runtime.get("status") not in {"unknown", "not_exposed"}:
+            return {"status": "observed", "source": "recent_inference_response", "data": runtime}
+        return {
+            "status": "not_exposed",
+            "source": operator.get("quota", {}).get("visibility", "unknown"),
+            "message": operator.get("quota", {}).get("notes", "The provider does not expose live remaining quota."),
+        }
+    async def list_models(self, provider_id: str) -> List[str]:
+        """Discover exact provider model IDs with a bounded catalog request."""
+        provider = self._create_provider(provider_id)
+        try:
+            models = await asyncio.wait_for(
+                provider.list_models(), timeout=self._timeout_seconds
+            )
+        except asyncio.TimeoutError as exc:
+            raise InterfaceManagerError(
+                "timeout", "The provider model catalog request timed out.", provider_id
+            ) from exc
+        except Exception as exc:
+            raise InterfaceManagerError(
+                "catalog_unavailable", "The provider model catalog could not be retrieved.", provider_id
+            ) from exc
+
+        return list(models or [])
+
+    async def check_connection(self, provider_id: str) -> dict:
+        """Probe catalog access; this does not claim inference has been verified."""
+        checked_at = datetime.now(timezone.utc).isoformat()
+        try:
+            models = await self.list_models(provider_id)
+        except InterfaceManagerError as exc:
+            if exc.category == "unknown_provider":
+                raise
+            return {
+                "provider": provider_id,
+                "status": "unreachable",
+                "probe": "model_catalog",
+                "model_count": None,
+                "checked_at": checked_at,
+                "error": {"category": exc.category, "message": exc.safe_message},
+            }
+
+        return {
+            "provider": provider_id,
+            "status": "reachable",
+            "probe": "model_catalog",
+            "model_count": len(models),
+            "models": models,
+            "checked_at": checked_at,
+            "error": None,
+        }
+
+    async def get_model_metadata(self, provider_id: str, model_ids: List[str]) -> dict:
+        """Collect optional per-model metadata without breaking basic catalog discovery."""
+        provider = self._create_provider(provider_id)
+        bulk_reader = getattr(provider, "list_model_metadata", None)
+        if callable(bulk_reader):
+            try:
+                timeout = max(self._timeout_seconds, min(self._timeout_seconds * max(1, len(model_ids)), 120.0))
+                result = await asyncio.wait_for(
+                    bulk_reader(model_ids), timeout=timeout
+                )
+                return {
+                    "models": result.get("models", {}),
+                    "errors": result.get("errors", []),
+                }
+            except asyncio.TimeoutError:
+                return {
+                    "models": {},
+                    "errors": [{"category": "metadata_timeout"}],
+                }
+            except Exception:
+                return {
+                    "models": {},
+                    "errors": [{"category": "metadata_unavailable"}],
+                }
+
+        details_reader = getattr(provider, "get_model_details", None)
+        if not callable(details_reader):
+            return {"models": {}, "errors": []}
+
+        semaphore = asyncio.Semaphore(3)
+
+        async def collect(model_id: str):
+            async with semaphore:
+                try:
+                    data = await asyncio.wait_for(
+                        details_reader(model_id), timeout=self._timeout_seconds
+                    )
+                    return model_id, data, None
+                except asyncio.TimeoutError:
+                    return model_id, None, {"model_id": model_id, "category": "metadata_timeout"}
+                except Exception:
+                    return model_id, None, {"model_id": model_id, "category": "metadata_unavailable"}
+
+        results = await asyncio.gather(*(collect(model_id) for model_id in model_ids))
+        return {
+            "models": {model_id: data for model_id, data, error in results if data is not None},
+            "errors": [error for _model_id, _data, error in results if error is not None],
+        }
+
+    async def stream_chat(
+        self,
+        provider_id: str,
+        messages: List[Dict[str, str]],
+        model: str,
+        temperature: Optional[float] = None,
+    ) -> AsyncIterator[str]:
+        """Stream inference through the selected adapter without leaking raw errors."""
+        provider = self._create_provider(provider_id)
+        try:
+            if temperature is None:
+                # Let each adapter retain its own established default (e.g. Cohere 0.3).
+                stream = provider.chat_stream(messages=messages, model=model)
+            else:
+                stream = provider.chat_stream(
+                    messages=messages, model=model, temperature=temperature
+                )
+            async for chunk in stream:
+                yield chunk
+        except Exception as exc:
+            raise InterfaceManagerError(
+                "inference_failed", "The provider inference request failed.", provider_id
+            ) from exc

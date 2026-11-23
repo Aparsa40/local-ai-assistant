@@ -325,14 +325,97 @@
                         </select>
                     </label>
 
+                    <section class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <h3 class="font-semibold">گزارش عملیاتی Interface Manager</h3>
+                                <p class="text-xs text-slate-500">نمای تجمیعی وضعیت ثبت‌شده Providerها و تعداد مدل‌های فعال در کاتالوگ؛ این تعداد به معنی Loaded یا موفقیت Inference نیست. اطلاعات ناموجود Unknown می‌ماند.</p>
+                            </div>
+                            <button @click="loadOperationalReport()" type="button" :disabled="operationalReportLoading"
+                                    class="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-2 text-xs">↻ بروزرسانی</button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <template x-for="providerReport in (operationalReport?.providers || [])" :key="providerReport.provider_id">
+                                <div class="rounded border border-slate-800 p-2 text-xs space-y-1">
+                                    <div class="flex justify-between gap-2">
+                                        <span class="font-medium text-slate-200" x-text="providerReport.operator?.name || providerReport.provider_id"></span>
+                                        <span class="text-slate-400" x-text="providerReport.provider_runtime?.status || 'unknown'"></span>
+                                    </div>
+                                    <div class="text-slate-500" x-text="'مدل ثبت‌شده فعال: ' + (providerReport.live_models || []).filter(model => model.active).length"></div>
+                                    <div class="text-slate-500" x-text="'آخرین بررسی: ' + (providerReport.provider_runtime?.checked_at || 'Unknown')"></div>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="text-[10px] text-slate-600" x-show="operationalReport?.generated_at" x-text="'Generated: ' + operationalReport.generated_at"></p>
+                    </section>
+
+                    <section class="rounded-lg border border-slate-700 p-3 space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <div class="font-semibold">گزارش هوشمند Provider و مدل‌ها</div>
+                                <p class="text-xs text-slate-500">تحلیل مدل‌ها بر پایه اطلاعات ذخیره‌شده و شواهد قابل‌ردیابی.</p>
+                            </div>
+                            <button @click="generateOfflineReport()" type="button" :disabled="intelligenceReportLoading"
+                                    class="rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 px-3 py-2 text-xs">تولید گزارش آفلاین</button>
+                        </div>
+                        <template x-if="intelligenceReport">
+                            <div class="space-y-2 text-xs">
+                                <div class="flex flex-wrap gap-3 text-slate-300">
+                                    <span x-text="'وضعیت: ' + intelligenceReport.overall_status"></span>
+                                    <span x-text="'نوع: ' + intelligenceReport.report_type"></span>
+                                    <span x-text="'تازگی: ' + (intelligenceReport.freshness?.status || 'unknown')"></span>
+                                </div>
+                                <p class="text-slate-400" x-text="intelligenceReport.summary"></p>
+                                <template x-for="warning in (intelligenceReport.warnings || [])" :key="warning">
+                                    <p class="text-amber-400" x-text="warning"></p>
+                                </template>
+                                <p x-show="intelligenceReport.provider_runtime?.startup" class="text-slate-500"
+                                   x-text="intelligenceReport.provider_runtime?.startup?.started_by_application ? 'Ollama توسط برنامه راه‌اندازی شد.' : (intelligenceReport.provider_runtime?.startup?.already_running ? 'از سرور فعال Ollama استفاده شد.' : 'راه‌اندازی خودکار انجام نشد.')"></p>
+                                <template x-for="model in (intelligenceReport.models || [])" :key="model.model_id">
+                                    <div class="rounded border border-slate-800 p-2">
+                                        <div class="font-medium text-sky-300 break-all" dir="ltr" x-text="model.model_id"></div>
+                                        <div class="text-slate-500" x-text="'Family: ' + (model.metadata?.family || 'Unknown') + ' · Parameters: ' + (model.metadata?.parameter_size || 'Unknown') + ' · Quantization: ' + (model.metadata?.quantization_level || 'Unknown')"></div>
+                                        <div class="text-slate-500" x-text="'Size: ' + (model.metadata?.size ? (model.metadata.size + ' bytes') : 'Unknown') + ' · Context: ' + (model.metadata?.context_length || 'Unknown')"></div>
+                                        <div class="text-slate-500" x-text="'Installed: ' + (model.runtime?.installed === true ? 'Yes' : model.runtime?.installed === false ? 'No' : 'Unknown') + ' · Loaded: ' + (model.runtime?.loaded === true ? 'Yes' : model.runtime?.loaded === false ? 'No' : 'Unknown') + ' · Last inference: ' + (model.runtime?.inference_status || 'unknown')"></div>
+                                        <div class="text-slate-400" x-text="'Model roles: ' + (model.model_roles || []).join(', ') + ' · Chat eligible: ' + (model.chat_eligible === true ? 'Yes' : model.chat_eligible === false ? 'No' : 'Unknown')"></div>
+                                        <div class="text-slate-400" x-text="'Tasks: ' + (model.task_suitability || []).filter(item => item.suitability !== 'unknown').map(item => item.task + ' (' + item.suitability + ')').join(', ')"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <p x-show="intelligenceReportLoading" class="text-xs text-sky-400">در حال تولید گزارش...</p>
+                        <p x-show="intelligenceReportError" class="text-xs text-amber-400" x-text="intelligenceReportError"></p>
+                    </section>
+
+                    <div class="rounded-lg border border-slate-700 p-3 space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <div class="font-semibold">وضعیت اتصال Provider</div>
+                                <p class="text-xs text-slate-500">تنظیمات را ذخیره می‌کند، اتصال را بررسی می‌کند و در صورت موفقیت مدل‌های همان Provider را دریافت و در کاتالوگ زنده ذخیره می‌کند.</p>
+                            </div>
+                            <button @click="checkProviderConnection()" type="button" :disabled="connectionLoading"
+                                    class="rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50 px-3 py-2 text-xs">
+                                <span x-text="connectionLoading ? 'در حال اتصال و دریافت مدل‌ها...' : 'ذخیره، اتصال و دریافت مدل‌ها'"></span>
+                            </button>
+                        </div>
+                        <p x-show="connectionResult" class="text-xs"
+                           x-text="connectionResult ? (connectionResult.status === 'reachable' ? 'اتصال به کاتالوگ مدل‌ها برقرار است؛ تعداد مدل‌های قابل مشاهده: ' + connectionResult.model_count : 'اتصال برقرار نشد: ' + (connectionResult.error?.message || 'خطای نامشخص')) : ''"></p>
+                        <p x-show="connectionResult?.status === 'reachable'" class="text-[11px] text-slate-500">این آزمایش دسترسی به کاتالوگ را تأیید می‌کند، نه اجرای موفق درخواست استنتاج.</p>
+                    </div>
+
                     <div x-show="settings.active_provider === 'ollama'" class="space-y-2">
+                        <label class="flex items-center gap-2 text-xs text-slate-300">
+                            <input type="checkbox" x-model="settings.providers_config.ollama.auto_start" class="accent-sky-500">
+                            اگر Ollama در دسترس نبود، هنگام اتصال به‌صورت خودکار اجرا شود
+                        </label>
+                        <p class="text-[11px] text-slate-500">راه‌اندازی فقط هنگام «ذخیره، اتصال و دریافت مدل‌ها» انجام می‌شود؛ بازکردن تنظیمات باعث اجرای سرور نخواهد شد.</p>
                         <label class="block">مدل نصب‌شده در Ollama</label>
                         <div class="flex gap-2">
                             <select x-model="settings.providers_config.ollama.model" class="flex-1 bg-slate-950 border border-slate-700 rounded p-2">
                                 <option value="">انتخاب مدل محلی</option>
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
-                            <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
+                            <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 rounded">↻</button>
                         </div>
                     </div>
 
@@ -348,7 +431,7 @@
                                 </template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌ها ↻</button>
+                        <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی فهرست مدل‌ها ↻</button>
                     </div>
                     <div x-show="settings.active_provider === 'google_ai_studio'" class="space-y-2">
                         <label class="block">کلید API برای Google AI Studio
@@ -360,7 +443,7 @@
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های قابل‌دسترسی ↻</button>
+                        <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های قابل‌دسترسی ↻</button>
                         <p class="text-xs text-slate-500">فقط شناسه‌های مدل‌های دارای Free Tier طبق فهرست رسمی گوگل نمایش داده می‌شوند و با API حساب شما تطبیق داده می‌شوند. سهمیه و دسترسی نهایی به پروژه و محدودیت‌های حساب بستگی دارد.</p>
                     </div>
 
@@ -377,7 +460,7 @@
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های رایگان قابل‌دسترسی ↻</button>
+                        <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های رایگان قابل‌دسترسی ↻</button>
                     </div>
 
                     <div x-show="settings.active_provider === 'groq'" class="space-y-2">
@@ -390,7 +473,7 @@
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی مدل‌های در دسترس ↻</button>
+                        <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">به‌روزرسانی مدل‌های در دسترس ↻</button>
                     </div>
 
                     <div x-show="settings.active_provider === 'cohere'" class="space-y-2">
@@ -403,13 +486,19 @@
                                 <template x-for="model in availableModels" :key="model"><option :value="model" x-text="model"></option></template>
                             </select>
                         </label>
-                        <button @click="refreshModels()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های Chat قابل‌دسترسی ↻</button>
+                        <button @click="syncProviderCatalog()" type="button" class="bg-slate-700 px-3 py-2 rounded text-xs">دریافت مدل‌های Chat قابل‌دسترسی ↻</button>
                     </div>
 
-                    <div x-show="providerCapabilities && ['cloudflare_workers_ai','groq','cohere'].includes(settings.active_provider)" class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
-                        <div class="font-semibold text-slate-200">قابلیت‌ها و سهمیه Provider</div>
+                    <div x-show="providerCapabilities" class="rounded-lg border border-slate-700 bg-slate-950/60 p-3 space-y-2">
+                        <div class="font-semibold text-slate-200">کاتالوگ اپراتور و وضعیت قابلیت‌ها</div>
+                        <p class="text-xs text-slate-400" x-text="'روش کاتالوگ: ' + (providerCapabilities.operator?.catalog_mode || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-400" x-text="'وظایف پیشنهادی اپراتور: ' + (providerCapabilities.operator?.task_tags || []).join('، ')"></p>
+                        <p class="text-xs text-slate-400" x-text="'دامنه کشف مدل: ' + (providerCapabilities.operator?.discovery?.scope || 'نامشخص')"></p>
+                        <p class="text-xs text-amber-400" x-text="providerCapabilities.operator?.quota?.notes || 'اطلاعات سهمیه در دسترس نیست.'"></p>
+                        <button @click="refreshProviderQuota()" type="button" class="rounded bg-slate-700 px-3 py-2 text-xs">به‌روزرسانی وضعیت سهمیه ↻</button>
+                        <p x-show="providerQuota" class="text-xs text-slate-400 break-words" x-text="providerQuota ? JSON.stringify(providerQuota) : ''"></p>
                         <p class="text-xs text-slate-400" x-text="'Streaming: ' + providerCapabilities.streaming + ' · Tool Calling: ' + providerCapabilities.tool_calling"></p>
-                        <p class="text-xs text-slate-400" x-text="'سهمیه: ' + (providerCapabilities.quota?.allowance || 'نامشخص')"></p>
+                        <p class="text-xs text-slate-400" x-text="'سهمیه/مشاهده‌پذیری: ' + (providerCapabilities.quota?.allowance || providerCapabilities.operator?.quota?.visibility || 'نامشخص')"></p>
                         <p class="text-xs text-amber-400" x-text="'وضعیت سهمیه: ' + (providerCapabilities.quota?.status || 'نامشخص')"></p>
                         <p class="text-xs text-slate-500" x-text="'آخرین وضعیت API: ' + JSON.stringify(providerCapabilities.quota?.runtime || {})"></p>
                         <template x-for="(details, modelId) in (providerCapabilities.models || {})" :key="modelId">
@@ -419,7 +508,97 @@
                             </div>
                         </template>
                     </div>
-                    <p x-show="modelsLoading" class="text-xs text-sky-400">در حال دریافت فهرست مدل‌ها...</p>
+
+                    <section x-show="providerCapabilities?.operator" class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-3">
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 class="font-semibold text-slate-100">کاتالوگ اپراتور — Operator Capability Catalog</h3>
+                                <p class="text-xs text-slate-500 mt-1">اطلاعات نسخه‌بندی‌شده برنامه؛ مستقل از اتصال زنده و دریافت مدل‌ها.</p>
+                            </div>
+                            <a x-show="providerCapabilities?.operator?.source_url" :href="providerCapabilities.operator.source_url"
+                               target="_blank" rel="noopener noreferrer" class="text-xs text-sky-400 hover:text-sky-300">مستندات رسمی ↗</a>
+                        </div>
+                        <p class="text-xs text-slate-400" x-text="providerCapabilities.operator?.description || ''"></p>
+                        <p class="text-[11px] text-slate-500" x-text="'آخرین بازبینی مستندات: ' + (providerCapabilities.operator?.review_metadata?.last_reviewed_at || 'ثبت نشده')"></p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            <div><span class="text-slate-500">نوع سرویس:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.category || 'نامشخص'"></span></div>
+                            <div><span class="text-slate-500">روش کاتالوگ:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.catalog_mode || 'نامشخص'"></span></div>
+                            <div><span class="text-slate-500">دامنه کشف:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.discovery?.scope || 'نامشخص'"></span></div>
+                            <div><span class="text-slate-500">نیاز به اعتبارنامه:</span> <span class="text-slate-200" x-text="providerCapabilities.operator?.discovery?.requires_credentials ? 'بله' : 'خیر / نامشخص'"></span></div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 mb-1">وظایف سطح اپراتور</div>
+                            <div class="flex flex-wrap gap-1">
+                                <template x-for="task in (providerCapabilities.operator?.task_tags || [])" :key="task">
+                                    <span class="rounded bg-slate-800 px-2 py-1 text-[11px] text-sky-200" x-text="task"></span>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="rounded border border-slate-800 p-2 space-y-1">
+                            <div class="text-xs font-medium text-slate-300">سیاست Free Tier منتشرشده</div>
+                            <p class="text-xs text-slate-400" x-text="providerCapabilities.operator?.free_tier?.published_allowance || 'اطلاعات سهمیه منتشرشده در دسترس نیست.'"></p>
+                            <p class="text-[11px] text-amber-300" x-text="'Remaining: ' + (providerCapabilities.operator?.free_tier?.remaining || 'Unknown')"></p>
+                        </div>
+                        <p class="text-xs text-amber-300" x-text="providerCapabilities.operator?.quota?.notes || 'اطلاعات سهمیه مستند نشده است.'"></p>
+                        <div class="border-t border-slate-800 pt-3">
+                            <div class="font-medium text-xs text-slate-300 mb-2">پروفایل‌های مدل تهیه‌شده در Repository</div>
+                            <template x-if="!(providerCapabilities.curated_models || []).length">
+                                <p class="text-xs text-slate-500">برای این اپراتور هنوز پروفایل مدل curated ثبت نشده است.</p>
+                            </template>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <template x-for="item in (providerCapabilities.curated_models || [])" :key="item.model_id">
+                                    <div class="rounded border border-slate-800 p-2 text-xs">
+                                        <div class="text-sky-300 break-all" dir="ltr" x-text="item.model_id"></div>
+                                        <div class="text-slate-400 mt-1" x-text="'Context: ' + (item.profile?.context_window ?? 'Unknown') + ' · Tools: ' + (item.profile?.tool_calling ?? 'Unknown')"></div>
+                                        <div class="text-slate-500 mt-1" x-text="'Tasks: ' + (item.profile?.tasks || []).join(', ')"></div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="rounded-lg border border-slate-700 bg-slate-950/60 p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h3 class="font-semibold text-slate-100">کاتالوگ زنده مدل‌ها — Live Model Catalog</h3>
+                                <p class="text-xs text-slate-500 mt-1">مدل‌های واقعی دریافت‌شده از API و ذخیره‌شده در SQLite؛ هر Provider فضای مستقل دارد.</p>
+                            </div>
+                            <button @click="syncProviderCatalog()" type="button" :disabled="catalogSyncLoading"
+                                    class="rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-50 px-3 py-2 text-xs">
+                                <span x-text="catalogSyncLoading ? 'در حال همگام‌سازی...' : 'دریافت / همگام‌سازی کاتالوگ ↻'"></span>
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-3 text-xs text-slate-400">
+                            <span x-text="'وضعیت اتصال: ' + (providerCatalogSnapshot?.provider_runtime?.status || 'unknown')"></span>
+                            <span x-text="'تعداد مدل‌های ذخیره‌شده: ' + ((providerCapabilities?.live_models || []).length)"></span>
+                            <span x-text="'آخرین همگام‌سازی: ' + (providerCapabilities?.sync_history?.[0]?.synced_at || 'هنوز انجام نشده')"></span>
+                        </div>
+                        <p x-show="catalogSyncResult" class="text-xs"
+                           :class="catalogSyncResult?.status === 'success' ? 'text-emerald-400' : 'text-amber-400'"
+                           x-text="catalogSyncResult?.status === 'success' ? ('همگام‌سازی موفق؛ ' + catalogSyncResult.discovered_count + ' مدل، ' + catalogSyncResult.added_count + ' مدل جدید، ' + catalogSyncResult.retired_count + ' مدل خارج‌شده از فهرست فعال.') : (catalogSyncResult?.error || '')"></p>
+                        <template x-if="!(providerCapabilities?.live_models || []).length">
+                            <p class="text-xs text-slate-500">هنوز مدل زنده‌ای در دیتابیس ثبت نشده است. دریافت کاتالوگ نیازمند دسترسی معتبر به Provider است.</p>
+                        </template>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <template x-for="model in (providerCapabilities?.live_models || [])" :key="model.model_id">
+                                <div class="rounded border border-slate-800 p-3 space-y-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="text-xs text-sky-300 break-all" dir="ltr" x-text="model.model_id"></span>
+                                        <span class="shrink-0 rounded px-2 py-0.5 text-[10px]"
+                                              :class="model.active ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-800 text-slate-400'"
+                                              x-text="model.active ? 'فعال' : 'غیرفعال / قبلاً مشاهده‌شده'"></span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500" x-text="'Source: ' + model.source + ' · Last seen: ' + (model.last_seen_at || 'Unknown')"></div>
+                                    <div class="text-[11px] text-slate-500" x-text="'Last inference status: ' + (model.runtime?.availability || 'unknown')"></div>
+                                    <div x-show="model.operator_profile" class="text-[11px] text-slate-400" x-text="'Curated profile · Context: ' + (model.operator_profile?.context_window ?? 'Unknown') + ' · Tools: ' + (model.operator_profile?.tool_calling ?? 'Unknown')"></div>
+                                    <div x-show="model.operator_profile" class="text-[10px] text-slate-500">پروفایل curated مرجع کمکی است و به‌تنهایی پشتیبانی زنده این مدل را اثبات نمی‌کند.</div>
+                                </div>
+                            </template>
+                        </div>
+                        <p class="text-[11px] text-slate-500">در صورت خطای API، سوابق قبلی حفظ می‌شوند. شناسه مدل به‌تنهایی قابلیت‌هایی مانند Tool Calling یا Vision را اثبات نمی‌کند.</p>
+                    </section>
+
+                    <p x-show="modelsLoading" class="text-xs text-sky-400">در حال خواندن کاتالوگ ذخیره‌شده...</p>
                     <p x-show="modelsError" class="text-xs text-rose-400" x-text="modelsError"></p>
                     <div class="flex justify-end">
                         <button @click="saveSettings()" class="bg-emerald-700 hover:bg-emerald-600 px-4 py-2 rounded text-sm font-bold">ذخیره تنظیمات مدل‌ها</button>

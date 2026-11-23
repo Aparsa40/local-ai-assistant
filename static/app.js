@@ -23,14 +23,25 @@ function chatApp() {
         availableModels: [],
         modelsLoading: false,
         modelsError: '',
+        connectionLoading: false,
+        connectionResult: null,
         providerCapabilities: null,
+        providerQuota: null,
+        catalogSyncLoading: false,
+        catalogSyncResult: null,
+        providerCatalogSnapshot: null,
+        operationalReport: null,
+        operationalReportLoading: false,
+        intelligenceReport: null,
+        intelligenceReportLoading: false,
+        intelligenceReportError: '',
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
             active_provider: 'openrouter',
             routing_mode: 'manual',
             providers_config: {
-                ollama: { base_url: 'http://localhost:11434', model: '' },
+                ollama: { base_url: 'http://localhost:11434', model: '', auto_start: true },
                 openrouter: { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' },
                 google_ai_studio: { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' },
                 cloudflare_workers_ai: { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' },
@@ -44,7 +55,9 @@ function chatApp() {
             await this.loadProfile();
             await this.loadSettings();
             await this.loadProviders();
+            await this.loadOperationalReport();
             await this.loadProviderCapabilities();
+            await this.loadLatestIntelligenceReport();
             await this.refreshModels();
             await this.loadSessions();
             // Keep previous conversations in the sidebar, but never reopen one automatically.
@@ -56,7 +69,8 @@ function chatApp() {
             if (!response.ok) throw new Error('بارگذاری تنظیمات ناموفق بود.');
             this.settings = await response.json();
             this.settings.providers_config ||= {};
-            this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '' };
+            this.settings.providers_config.ollama ||= { base_url: 'http://localhost:11434', model: '', auto_start: true };
+            this.settings.providers_config.ollama.auto_start ??= true;
             this.settings.providers_config.openrouter ||= { base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/free', api_key: '' };
             this.settings.providers_config.google_ai_studio ||= { base_url: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.8-flash', api_key: '' };
             this.settings.providers_config.cloudflare_workers_ai ||= { base_url: 'https://api.cloudflare.com/client/v4', account_id: '', model: '@cf/zai-org/glm-4.7-flash', api_key: '' };
@@ -87,68 +101,179 @@ function chatApp() {
             if (response.ok) this.availableProviders = await response.json();
         },
 
+        async loadOperationalReport() {
+            this.operationalReportLoading = true;
+            try {
+                const response = await fetch('/api/operational-report');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'بارگذاری گزارش عملیاتی ناموفق بود.');
+                this.operationalReport = data;
+            } catch (error) {
+                console.warn('Operational report unavailable:', error);
+            } finally {
+                this.operationalReportLoading = false;
+            }
+        },
+
+        async loadLatestIntelligenceReport() {
+            this.intelligenceReportError = '';
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch('/api/intelligence/reports/latest?provider_id=' + encodeURIComponent(provider));
+                const data = await response.json();
+                if (response.status === 404) {
+                    this.intelligenceReport = null;
+                    return;
+                }
+                if (!response.ok) throw new Error(data.detail || 'بارگذاری گزارش هوشمند ناموفق بود.');
+                this.intelligenceReport = data;
+            } catch (error) {
+                this.intelligenceReportError = error.message;
+            }
+        },
+
+        async generateOfflineReport() {
+            if (this.intelligenceReportLoading) return;
+            this.intelligenceReportLoading = true;
+            this.intelligenceReportError = '';
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch('/api/intelligence/reports/offline?provider_id=' + encodeURIComponent(provider), { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'تولید گزارش آفلاین ناموفق بود.');
+                this.intelligenceReport = data;
+            } catch (error) {
+                this.intelligenceReportError = error.message;
+            } finally {
+                this.intelligenceReportLoading = false;
+            }
+        },
+
         async onProviderChange() {
+            this.connectionResult = null;
+            this.providerQuota = null;
+            this.catalogSyncResult = null;
+            // Never leave the previous provider's options visible during a provider switch.
+            this.availableModels = [];
+            this.modelsError = '';
             await this.loadProviderCapabilities();
             await this.refreshModels();
+            await this.loadLatestIntelligenceReport();
+        },
+
+        async checkProviderConnection() {
+            this.connectionLoading = true;
+            this.connectionResult = null;
+            try {
+                // Persist the currently edited provider settings before probing them.
+                const saveResponse = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.settings)
+                });
+                const saved = await saveResponse.json();
+                if (!saveResponse.ok) throw new Error(saved.detail || 'ذخیره تنظیمات ناموفق بود.');
+                this.settings = saved.config;
+                this.updateProviderKeyHints();
+
+                const provider = this.settings.active_provider;
+                const response = await fetch('/api/providers/' + encodeURIComponent(provider) + '/connection', { method: 'POST', cache: 'no-store' });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'بررسی اتصال ناموفق بود.');
+                this.connectionResult = result;
+                this.intelligenceReport = result.intelligence_report || this.intelligenceReport;
+                if (result.status === 'reachable') {
+                    this.catalogSyncResult = result.catalog_sync || null;
+                    await this.loadProviderCapabilities();
+                    await this.refreshModels();
+                    await this.loadOperationalReport();
+                } else {
+                    await this.loadOperationalReport();
+                }
+            } catch (error) {
+                this.connectionResult = {
+                    status: 'error',
+                    error: { message: error.message || 'بررسی اتصال ناموفق بود.' }
+                };
+            } finally {
+                this.connectionLoading = false;
+            }
         },
 
         async loadProviderCapabilities() {
             this.providerCapabilities = null;
             const provider = this.settings.active_provider;
-            if (!['cloudflare_workers_ai', 'groq', 'cohere'].includes(provider)) return;
             try {
-                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/capabilities`);
-                if (!response.ok) return;
+                // The operator catalog is local metadata; it must never trigger network discovery.
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/catalog`);
+                if (!response.ok) throw new Error('بارگذاری کاتالوگ اپراتور ناموفق بود.');
                 this.providerCapabilities = await response.json();
+                this.providerCatalogSnapshot = this.providerCapabilities.storage || null;
             } catch (error) {
-                console.warn('Provider capability discovery failed:', error);
+                console.warn('Operator catalog could not be loaded:', error);
             }
         },
-
+        async refreshProviderQuota() {
+            this.providerQuota = null;
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/quota`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'دریافت وضعیت سهمیه ناموفق بود.');
+                this.providerQuota = data;
+                await this.loadOperationalReport();
+            } catch (error) {
+                this.providerQuota = { status: 'error', message: error.message };
+            }
+        },
         async refreshModels() {
             this.modelsLoading = true;
             this.modelsError = '';
             const provider = this.settings.active_provider;
             const config = this.settings.providers_config[provider] ||= {};
             const defaultModel = config.model || '';
-
-            // Secret values are redacted by /api/settings; trust the configured marker
-            // when the actual credential is intentionally absent from the browser payload.
-            const hasApiKey = Boolean(config.api_key || config.api_key_configured);
-            const credentialsReady = provider === 'cloudflare_workers_ai'
-                ? Boolean(hasApiKey && config.account_id)
-                : ['groq', 'cohere'].includes(provider)
-                    ? hasApiKey
-                    : true;
-
-            if (!credentialsReady) {
-                this.availableModels = defaultModel ? [defaultModel] : [];
-                this.modelsError = 'برای دریافت فهرست زنده مدل‌ها، ابتدا اطلاعات اتصال این Provider را وارد کنید.';
-                this.modelsLoading = false;
-                return;
-            }
-
-            this.availableModels = defaultModel ? [defaultModel] : [];
             try {
+                // Model selection reads the durable catalog; network discovery is an explicit sync action.
                 const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/models`);
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.detail || 'دریافت فهرست مدل‌ها ناموفق بود.');
-                const discoveredModels = data.models || [];
-                this.availableModels = discoveredModels;
-                // Keep the configured default if discovery returns an empty or partial catalog.
-                if (discoveredModels.length && !discoveredModels.includes(config.model)) {
-                    config.model = discoveredModels[0];
+                if (!response.ok) throw new Error(data.detail || 'خواندن کاتالوگ ذخیره‌شده ناموفق بود.');
+                const storedModels = data.models || [];
+                this.availableModels = storedModels.length ? storedModels : (defaultModel ? [defaultModel] : []);
+                if (storedModels.length && !storedModels.includes(config.model)) {
+                    // Do not silently change the user's selected model; retain it until they choose another.
+                    this.modelsError = 'مدل انتخاب‌شده فعلاً در کاتالوگ زنده دیده نمی‌شود؛ انتخاب فعلی حفظ شده است.';
+                } else if (!storedModels.length) {
+                    this.modelsError = 'هنوز کاتالوگ زنده‌ای برای این Provider ذخیره نشده است. از «دریافت/همگام‌سازی کاتالوگ» استفاده کنید.';
                 }
             } catch (error) {
                 this.modelsError = error.message;
-                // Discovery is optional; never erase a working default because an API is unavailable.
                 this.availableModels = defaultModel ? [defaultModel] : [];
-                if (provider === 'openrouter') {
-                    this.availableModels = ['openrouter/free'];
-                    config.model ||= 'openrouter/free';
-                }
             } finally {
                 this.modelsLoading = false;
+            }
+        },
+
+        async syncProviderCatalog() {
+            if (this.catalogSyncLoading) return;
+            this.catalogSyncLoading = true;
+            this.catalogSyncResult = null;
+            const provider = this.settings.active_provider;
+            try {
+                const response = await fetch(`/api/providers/${encodeURIComponent(provider)}/catalog/sync`, { method: 'POST' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'همگام‌سازی کاتالوگ ناموفق بود.');
+                this.catalogSyncResult = data.sync;
+                this.providerCatalogSnapshot = data.catalog;
+                this.intelligenceReport = data.report || data.connection?.intelligence_report || this.intelligenceReport;
+                await this.loadProviderCapabilities();
+                await this.refreshModels();
+                await this.loadOperationalReport();
+            } catch (error) {
+                // A failed refresh does not clear the previously stored catalog.
+                this.catalogSyncResult = { status: 'failed', error: error.message };
+                this.modelsError = error.message;
+            } finally {
+                this.catalogSyncLoading = false;
             }
         },
 

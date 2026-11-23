@@ -151,3 +151,21 @@ def test_empty_cloud_provider_models_are_restored_to_safe_defaults():
     assert providers["cloudflare_workers_ai"]["model"] == "@cf/zai-org/glm-4.7-flash"
     assert providers["groq"]["model"] == "openai/gpt-oss-20b"
     assert providers["cohere"]["model"] == "command-r7b-12-2024"
+
+
+def test_ollama_auto_start_defaults_to_enabled():
+    config = ConfigManager._normalize({
+        "settings_schema_version": 3,
+        "active_provider": "ollama",
+        "providers_config": {"ollama": {"base_url": "http://localhost:11434"}},
+    })
+    assert config["providers_config"]["ollama"]["auto_start"] is True
+
+
+def test_ollama_auto_start_explicit_opt_out_is_preserved():
+    config = ConfigManager._normalize({
+        "settings_schema_version": 3,
+        "active_provider": "ollama",
+        "providers_config": {"ollama": {"auto_start": False}},
+    })
+    assert config["providers_config"]["ollama"]["auto_start"] is False

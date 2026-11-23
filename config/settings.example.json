@@ -7,6 +7,7 @@
   "providers_config": {
     "ollama": {
       "base_url": "http://localhost:11434",
+      "auto_start": true,
       "model": "llama3.2:1b"
     },
     "openrouter": {

@@ -34,4 +34,4 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q core main.py
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q -W default

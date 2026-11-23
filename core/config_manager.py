@@ -93,6 +93,7 @@ class ConfigManager:
         ):
             providers.setdefault(provider_id, {})
         providers["ollama"].setdefault("base_url", "http://localhost:11434")
+        providers["ollama"].setdefault("auto_start", True)
         providers["ollama"].setdefault("model", config.get("models", {}).get("general", ""))
         providers["openrouter"].setdefault("base_url", "https://openrouter.ai/api/v1")
         providers["openrouter"]["base_url"] = providers["openrouter"]["base_url"].rstrip("/")

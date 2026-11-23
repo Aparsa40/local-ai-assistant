@@ -13,11 +13,25 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from core.config_manager import ConfigManager
 from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
 from core.orchestrator import Orchestrator
-from core.providers.registry import PROVIDER_FACTORIES, get_provider_factory
-from core.providers.capabilities import PROVIDER_CATALOG, get_provider_capabilities
+from core.interface_manager import InterfaceManager, InterfaceManagerError
+from core.provider_intelligence import (
+    create_offline_intelligence_report,
+    refresh_provider_intelligence,
+)
+from core.catalog_storage import (
+    get_operational_report,
+    get_provider_catalog_snapshot,
+    record_model_runtime,
+    record_quota_snapshot,
+    seed_operator_catalogs,
+    get_latest_intelligence_report,
+)
 
 app = FastAPI(title="Local Modular AI Assistant")
+interface_manager = InterfaceManager()
 init_db()
+with SessionLocal() as _catalog_seed_db:
+    seed_operator_catalogs(_catalog_seed_db)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -157,44 +171,138 @@ async def delete_profile_avatar(db: Session = Depends(get_db)):
 
 @app.get("/api/providers")
 async def list_providers():
-    display_names = {
-        "ollama": "Ollama",
-        "openrouter": "OpenRouter",
-        "google_ai_studio": "Google AI Studio",
-        "cloudflare_workers_ai": "Cloudflare Workers AI",
-        "groq": "Groq",
-        "cohere": "Cohere",
-    }
-    return [
-        {
-            "id": name,
-            "name": display_names.get(name, name.replace("_", " ").title()),
-            "capabilities_available": name in PROVIDER_CATALOG,
-        }
-        for name in PROVIDER_FACTORIES
-    ]
+    return interface_manager.list_providers()
 
 
 @app.get("/api/providers/{provider_id}/capabilities")
 async def provider_capabilities(provider_id: str):
-    if provider_id not in PROVIDER_FACTORIES:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
-    # This endpoint serves the local capability manifest and observed runtime quota
-    # telemetry only. Keep remote model discovery in the explicit /models endpoint.
-    return get_provider_capabilities(provider_id)
+    try:
+        return interface_manager.get_capabilities(provider_id)
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+
+
+@app.get("/api/providers/{provider_id}/catalog")
+async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+    """Return repository-owned operator metadata and persisted catalog data without network I/O."""
+    owns_session = not isinstance(db, Session)
+    if owns_session:
+        db = SessionLocal()
+    try:
+        try:
+            result = interface_manager.get_provider_catalog(provider_id)
+        except InterfaceManagerError as exc:
+            status_code = 404 if exc.category == "unknown_provider" else 502
+            raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+        snapshot = get_provider_catalog_snapshot(db, provider_id)
+        result["storage"] = snapshot
+        result["live_models"] = snapshot["live_models"]
+        result["curated_models"] = snapshot["curated_models"]
+        result["provider_runtime"] = snapshot["provider_runtime"]
+        result["quota_snapshot"] = snapshot["quota"]
+        result["sync_history"] = snapshot["sync_history"]
+        return result
+    finally:
+        if owns_session:
+            db.close()
 
 
 @app.get("/api/providers/{provider_id}/models")
-async def list_provider_models(provider_id: str):
-    if provider_id not in PROVIDER_FACTORIES:
-        raise HTTPException(status_code=404, detail=f"Unknown provider: {provider_id}")
-    config = ConfigManager.load_config().get("providers_config", {}).get(provider_id, {})
+async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
+    """Read the last successfully synchronized model IDs from SQLite; never performs network I/O."""
     try:
-        provider = get_provider_factory(provider_id)(config)
-        models = await provider.list_models()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"provider": provider_id, "models": models}
+        operator_catalog = interface_manager.get_provider_catalog(provider_id).get("operator", {})
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+    snapshot = get_provider_catalog_snapshot(db, provider_id)
+    active_models = [row["model_id"] for row in snapshot["live_models"] if row["active"]]
+    # Router aliases are operator-level selectors, not concrete live model IDs.
+    selectable_models = list(dict.fromkeys([*operator_catalog.get("router_aliases", []), *active_models]))
+    return {"provider": provider_id, "models": selectable_models, "live_models": active_models, "source": "persistent_catalog"}
+
+
+@app.post("/api/providers/{provider_id}/catalog/sync")
+async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+    """Refresh provider runtime, model inventory, and intelligence report."""
+    try:
+        result = await refresh_provider_intelligence(
+            db, interface_manager, provider_id, ConfigManager.load_config
+        )
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
+    snapshot = get_provider_catalog_snapshot(db, provider_id)
+    sync_result = result.get("catalog_sync") or {
+        "status": "failed",
+        "error": (result.get("error") or {}).get("message", "Provider catalog is unavailable."),
+    }
+    return {
+        "sync": sync_result,
+        "connection": result,
+        "catalog": snapshot,
+        "report": result.get("intelligence_report"),
+    }
+
+
+@app.get("/api/operational-report")
+async def operational_report(db: Session = Depends(get_db)):
+    return get_operational_report(db)
+
+
+@app.get("/api/intelligence/reports/latest")
+async def latest_intelligence_report(
+    provider_id: str,
+    report_type: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        interface_manager.get_provider_catalog(provider_id)
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+    report = get_latest_intelligence_report(db, provider_id, report_type)
+    if report is None:
+        raise HTTPException(status_code=404, detail="No intelligence report has been generated for this provider yet.")
+    return report
+
+
+@app.post("/api/intelligence/reports/offline")
+async def generate_offline_intelligence_report(
+    provider_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        interface_manager.get_provider_catalog(provider_id)
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404, detail=exc.safe_message) from exc
+    return create_offline_intelligence_report(db, provider_id)
+
+
+@app.get("/api/providers/{provider_id}/quota")
+async def provider_quota_status(provider_id: str, db: Session = Depends(get_db)):
+    try:
+        status = await interface_manager.get_quota_status(provider_id)
+        record_quota_snapshot(db, provider_id, status)
+        return status
+    except InterfaceManagerError as exc:
+        status_code = 404 if exc.category == "unknown_provider" else 502
+        raise HTTPException(status_code=status_code, detail=exc.safe_message) from exc
+
+
+@app.post("/api/providers/{provider_id}/connection")
+async def provider_connection_status(
+    provider_id: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    # Connection checks may start a local runtime, discover models, and persist reports.
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    try:
+        return await refresh_provider_intelligence(
+            db, interface_manager, provider_id, ConfigManager.load_config
+        )
+    except InterfaceManagerError as exc:
+        raise HTTPException(status_code=404 if exc.category == "unknown_provider" else 502, detail=exc.safe_message) from exc
 
 
 @app.get("/api/sessions")
@@ -261,7 +369,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
     history = [{"role": message.role, "content": message.content} for message in past_msgs[:-1]]
     try:
         orchestrator = Orchestrator()
-        provider = orchestrator.get_provider()
+        provider_id = orchestrator.get_provider_id()
         formatted_messages, selected_model = orchestrator.build_messages(history, req.message)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -270,14 +378,28 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
         full_response = ""
         yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\n\n"
         try:
-            async for chunk in provider.chat_stream(formatted_messages, model=selected_model):
+            async for chunk in interface_manager.stream_chat(
+                provider_id, formatted_messages, model=selected_model
+            ):
                 full_response += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as exc:
+            diagnostic_db = SessionLocal()
+            try:
+                record_model_runtime(
+                    diagnostic_db,
+                    provider_id,
+                    selected_model,
+                    "error",
+                    {"category": getattr(exc, "category", "inference_failed"), "message": "Inference request failed."},
+                )
+            finally:
+                diagnostic_db.close()
             yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
             return
         db_session = SessionLocal()
         try:
+            record_model_runtime(db_session, provider_id, selected_model, "available")
             db_session.add(ChatMessage(
                 session_id=req.session_id,
                 role="assistant",
