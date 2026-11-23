@@ -162,6 +162,7 @@ class RuntimeRepositoryTests(unittest.TestCase):
             data={"endpoint_scope": "local", "version": "0.15.0"},
         )
         self.repository.record(runtime, "runtime_probe")
+        self.repository.record(runtime, "runtime_probe")
         inventory = RuntimeResult(
             True,
             "ollama",
