@@ -160,6 +160,26 @@ class RuntimeRepositoryTests(unittest.TestCase):
         finally:
             session.close()
 
+    def test_failed_operation_does_not_erase_last_known_model_state(self):
+        observed = RuntimeResult(True, "ollama", "installed", "llama3.2:1b", data={"installed": True})
+        failed = RuntimeResult(
+            False,
+            "ollama",
+            "failed",
+            "llama3.2:1b",
+            error={"category": "load_failed", "message": "load failed"},
+        )
+        self.repository.record(observed, "model_inspection")
+        self.repository.record(failed, "load_failed")
+
+        session = self.Session()
+        try:
+            row = session.get(RuntimeModelState, ("ollama", "llama3.2:1b"))
+            self.assertEqual(row.state, "installed")
+            self.assertEqual(row.error["category"], "load_failed")
+        finally:
+            session.close()
+
     def test_model_lifecycle_event_is_recorded(self):
         result = RuntimeResult(True, "ollama", "loaded", "llama3.2:1b", data={"operation": "load"})
         self.repository.record(result, "model_load")
@@ -190,6 +210,18 @@ class OllamaRuntimeAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.ok)
         self.assertTrue(result.data["models"][0]["installed"])
         self.assertTrue(result.data["models"][0]["loaded"])
+
+    async def test_shutdown_delegates_only_to_owned_process_controller(self):
+        class Controller:
+            async def shutdown_owned_process(self):
+                return {"status": "stopped", "process_stopped": True}
+
+        adapter = OllamaRuntimeAdapter(controller=Controller())
+        result = await adapter.shutdown_owned_process()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.state, "stopped")
+        self.assertTrue(result.data["process_stopped"])
 
     async def test_unload_sends_explicit_zero_keep_alive(self):
         adapter = OllamaRuntimeAdapter()
