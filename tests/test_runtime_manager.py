@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 from sqlalchemy import create_engine
@@ -125,6 +126,18 @@ class RuntimeManagerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(adapter.unload_calls, [])
+
+    async def test_adapter_timeout_returns_normalized_failure(self):
+        class HangingAdapter(FakeRuntimeAdapter):
+            async def ensure_available(self, auto_start=True):
+                await asyncio.sleep(0.05)
+                return await super().ensure_available(auto_start=auto_start)
+
+        manager = RuntimeManager([HangingAdapter()], operation_timeout=0.005)
+        result = await manager.ensure_runtime("fake")
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["category"], "runtime_request_timeout")
 
     async def test_unknown_runtime_is_rejected(self):
         manager = RuntimeManager()
@@ -281,3 +294,4 @@ class OllamaRuntimeAdapterTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
