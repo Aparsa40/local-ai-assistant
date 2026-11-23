@@ -329,7 +329,7 @@ async def get_local_runtime_models(runtime_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.get("/api/runtime/{runtime_id}/models/{model_id}")
+@app.get("/api/runtime/{runtime_id}/models/{model_id:path}")
 async def get_local_runtime_model(runtime_id: str, model_id: str):
     try:
         return await runtime_manager.inspect_model(runtime_id, model_id)
@@ -337,7 +337,7 @@ async def get_local_runtime_model(runtime_id: str, model_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.post("/api/runtime/{runtime_id}/models/{model_id}/load")
+@app.post("/api/runtime/{runtime_id}/models/{model_id:path}/load")
 async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest):
     """Explicitly load a model; this may start Ollama when configured to do so."""
     try:
@@ -353,11 +353,21 @@ async def load_local_runtime_model(runtime_id: str, model_id: str, data: Runtime
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@app.post("/api/runtime/{runtime_id}/models/{model_id}/unload")
+@app.post("/api/runtime/{runtime_id}/models/{model_id:path}/unload")
 async def unload_local_runtime_model(runtime_id: str, model_id: str):
     """Explicitly unload a model; never stops the Ollama server process."""
     try:
         return await runtime_manager.unload_model(runtime_id, model_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/runtime/{runtime_id}/shutdown")
+async def shutdown_local_runtime(runtime_id: str):
+    """Stop only a runtime process explicitly owned by this application."""
+    try:
+        results = await runtime_manager.shutdown(runtime_id)
+        return results[0] if results else {"ok": True, "runtime_id": runtime_id, "state": "stopped"}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
