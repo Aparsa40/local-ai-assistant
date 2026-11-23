@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from .contracts import RuntimeAdapter, RuntimeResult
 from .resource_manager import ResourceManager
@@ -37,58 +36,74 @@ class RuntimeManager:
         if self.repository is not None:
             self.repository.record(result, event_type)
 
-    async def ensure_runtime(self, runtime_id: str, auto_start: bool = True) -> dict[str, Any]:
+    async def ensure_runtime(self, runtime_id: str, auto_start: bool = True) -> dict:
         adapter = self.get_adapter(runtime_id)
         async with self._runtime_lock(runtime_id):
             result = await adapter.ensure_available(auto_start=auto_start)
             self._persist(result, "runtime_probe")
             return result.to_dict()
 
-    async def list_models(self, runtime_id: str, refresh: bool = True) -> dict[str, Any]:
+    async def list_models(self, runtime_id: str, refresh: bool = True) -> dict:
         adapter = self.get_adapter(runtime_id)
         if refresh:
-            ready = await self.ensure_runtime(runtime_id)
+            ready = await self.ensure_runtime(runtime_id, auto_start=False)
             if not ready["ok"]:
                 return ready
         result = await adapter.list_models()
         self._persist(result, "model_inventory")
         return result.to_dict()
 
-    async def inspect_model(self, runtime_id: str, model_id: str) -> dict[str, Any]:
+    async def inspect_model(self, runtime_id: str, model_id: str) -> dict:
         result = await self.get_adapter(runtime_id).inspect_model(model_id)
         self._persist(result, "model_inspection")
         return result.to_dict()
 
-    async def load_model(self, runtime_id: str, model_id: str, options: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def load_model(
+        self, runtime_id: str, model_id: str, options: dict | None = None, auto_start: bool = True
+    ) -> dict:
         adapter = self.get_adapter(runtime_id)
         async with self._model_lock(runtime_id, model_id):
-            ready = await self.ensure_runtime(runtime_id)
+            ready = await self.ensure_runtime(runtime_id, auto_start=auto_start)
             if not ready["ok"]:
                 return ready
             inventory = await adapter.list_models()
+            if not inventory.ok:
+                self._persist(inventory, "model_inventory_failed")
+                return inventory.to_dict()
             models = inventory.data.get("models", [])
-            if not any(item.get("model_id") == model_id for item in models):
-                result = RuntimeResult(False, runtime_id, "failed", model_id, error={"category": "model_not_installed", "message": "The requested model is not installed in this runtime.", "retryable": False})
+            target = next((item for item in models if item.get("model_id") == model_id), None)
+            if target is None:
+                result = RuntimeResult(
+                    False, runtime_id, "failed", model_id,
+                    error={"category": "model_not_installed", "message": "The requested model is not installed in this runtime.", "retryable": False},
+                )
                 self._persist(result, "load_failed")
+                return result.to_dict()
+            if target.get("loaded") is True:
+                result = RuntimeResult(True, runtime_id, "loaded", model_id, data={**target, "already_loaded": True})
+                self._persist(result, "model_load")
                 return result.to_dict()
             currently_loaded = sum(1 for item in models if item.get("loaded") is True)
             allowed, reason = self.resources.can_load(currently_loaded)
             if not allowed:
-                result = RuntimeResult(False, runtime_id, "installed", model_id, error={"category": "resource_limit_exceeded", "message": reason, "retryable": True})
+                result = RuntimeResult(
+                    False, runtime_id, "installed", model_id,
+                    error={"category": "resource_limit_exceeded", "message": reason, "retryable": True},
+                )
                 self._persist(result, "load_rejected")
                 return result.to_dict()
             result = await adapter.load_model(model_id, options or {})
             self._persist(result, "model_load" if result.ok else "load_failed")
             return result.to_dict()
 
-    async def unload_model(self, runtime_id: str, model_id: str) -> dict[str, Any]:
+    async def unload_model(self, runtime_id: str, model_id: str) -> dict:
         adapter = self.get_adapter(runtime_id)
         async with self._model_lock(runtime_id, model_id):
             result = await adapter.unload_model(model_id)
             self._persist(result, "model_unload" if result.ok else "unload_failed")
             return result.to_dict()
 
-    async def shutdown(self, runtime_id: str | None = None) -> list[dict[str, Any]]:
+    async def shutdown(self, runtime_id: str | None = None) -> list[dict]:
         adapters = [self.get_adapter(runtime_id)] if runtime_id else list(self._adapters.values())
         results = []
         for adapter in adapters:
