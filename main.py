@@ -19,6 +19,7 @@ from core.provider_intelligence import (
     refresh_provider_intelligence,
 )
 from core.runtime.factory import build_runtime_manager
+from core.runtime.monitor import RuntimeMonitor
 from core.catalog_storage import (
     get_operational_report,
     get_provider_catalog_snapshot,
@@ -32,6 +33,7 @@ app = FastAPI(title="Local Modular AI Assistant")
 interface_manager = InterfaceManager()
 init_db()
 runtime_manager = build_runtime_manager(ConfigManager.load_config, SessionLocal)
+runtime_monitor = RuntimeMonitor(runtime_manager)
 with SessionLocal() as _catalog_seed_db:
     seed_operator_catalogs(_catalog_seed_db)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -316,6 +318,15 @@ async def get_local_runtime_status(runtime_id: str):
     """Read runtime readiness without starting a local process."""
     try:
         return await runtime_manager.ensure_runtime(runtime_id, auto_start=False)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/runtime/{runtime_id}/snapshot")
+async def get_local_runtime_snapshot(runtime_id: str):
+    """Return one read-only runtime-health and model-inventory snapshot."""
+    try:
+        return await runtime_monitor.snapshot(runtime_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
