@@ -122,12 +122,7 @@ class ApprovalService:
 
         now = self._clock()
         if now >= approval.expires_at:
-            self.repository.decide(
-                approval_id,
-                status=ApprovalStatus.EXPIRED,
-                decided_by=approver.subject_id,
-                decided_at=now,
-            )
+            self.repository.expire(approval_id, expired_at=now)
             raise ApprovalTransitionError("Approval request has expired.")
 
         updated = self.repository.decide(
@@ -179,12 +174,7 @@ class ApprovalService:
 
         now = self._clock()
         if now >= approval.expires_at:
-            self.repository.decide(
-                approval_id,
-                status=ApprovalStatus.EXPIRED,
-                decided_by=approval.decided_by or approval.requested_by,
-                decided_at=now,
-            )
+            self.repository.expire(approval_id, expired_at=now)
             return None
         return self.repository.consume(
             approval_id,
