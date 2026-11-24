@@ -3,8 +3,8 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-4.1, WP-4.2, and WP-4.3 validated; WP-4.4 implementation in progress  
-**Execution branch (planned):** `feat/storage-memory-services`  
+**Status:** In progress — WP-4.1 through WP-4.4 validated; WP-4.5 implementation in progress  
+**Execution branches:** `feat/storage-memory-services` (WP-4.1–WP-4.4) and `feat/phase-4-memory-service` (WP-4.5; stacked PR into the phase branch)  
 **Last reviewed:** 2026-11-24
 
 ## 1. Purpose
@@ -295,6 +295,8 @@ Tasks:
 **Deliverables:** Memory Service, Memory Repository, schemas, retrieval/ranking, lifecycle policies, and tests.
 
 **Exit gate:** memory records are traceable, scoped, lifecycle-managed, and cannot grant permissions or silently promote unverified content.
+
+**WP-4.5 implementation status (2026-11-24):** Initial Memory Service implementation is underway on `feat/phase-4-memory-service`, stacked on `feat/storage-memory-services` because GitHub now requires changes to this phase branch to enter through a pull request. Added a `memories` ORM table, owner- and scope-filtered `MemoryRepository`, typed memory contracts, default-deny access-policy hook, deterministic retention/scoring, and `MemoryService` lifecycle/retrieval operations. Candidate records are never automatically activated; explicit reviewer identity is required. AI-generated records remain candidates. No vector/embedding service, API endpoint, Phase 5 permission system, or migration framework is included. Focused tests are added; local validation is pending.
 
 ### WP-4.6 — Context Manager
 
