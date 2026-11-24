@@ -18,7 +18,7 @@ The repository currently contains a FastAPI backend, lightweight Alpine.js brows
 
 The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
 
-Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Services, Memory Service, and Context Manager) are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15: WP-5.1–WP-5.6 (typed contracts, default-deny PermissionManager, persisted grants, approvals, audit, Tool Registry/Runtime, and local domain/API integration) are implemented and CI-validated; WP-5.7 final acceptance remains. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
+Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); GitHub Actions passed 228 tests, Python compilation, and frontend syntax validation. SQLite is the only migration backend; PostgreSQL migration support and a separate Windows smoke test remain unverified. Phase 5 PR #15 is merged, but Phase 5 remains in progress: the core Permission Manager, Approval/Audit services, Tool Registry/Runtime, and loopback local API integration exist; operational grant/approval administration, Knowledge authorization integration, direct destructive-action approval coverage, and final security acceptance remain. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## Phase 1 — Architecture & Contracts Foundation
 
@@ -85,11 +85,12 @@ Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Ser
 
 ## Phase 4 — Storage & Memory Services
 
-**Status:** Partially implemented — WP-4.1–WP-4.6 complete; WP-4.7 Knowledge Storage & Migration remains pending.
+**Status:** Completed and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests.
 
 **Goal:** Consolidate persistence boundaries and introduce domain repositories, conversation storage, durable memory, request context assembly, and knowledge metadata while preserving existing SQLite data.
 
 **Execution plan:** [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md)  
+**Completion evidence:** [PR #16](https://github.com/Aparsa40/local-ai-assistant/pull/16), merge commit `923ad244d91425cca50a64b4c683f62aa53b7fc0` (228 CI tests passed).  
 **Existing storage reference:** [CATALOG_STORAGE.md](CATALOG_STORAGE.md)
 
 **Work packages:**
@@ -114,11 +115,12 @@ Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Ser
 
 ## Phase 5 — Tool Runtime & Permission Manager
 
-**Status:** In progress — PR #15; WP-5.1–WP-5.6 implemented and CI-validated; WP-5.7 pending.
+**Status:** In progress — PR #15 merged; core infrastructure exists, but remaining operational integrations and WP-5.7 acceptance are not complete.
 
 **Goal:** Mediate every protected data access and tool action through application-owned authorization and execution boundaries.
 
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)  
+**Foundation evidence:** [PR #15](https://github.com/Aparsa40/local-ai-assistant/pull/15), merge commit `342a7fcb0ead3ab9586b671994a5427d812cb175`.  
 **Module contracts:** [PERMISSIONS.md](PERMISSIONS.md), [TOOL_RUNTIME.md](TOOL_RUNTIME.md)
 
 **Core deliverables:**
