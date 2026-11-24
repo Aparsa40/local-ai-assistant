@@ -33,14 +33,14 @@ The user has explicitly confirmed that the current local database contains dispo
 
 ### 2.1 Physical database
 
-The current implementation uses one local SQLite database, configured in `core/database.py`:
+The application uses one local SQLite database. The original implementation created its engine and session factory in `core/database.py`; WP-4.2 has now moved that lifecycle into `core/storage/manager.py`.
 
 - Default path: `data/chat_history.db`
-- SQLAlchemy engine: module-level `engine`
-- Session factory: module-level `SessionLocal`
-- ORM metadata: module-level `Base`
+- Engine and session factory owner: process-wide `StorageManager`
+- ORM metadata: `Base` remains in `core/database.py`
 - SQLite connection option: `check_same_thread=False`
-- Schema initialization: `init_db()` calls `Base.metadata.create_all()`, then performs two inline additive column checks.
+- Schema initialization: `init_db()` still calls `Base.metadata.create_all()` and retains the two existing additive column checks.
+- Compatibility: `core/database.py` re-exports `engine` and `SessionLocal` while existing callers are migrated incrementally.
 
 There is no evidence in the inspected implementation of separate physical databases per module or agent. The architecture explicitly allows multiple logical data domains to share one physical database. **Do not create one SQLite file per agent or domain by default.**
 
@@ -99,7 +99,7 @@ The following inventory is derived from ORM declarations in `core/database.py`.
 
 | Location | Observed behavior | Audit classification |
 |---|---|---|
-| `core/database.py` | Creates module-level SQLite engine and `SessionLocal` | Centralized only within this module; not yet a formal Storage Manager |
+| `core/database.py` | Defines ORM metadata and exports compatibility aliases for `engine` and `SessionLocal` | ORM/schema module; engine lifecycle delegated to Storage Manager |
 | `main.py:get_db()` | Creates one session per FastAPI dependency scope and closes it in `finally` | Existing request-scoped session pattern |
 | `main.py` startup | Calls `init_db()`; builds runtime manager with `SessionLocal`; seeds catalog using a context-managed session | Multiple lifecycle entry points tied to the module-level factory |
 | `core/runtime/repository.py:record()` | Creates its own session from injected factory; commits, rolls back on exception, closes in `finally` | Repository owns its unit of work |
@@ -313,7 +313,7 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 
 - The ORM declares 14 tables in the current shared metadata: `sessions`, `messages`, `user_profile`, `operator_catalogs`, `operator_model_profiles`, `live_model_catalog`, `provider_runtime_status`, `model_runtime_status`, `provider_quota_snapshots`, `catalog_sync_history`, `provider_intelligence_reports`, `runtime_model_states`, `runtime_statuses`, and `runtime_events`.
 - `messages.session_id` is nullable by ORM default and references `sessions.id`; no `ondelete` action is declared. The relationship's `delete-orphan` cascade is an ORM behavior, not proof of SQLite foreign-key enforcement.
-- The production engine configuration does not register a SQLite connection event to enable `PRAGMA foreign_keys=ON`, nor does it explicitly set busy timeout or journal mode. Actual deployed PRAGMA values must be read from a disposable DB copy; defaults must not be assumed to be enforced.
+- The SQLite adapter currently does not explicitly set `PRAGMA foreign_keys=ON`, busy timeout, or journal mode. These remain deliberate follow-up configuration decisions; do not assume enforcement based on ORM declarations alone.
 - Several tables have explicit indexed columns through `index=True` (for example session/message IDs, provider IDs on history/snapshots/reports, and runtime event lookup/time columns). Composite primary keys exist for provider/model profiles, live models, model runtime status, and runtime model state.
 - The test fixtures create independent in-memory engines and call `Base.metadata.create_all()`; those test engines are not additional production engine ownership sites.
 - The current source audit establishes the authoritative ORM-declared schema. The exact contents of the user's local `data/chat_history.db` are intentionally not inspected because the user has confirmed that its test data may be discarded and no compatibility migration is required.
@@ -343,9 +343,26 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 
 **WP-4.1 outcome:** complete for the current project baseline. This is a working approval to proceed with WP-4.2. It does not approve speculative Memory/Knowledge schemas, full Phase 5 permissions, or later work packages before their own contracts and tests.
 
-## 11. Execution directive
+## 11. WP-4.2 implementation snapshot
 
-## 11. Execution directive
+The first Storage Manager increment is committed on `feat/storage-memory-services`:
+
+- `core/storage/config.py`: environment-backed database URL/path and SQL echo configuration.
+- `core/storage/adapters/base.py` and `sqlite.py`: backend adapter contract and active SQLite engine adapter.
+- `core/storage/manager.py`: centralized engine/session-factory lifecycle, explicit session/transaction scopes, health check, and disposal.
+- `core/storage/session.py`: close-safe session and transaction context managers; no implicit commit in a plain session scope.
+- `core/storage/exceptions.py`: normalized storage exception types.
+- `core/database.py`: ORM models remain in place; legacy `engine` and `SessionLocal` imports now delegate to the manager.
+- `tests/test_storage_manager.py`: focused coverage for path creation, health check, transaction commit/rollback, in-memory SQLite, and unsupported backend rejection.
+
+Configuration:
+- `LOCAL_AI_DATABASE_URL` optionally overrides the database URL.
+- `LOCAL_AI_DATABASE_PATH` overrides the default SQLite file path.
+- `LOCAL_AI_SQL_ECHO` enables SQLAlchemy SQL logging when explicitly set to a truthy value.
+
+**WP-4.2 status:** foundation implemented; local test execution and application smoke test are still required before its exit gate is approved. Existing callers continue to work through compatibility exports. Catalog transaction ownership and route-level ORM access are intentionally deferred to WP-4.3/WP-4.4.
+
+## 12. Execution directive
 
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11 — Storage & Memory Services  
