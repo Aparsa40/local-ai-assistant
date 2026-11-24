@@ -43,7 +43,7 @@ class MemoryService:
     MAX_CONTENT_LENGTH = 12000
     MAX_RETENTION_DAYS = 36500
     _SECRET_PATTERNS = (
-        re.compile(r"(?i)\b(password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)\s*[:=]\s*[^\s,;]+"),
+        re.compile(r"""(?i)["']?\b(password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)["']?\s*[:=]\s*["']?[^"'\s,;}]+"""),
         re.compile(r"(?i)\bbearer\s+[a-z0-9._~+/=-]{12,}"),
         re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     )
@@ -158,6 +158,8 @@ class MemoryService:
             raise MemoryValidationError("کلید تشخیص تکرار معتبر نیست")
         if source_ref is not None and (not source_ref.strip() or len(source_ref) > 255):
             raise MemoryValidationError("شناسه مرجع منبع معتبر نیست")
+        if source_ref is not None and any(pattern.search(source_ref) for pattern in self._SECRET_PATTERNS):
+            raise MemoryValidationError("مرجع منبع نباید حاوی اطلاعات محرمانه باشد")
 
         if dedup_key:
             existing_key = self.repository.find_dedup_key(
@@ -247,6 +249,12 @@ class MemoryService:
         if content is not None:
             updated_content = self._validate_content(content)
             if updated_content != record.content:
+                if record.dedup_key:
+                    keyed = self.repository.find_dedup_key(
+                        record.dedup_key, scope.scope_type, scope.scope_id, scope.owner_id
+                    )
+                    if keyed and keyed.id != record.id:
+                        raise MemoryConflictError("کلید تشخیص تکرار به حافظه دیگری تعلق دارد")
                 duplicate = self.repository.find_duplicate(
                     record.memory_type, scope.scope_type, scope.scope_id, scope.owner_id, updated_content.casefold()
                 )
