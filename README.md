@@ -26,13 +26,14 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
 - **Quota diagnostics:** OpenRouter key usage can be read through its key endpoint; Groq/Cohere telemetry is shown only when response headers have actually been observed. Other unavailable balances remain unknown.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
-- **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
+- **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, memories, and agent runs.
 - **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
 - **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
 - **Permission Manager (Phase 5 implementation complete and merged):** default-deny exact-scope authorization, persisted grants, local-owner grant administration, one-time action-bound approvals, redacted audit APIs, and approval gates for session deletion, avatar deletion, and owned-runtime shutdown. The API is loopback/same-origin restricted; the fixed local principal is not authentication.
-- **Tool Registry & Runtime (Phase 5 infrastructure implemented):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. Production handlers and model-generated tool-call orchestration are intentionally deferred to Agent Runtime (Phase 6).
-- **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
-- **SQLite persistence:** chat sessions, messages, profile data, catalogs, runtime observations, memories, Knowledge sources/files/artifacts/chunks, permission grants, approval requests, and redacted audit events are stored locally. Phase 4 adds ordered SQLite schema migrations `0001`–`0004`; PostgreSQL migrations are not implemented. Permission/approval/audit tables are currently registered through ORM metadata.
+- **Tool Registry & Runtime (Phase 5 infrastructure implemented):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. The first production read-only handler and the agent tool-call loop are provided by the Phase 6 Agent Runtime; further production handlers remain future work.
+- **Agent Runtime (Phase 6 implemented on `feat/phase-6-agent-runtime`; PR pending):** a bounded, application-owned runtime in `core/agents/` with versioned and validated definitions, a trusted registry, deterministic lifecycle with optimistic concurrency, checkpoint/resume and restart recovery, budget-bounded execution (iterations, wall-clock deadline, tool calls, input/output bytes, model tokens), permission-checked scoped context, model invocation only through the InterfaceManager behind a route allowlist plus explicit task-level transmission authorization, tool invocation only through ToolRuntime, loopback-protected lifecycle APIs and a minimal run-status UI, and one builtin read-only knowledge-analysis agent ([Agent Runtime](docs/AGENT_RUNTIME.md)). This is one bounded agent, not a general autonomous-agent platform; Supervisor and multi-agent execution are not implemented.
+- **Local API boundary:** settings, provider, runtime, profile, session, chat, and agent APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
+- **SQLite persistence:** chat sessions, messages, profile data, catalogs, runtime observations, memories, Knowledge sources/files/artifacts/chunks, permission grants, approval requests, agent definitions/tasks/runs/checkpoints/events, and redacted audit events are stored locally. Ordered SQLite schema migrations `0001`–`0005` are implemented; PostgreSQL migrations are not implemented. Permission/approval/audit tables are currently registered through ORM metadata.
 
 ## Project structure
 
@@ -54,6 +55,8 @@ local-ai-assistant/
 ├── core/context/           # bounded request context assembly
 ├── core/permissions/       # default-deny Permission Manager and approval/audit services
 ├── core/tools/             # Tool Registry and bounded Tool Runtime
+├── core/agents/            # bounded Agent Runtime: contracts, registry, lifecycle, controller
+├── core/migrations/        # ordered SQLite schema migrations
 ├── core/provider_intelligence.py # local runtime lifecycle and provider/model reports
 ├── core/catalog_storage.py  # durable operator/live catalog and report repository
 ├── data/                    # local SQLite database (git-ignored)
@@ -80,13 +83,14 @@ Important documents:
 - [Provider system](docs/PROVIDER_SYSTEM.md)
 - [Model Manager](docs/MODEL_MANAGER.md)
 - [Phase 5 execution plan](docs/PHASE_05_EXECUTION_PLAN.md)
+- [Phase 6 execution plan](docs/PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md)
 - [Permissions](docs/PERMISSIONS.md)
 - [Tool Runtime](docs/TOOL_RUNTIME.md)
 - [Knowledge Storage](docs/KNOWLEDGE_STORAGE.md)
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 foundation PR #15 is merged; final local-owner grant/approval APIs, Knowledge authorization, destructive-action approval, and security regression are implemented on `feat/phase-5-operational-authorization`. Latest CI passed 235 tests; its PR/merge is pending. The local owner identity is not authentication. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 foundation PR #15 is merged; final local-owner grant/approval APIs, Knowledge authorization, destructive-action approval, and security regression are implemented on `feat/phase-5-operational-authorization`. Latest CI passed 235 tests; its PR/merge is pending. Phase 6 Agent Runtime is implemented on `feat/phase-6-agent-runtime` with its PR pending review and CI. The local owner identity is not authentication. Read the relevant module contract before changing that area.
 
 ## Requirements
 
@@ -100,7 +104,7 @@ The documents distinguish **Implemented**, **Accepted**, and **Planned** capabil
 git clone https://github.com/Aparsa40/local-ai-assistant.git
 cd local-ai-assistant
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+.\\.venv\\Scripts\\Activate.ps1
 python -m pip install -r requirements.txt
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -183,7 +187,7 @@ The following target capabilities are **not yet implemented as complete systems*
 - Automatic task-based routing and LLM Supervisor.
 - Unified Conversation Processing with explicit online/offline engines.
 - Response Validator & Composer.
-- Production tool handlers and model-generated tool-call orchestration (Phase 6 Agent Runtime).
+- General autonomous-agent capabilities beyond the single Phase 6 builtin agent: Supervisor, Conversation Agent, multi-agent execution, and further production tool handlers beyond the read-only knowledge_search agent tool.
 - Hosted authentication and multi-user authorization; the current local owner principal is not identity verification.
 - General managed-file upload API and external connector framework.
 - External connector framework and Discord synchronization.
@@ -191,7 +195,7 @@ The following target capabilities are **not yet implemented as complete systems*
 - PostgreSQL migration adapter/deployment; current versioned migrations target SQLite.
 - Authentication and hosted multi-user security.
 
-The current chat path still uses manual provider/model selection. Agent Runtime, automatic task routing, and Multi-Agent execution are not implemented yet. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
+The current chat path still uses manual provider/model selection. Automatic task routing, the Supervisor, and Multi-Agent execution are not implemented yet; Phase 6 delivers one bounded, deterministic agent only. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
 
 ## License
 
@@ -213,4 +217,5 @@ MIT — see [LICENSE](LICENSE).
 - Phase 4 WP-4.7 and Phase 5 operational authorization/Knowledge integration are merged into `main`.
 - Phase 5 completion PR: [#17](https://github.com/Aparsa40/local-ai-assistant/pull/17), squash merge commit `22ac914163afb35778e27f52f774630919d9272d`.
 - CI for the merged implementation passed (235 tests; Python compile and frontend syntax checks). A separate Windows HTTP smoke test remains outstanding.
-- Phases 6–11 have authoritative execution plans; these phases remain **planned**, not implemented.
+- Phase 6 is implemented on `feat/phase-6-agent-runtime` with its pull request pending review and CI; it is not merged.
+- Phases 7–11 have authoritative execution plans; these phases remain **planned**, not implemented.
