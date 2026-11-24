@@ -20,7 +20,7 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
 | 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | Completed and merged via PR #16; 228 CI tests passed |
 | 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | Implementation complete on feature branch; 235 CI tests passed; PR/merge pending |
-| 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
+| 6 — Agent Runtime | [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md) | Implementation complete on `feat/phase-6-agent-runtime`; PR/merge pending |
 | 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 9 — Multi-Agent System and Specialized Agents | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
@@ -43,9 +43,9 @@ A dedicated execution plan should be added for each later phase before implement
 | [Context Manager](CONTEXT_MANAGER.md) | Request-scoped context assembly, explicit memory scopes, provenance, ranking, and token budgeting |
 | [Permissions](PERMISSIONS.md) | Implemented authorization contracts, exact-scope grants, approvals, and audit service |
 | [Tool Runtime](TOOL_RUNTIME.md) | Implemented Tool Registry/Runtime, bounded execution, and current integration limits |
+| [Agent Runtime](AGENT_RUNTIME.md) | Implemented Phase 6 agent contracts, lifecycle, bounded execution loop, security boundaries, and one bounded agent |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
-| [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [AI Orchestration](AI_ORCHESTRATION.md) | Conversation Processing, online/offline engines, and Supervisor |
 
 | [Knowledge Storage](KNOWLEDGE_STORAGE.md) | Source metadata, managed files, extraction artifacts, lexical search, and SQLite migrations |
