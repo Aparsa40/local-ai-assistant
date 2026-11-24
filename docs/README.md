@@ -42,7 +42,6 @@ A dedicated execution plan should be added for each later phase before implement
 | [Memory Service](MEMORY_SERVICE.md) | Scoped memory lifecycle, provenance, deduplication, retention, and deterministic retrieval |
 | [Context Manager](CONTEXT_MANAGER.md) | Request-scoped context assembly, explicit memory scopes, provenance, ranking, and token budgeting |
 | [Permissions](PERMISSIONS.md) | Implemented authorization contracts and Phase 5 default-deny/tool mediation target |
-| [Tool Runtime](TOOL_RUNTIME.md) | Added when WP-5.4/WP-5.5 contracts are implemented |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
 | [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
