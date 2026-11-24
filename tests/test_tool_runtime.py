@@ -145,6 +145,7 @@ def test_runtime_executes_only_after_exact_permission_and_audits_result(db_sessi
     assert [item["event_type"] for item in audit.repository.list_for_request(request.access_request.request_id)] == [
         "tool_request",
         "permission_decision",
+        "permission_recheck",
         "tool_execution",
     ]
 
@@ -256,7 +257,7 @@ def test_runtime_reports_post_execution_audit_failure_without_claiming_no_side_e
     class FailOnThirdEvent:
         def record(self, **kwargs):
             events.append(kwargs)
-            if len(events) == 3:
+            if len(events) == 4:
                 raise AuditPersistenceError("audit unavailable")
     runtime, request, _approvals, _audit = _runtime(
         db_session, definition, _echo, audit=FailOnThirdEvent()
