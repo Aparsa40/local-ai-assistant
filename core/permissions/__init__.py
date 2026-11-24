@@ -2,6 +2,7 @@
 
 from .types import (
     AccessRequest,
+    AccessContext,
     ApprovalRequest,
     ApprovalStatus,
     DataSensitivity,
@@ -20,6 +21,7 @@ from .policies import DenyAllGrantAdministrationPolicy, GrantAdministrationPolic
 
 __all__ = [
     "AccessRequest",
+    "AccessContext",
     "ApprovalRequest",
     "ApprovalStatus",
     "DataSensitivity",
