@@ -3,6 +3,14 @@ from fastapi.testclient import TestClient
 
 import main
 from core.runtime.monitor import RuntimeMonitor
+from core.permissions.types import AccessContext, PermissionScope, PermissionSubject, ScopeType, SubjectType
+
+
+def override_local_access_context():
+    return AccessContext(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
+    )
 
 
 class StubRuntimeManager:
@@ -36,8 +44,12 @@ class StubRuntimeManager:
 def runtime_client(monkeypatch):
     manager = StubRuntimeManager()
     monkeypatch.setattr(main, "runtime_monitor", RuntimeMonitor(manager))
-    with TestClient(main.app) as client:
-        yield client, manager
+    main.app.dependency_overrides[main.get_local_access_context] = override_local_access_context
+    try:
+        with TestClient(main.app) as client:
+            yield client, manager
+    finally:
+        main.app.dependency_overrides.pop(main.get_local_access_context, None)
 
 
 def test_runtime_snapshot_is_read_only_and_combines_inventory(runtime_client):
@@ -57,9 +69,12 @@ def test_runtime_snapshot_is_read_only_and_combines_inventory(runtime_client):
 def test_runtime_snapshot_skips_inventory_when_runtime_is_unavailable(monkeypatch):
     manager = StubRuntimeManager(runtime_ok=False)
     monkeypatch.setattr(main, "runtime_monitor", RuntimeMonitor(manager))
-
-    with TestClient(main.app) as client:
-        response = client.get("/api/runtime/ollama/snapshot")
+    main.app.dependency_overrides[main.get_local_access_context] = override_local_access_context
+    try:
+        with TestClient(main.app) as client:
+            response = client.get("/api/runtime/ollama/snapshot")
+    finally:
+        main.app.dependency_overrides.pop(main.get_local_access_context, None)
 
     assert response.status_code == 200
     payload = response.json()
