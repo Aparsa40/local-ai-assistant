@@ -4,8 +4,6 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 from uuid import uuid4
 
 from core.repositories.knowledge_repository import KnowledgeRepository
@@ -13,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from core.database import utcnow_naive
 from .models import KnowledgeArtifactRecord, KnowledgeChunkRecord, KnowledgeFileRecord, KnowledgeSourceRecord
-from .storage import ManagedFileStorage, ManagedFileStorageError
+from .storage import ManagedFileStorage
 
 
 class KnowledgeValidationError(ValueError):
@@ -142,7 +140,7 @@ class KnowledgeService:
         mime_type: str | None = None,
     ) -> KnowledgeFileRecord:
         source = self._source(scope, source_id, "write")
-        safe_name = filename.replace("\\\\", "/").split("/")[-1].strip() if isinstance(filename, str) else ""
+        safe_name = filename.replace(chr(92), "/").split("/")[-1].strip() if isinstance(filename, str) else ""
         if not safe_name or len(safe_name) > 255 or safe_name in {".", ".."}:
             raise KnowledgeValidationError("Original filename is invalid")
         storage_key, size_bytes, digest = self.file_storage.store(content)
