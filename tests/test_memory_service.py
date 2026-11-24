@@ -132,6 +132,8 @@ def test_validation_requires_provenance_and_rejects_secret_material():
         with pytest.raises(MemoryValidationError):
             create_candidate(service, scope, "api_key=sk-abcdefghijklmnop")
         with pytest.raises(MemoryValidationError):
+            create_candidate(service, scope, provenance={"source": "user", "metadata": {"api_key": "very-secret-value"}})
+        with pytest.raises(MemoryValidationError):
             create_candidate(service, scope, provenance={"source": "user", "note": "password=not-safe"})
         with pytest.raises(MemoryValidationError):
             create_candidate(service, scope, confidence=101)
@@ -149,6 +151,10 @@ def test_update_tracks_revision_and_supersede_links_replacement():
         revised = service.update(scope, old.id, content="پاسخ‌های ساختاریافته را ترجیح می‌دهد", importance=90)
         assert revised.content == "پاسخ‌های ساختاریافته را ترجیح می‌دهد"
         assert len(revised.provenance["revision_history"]) == 1
+
+        duplicate = create_candidate(service, scope, "محتوای جایگزین برای آزمون", dedup_key="another-key")
+        with pytest.raises(MemoryConflictError):
+            service.update(scope, old.id, content=duplicate.content)
 
         replacement = create_candidate(service, scope, "ترجیح پاسخ ساختاریافته و دقیق", dedup_key="response-style-v2")
         replacement = service.activate(scope, replacement.id, verified_by="user-review")
