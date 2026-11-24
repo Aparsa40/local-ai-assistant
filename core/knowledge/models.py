@@ -31,6 +31,7 @@ class KnowledgeFileRecord(Base):
 
     id = Column(String(32), primary_key=True)
     source_id = Column(String(32), ForeignKey("knowledge_sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_version = Column(Integer, nullable=False)
     storage_key = Column(String(64), nullable=False, unique=True)
     original_filename = Column(String(255), nullable=False)
     mime_type = Column(String(160), nullable=True)
