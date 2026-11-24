@@ -12,6 +12,7 @@ from core.knowledge import (
     KnowledgeAccessDeniedError,
     KnowledgeScope,
     KnowledgeService,
+    KnowledgeValidationError,
     ManagedFileStorage,
 )
 from core.migrations import CURRENT_SCHEMA_REVISION, run_migrations
@@ -163,4 +164,25 @@ def test_migrations_bootstrap_knowledge_schema_on_a_fresh_database():
             assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts", "0003_knowledge_file_versions"]
             assert connection.execute(text("SELECT COUNT(*) FROM knowledge_chunks_fts")).scalar_one() == 0
     finally:
+        engine.dispose()
+
+
+def test_knowledge_rejects_credential_like_metadata_uris_and_extracted_text(tmp_path: Path):
+    engine, session, service, scope = make_service(tmp_path)
+    try:
+        with pytest.raises(KnowledgeValidationError):
+            service.create_source(
+                scope, source_type="url", title="Unsafe metadata",
+                uri="https://example.test/?access_token=not-safe",
+            )
+        with pytest.raises(KnowledgeValidationError):
+            service.create_source(
+                scope, source_type="manual", title="Unsafe metadata",
+                metadata={"api_key": "not-safe"},
+            )
+        source = service.create_source(scope, source_type="text", title="Safe title")
+        with pytest.raises(KnowledgeValidationError):
+            service.index_extracted_text(scope, source.id, "password=not-safe")
+    finally:
+        session.close()
         engine.dispose()
