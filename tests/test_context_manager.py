@@ -13,7 +13,7 @@ from core.memory import MemoryAccessDeniedError, MemoryScope, MemoryService
 
 class AllowScopedPolicy:
     def authorize(self, scope_type: str, scope_id: str, owner_id: str, action: str) -> bool:
-        return scope_type in {"user", "conversation"} and owner_id == "local" and scope_id in {"profile-1", "1"}
+        return scope_type in {"user", "conversation"} and owner_id == "local" and scope_id in {"profile-1", "profile-2", "1"}
 
 
 def make_db():
@@ -32,13 +32,13 @@ def make_services(db, *, allow_memory: bool = True):
     return conversations, memory
 
 
-def add_active_memory(memory, scope, content: str):
+def add_active_memory(memory, scope, content: str, *, source_ref: str = "profile-preference"):
     candidate = memory.create_candidate(
         scope,
         memory_type="long_term",
         content=content,
         source_type="user",
-        source_ref="profile-preference",
+        source_ref=source_ref,
         provenance={"source": "explicit-user-statement", "note": "reviewed"},
         confidence=95,
         importance=90,
@@ -91,9 +91,10 @@ def test_context_retrieves_only_explicit_memory_scopes_and_preserves_provenance(
         assert len(package.items) == 1
         item = package.items[0]
         assert item.source_type == "memory"
-        assert item.source_ref == "profile-preference"
+        assert item.source_ref == f"memory:{active.id}"
         assert item.trust_status == "active"
         assert item.provenance["memory_id"] == active.id
+        assert item.provenance["source_ref"] == "profile-preference"
         assert item.provenance["verified_by"] == "local-user-review"
 
         no_memory_package = ContextManager(conversations).assemble(
@@ -174,6 +175,32 @@ def test_context_rejects_implicit_cross_owner_memory_scope_and_invalid_limits():
             manager.assemble(
                 ContextRequest(conversation_id=session_id, query="درخواست", max_tokens=10)
             )
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_memory_limit_is_aggregate_across_explicit_scopes():
+    engine, db = make_db()
+    try:
+        conversations, memory = make_services(db)
+        session_id = conversations.create_session()["id"]
+        scope_one = MemoryScope("user", "profile-1", "local")
+        scope_two = MemoryScope("user", "profile-2", "local")
+        add_active_memory(memory, scope_one, "ترجیح پاسخ فارسی اول", source_ref="first")
+        add_active_memory(memory, scope_two, "ترجیح پاسخ فارسی دوم", source_ref="second")
+
+        package = ContextManager(conversations, memory).assemble(
+            ContextRequest(
+                conversation_id=session_id,
+                query="ترجیح پاسخ فارسی",
+                memory_scopes=(scope_one, scope_two),
+                memory_limit=1,
+            )
+        )
+
+        assert len([item for item in package.items if item.source_type == "memory"]) == 1
+        assert package.omitted_items >= 1
     finally:
         db.close()
         engine.dispose()
