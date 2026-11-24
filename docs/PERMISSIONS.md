@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts are implemented; policy evaluation, grants, approvals, audit persistence, Tool Registry, and Tool Runtime are not yet implemented.  
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Approval workflow, audit persistence, Tool Registry, Tool Runtime, and API/domain integration remain pending.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -11,7 +11,7 @@ The first implementation is a local single-user application boundary, not hosted
 
 ## 2. Typed authorization contracts
 
-Implemented in `core/permissions/types.py`:
+Implemented in `core/permissions/types.py` and `core/permissions/manager.py`, with persistence in `core/repositories/permission_repository.py`:
 
 - `PermissionSubject`: typed subject category and stable identifier.
 - `PermissionResource`: typed resource category and stable identifier.
@@ -20,6 +20,8 @@ Implemented in `core/permissions/types.py`:
 - `AccessRequest`: subject/resource/operation/scope plus request ID, sensitivity, destination, and timezone-aware request timestamp.
 - `PermissionDecision`: allow/deny/approval-required result with stable reason and request reference.
 - `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, and revocation timestamps.
+
+`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is additive and currently created through SQLAlchemy metadata initialization; it is not backed by versioned migrations yet.
 
 Identifiers reject empty values, wildcard-like values, control characters, and excessive length. These contracts are descriptive data only; constructing a request, decision, or grant does not itself authorize an operation.
 
