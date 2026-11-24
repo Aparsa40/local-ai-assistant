@@ -3,41 +3,41 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, or_
-
-from core.database import MemoryRecord, utcnow_naive
+from core.database import MemoryRecord
 from .base import BaseRepository
 
 
 class MemoryRepository(BaseRepository):
     """Owns all ORM access and transaction boundaries for memory records."""
 
-    def get(self, memory_id: int, scope_type: str, scope_id: str):
+    def get(self, memory_id: int, scope_type: str, scope_id: str, owner_id: str):
         return (
             self.db.query(MemoryRecord)
             .filter(
                 MemoryRecord.id == memory_id,
                 MemoryRecord.scope_type == scope_type,
                 MemoryRecord.scope_id == scope_id,
+                MemoryRecord.owner_id == owner_id,
                 MemoryRecord.status != "deleted",
             )
             .first()
         )
 
-    def list_scope(self, scope_type: str, scope_id: str, statuses: tuple[str, ...]):
+    def list_scope(self, scope_type: str, scope_id: str, owner_id: str, statuses: tuple[str, ...]):
         return (
             self.db.query(MemoryRecord)
             .filter(
                 MemoryRecord.scope_type == scope_type,
                 MemoryRecord.scope_id == scope_id,
+                MemoryRecord.owner_id == owner_id,
                 MemoryRecord.status.in_(statuses),
             )
             .order_by(MemoryRecord.updated_at.desc(), MemoryRecord.id.desc())
             .all()
         )
 
-    def find_duplicate(self, memory_type: str, scope_type: str, scope_id: str, normalized_content: str):
-        records = self.list_scope(scope_type, scope_id, ("candidate", "active"))
+    def find_duplicate(self, memory_type: str, scope_type: str, scope_id: str, owner_id: str, normalized_content: str):
+        records = self.list_scope(scope_type, scope_id, owner_id, ("candidate", "active"))
         return next(
             (
                 record for record in records
@@ -47,13 +47,14 @@ class MemoryRepository(BaseRepository):
             None,
         )
 
-    def find_dedup_key(self, dedup_key: str, scope_type: str, scope_id: str):
+    def find_dedup_key(self, dedup_key: str, scope_type: str, scope_id: str, owner_id: str):
         return (
             self.db.query(MemoryRecord)
             .filter(
                 MemoryRecord.dedup_key == dedup_key,
                 MemoryRecord.scope_type == scope_type,
                 MemoryRecord.scope_id == scope_id,
+                MemoryRecord.owner_id == owner_id,
                 MemoryRecord.status.in_(("candidate", "active")),
             )
             .order_by(MemoryRecord.id.desc())
@@ -75,12 +76,13 @@ class MemoryRepository(BaseRepository):
         self.db.delete(record)
         self.db.commit()
 
-    def expire_due(self, scope_type: str, scope_id: str, now: datetime) -> int:
+    def expire_due(self, scope_type: str, scope_id: str, owner_id: str, now: datetime) -> int:
         records = (
             self.db.query(MemoryRecord)
             .filter(
                 MemoryRecord.scope_type == scope_type,
                 MemoryRecord.scope_id == scope_id,
+                MemoryRecord.owner_id == owner_id,
                 MemoryRecord.status.in_(("candidate", "active")),
                 MemoryRecord.expires_at.is_not(None),
                 MemoryRecord.expires_at <= now,
