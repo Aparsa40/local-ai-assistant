@@ -98,3 +98,15 @@ class PermissionRepository(BaseRepository):
             self.db.commit()
             self.db.refresh(record)
         return self._to_contract(record)
+
+
+    def list_recent(self, *, limit: int = 100) -> tuple[PermissionGrant, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        records = (
+            self.db.query(PermissionGrantRecord)
+            .order_by(PermissionGrantRecord.created_at.desc(), PermissionGrantRecord.grant_id)
+            .limit(limit)
+            .all()
+        )
+        return tuple(self._to_contract(record) for record in records)
