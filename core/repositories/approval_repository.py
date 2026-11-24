@@ -165,3 +165,33 @@ class ApprovalRepository(BaseRepository):
         else:
             self.db.rollback()
         return self.get(approval_id)
+
+
+    def invalidate(
+        self,
+        approval_id: str,
+        *,
+        invalidated_at: datetime,
+        actor_id: str = "system-audit-failure",
+    ) -> ApprovalRequest | None:
+        """Fail closed by invalidating a request when its required audit write fails."""
+        now = to_utc_naive(invalidated_at)
+        result = self.db.execute(
+            update(PermissionApprovalRecord)
+            .where(
+                PermissionApprovalRecord.approval_id == approval_id,
+                PermissionApprovalRecord.status.in_(
+                    (ApprovalStatus.PENDING.value, ApprovalStatus.APPROVED.value)
+                ),
+            )
+            .values(
+                status=ApprovalStatus.REJECTED.value,
+                decided_by=actor_id,
+                decided_at=now,
+            )
+        )
+        if result.rowcount:
+            self.db.commit()
+        else:
+            self.db.rollback()
+        return self.get(approval_id)
