@@ -5,6 +5,14 @@ All notable changes are documented here. The project follows Semantic Versioning
 ## Unreleased
 
 ### Added
+- Bounded, application-owned Agent Runtime (Phase 6): versioned and validated agent definitions, a trusted application-side registry, persistent tasks/runs with checkpoints and optimistic concurrency, deterministic lifecycle transitions, restart recovery, budget-bounded execution (iterations, wall-clock deadline, tool calls, input/output bytes, model tokens), and truthful structured outcomes.
+- Permission-checked scoped context assembly and least-privilege per-run capability grants; model calls go through the InterfaceManager only with a model route allowlist and explicit task-level transmission authorization, and tool calls go through ToolRuntime and the PermissionManager only.
+- One builtin low-risk agent (`knowledge-analyzer`) that analyzes one explicitly bound knowledge scope read-only through the `knowledge_search` tool; no autonomous publishing, deletion, credential access, or external transmission.
+- Loopback-protected agent lifecycle API (`/api/agents`, `/api/agents/runs`) with explicit pause/resume/cancel and approval handoff, plus a minimal run-status UI view.
+- SQLite schema migration `0005_agent_runtime` adding the agent definition, task, run, checkpoint, and run-event tables.
+- WP-6.7 regression suites covering contracts, registry, lifecycle and restart recovery, bounded execution budgets, permission denial paths, and per-run grant isolation.
+
+### Added
 - Start a fresh empty chat session on every app launch while keeping previous sessions available in the sidebar.
 - Versioned settings migration that defaults new and legacy installations to OpenRouter with `openrouter/free`, while preserving later user provider selections.
 - Google AI Studio/Gemini provider using the Interactions API with streaming and live model discovery.
@@ -40,3 +48,4 @@ All notable changes are documented here. The project follows Semantic Versioning
 
 ### Changed
 - Updated README, architecture, security, and contribution documentation to reflect implemented functionality and identify planned features.
+- Wired the Phase 6 agent bootstrap to the local-owner grant administration policy so trusted per-run capability grants can be issued while all other grant administration stays default-deny.
