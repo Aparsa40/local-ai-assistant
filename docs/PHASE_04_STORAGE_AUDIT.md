@@ -394,3 +394,20 @@ The repository layer has been introduced without changing the current table sche
 **Current implementation:** WP-4.1 and WP-4.2 complete; WP-4.3 repository layer in progress.
 
 **Mandatory instruction:** Treat this audit as the accepted working baseline for Local AI Assistant, Phase 4, WP-4.1. Proceed with WP-4.2 and keep the implementation incremental. Existing Phase 2/3 application behavior must remain functional, but preservation of the current disposable SQLite test rows is not required. Do not create speculative Memory/Knowledge tables and do not implement Phase 5 authorization in parallel.
+
+
+## WP-4.4 — Conversation & Profile Service integration (2026-11-24)
+
+**Implementation snapshot — validation pending**
+
+- Added `core/conversations/ConversationService` and typed `ChatPreparation` / `ConversationMessage` contracts.
+- Added `core/profiles/ProfileService` for profile validation, serialization, avatar normalization, and avatar lifecycle.
+- Migrated `/api/profile*`, `/api/sessions*`, and `/api/chat` persistence orchestration in `main.py` to the application services.
+- Route handlers translate service errors into the existing HTTP status codes and retain the existing JSON response shapes.
+- Chat behavior remains intentionally staged: the user message is committed before inference; the assistant message is committed only after a successful stream; failed inference does not create an assistant message.
+- Session title auto-generation and custom-title protection remain in the Conversation Service.
+- Avatar limits and normalization remain unchanged: 2 MiB upload cap, PNG/JPEG/WebP input, 4096×4096 dimension cap, 256×256 WebP output.
+- No database schema, table, or migration changes were made.
+- Added service-level regression tests; existing profile/session API regression tests remain part of the validation suite.
+
+**Pending acceptance evidence:** run focused service/API tests, the complete pytest suite, Python compilation, and frontend syntax check on the local branch. Do not mark WP-4.4 complete until those results are recorded.
