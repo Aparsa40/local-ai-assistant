@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
+**Status:** Phase 5 complete and merged to `main` via PR #15; 217 CI tests passed. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
