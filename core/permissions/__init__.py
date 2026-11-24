@@ -1,4 +1,4 @@
-"""Application-owned permission contracts and authorization services."""
+"""Typed contracts and policy hooks for application-owned permissions."""
 
 from .types import (
     AccessRequest,
@@ -15,7 +15,6 @@ from .types import (
     SubjectType,
 )
 from .policies import DenyAllGrantAdministrationPolicy, GrantAdministrationPolicy
-from .manager import PermissionManager, PermissionManagementDeniedError
 
 __all__ = [
     "AccessRequest",
@@ -32,6 +31,4 @@ __all__ = [
     "SubjectType",
     "DenyAllGrantAdministrationPolicy",
     "GrantAdministrationPolicy",
-    "PermissionManager",
-    "PermissionManagementDeniedError",
 ]
