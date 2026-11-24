@@ -40,3 +40,9 @@ class DenyAllApprovalDecisionPolicy:
 
     def authorize_approval(self, approver: PermissionSubject, approval: object, action: str) -> bool:
         return False
+
+
+class ApprovalRepositoryProtocol(Protocol):
+    """Marker protocol for the approval service's persistence dependency."""
+
+
