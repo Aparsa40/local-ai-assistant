@@ -205,3 +205,29 @@ def init_db():
             connection.execute(
                 text("ALTER TABLE provider_runtime_status ADD COLUMN runtime_details JSON")
             )
+
+
+class MemoryRecord(Base):
+    """Scoped, provenance-aware memory candidate and lifecycle record."""
+
+    __tablename__ = "memories"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    memory_type = Column(String(20), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    dedup_key = Column(String(255), nullable=True, index=True)
+    scope_type = Column(String(40), nullable=False, index=True)
+    scope_id = Column(String(160), nullable=False, index=True)
+    owner_id = Column(String(160), nullable=False, default="local")
+    source_type = Column(String(40), nullable=False)
+    source_ref = Column(String(255), nullable=True)
+    provenance = Column(JSON, nullable=False, default=dict)
+    confidence = Column(Integer, nullable=False, default=50)
+    importance = Column(Integer, nullable=False, default=50)
+    status = Column(String(20), nullable=False, default="candidate", index=True)
+    verified_by = Column(String(160), nullable=True)
+    retention_days = Column(Integer, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    superseded_by_id = Column(Integer, ForeignKey("memories.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    updated_at = Column(DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
+    last_accessed_at = Column(DateTime, nullable=True)
