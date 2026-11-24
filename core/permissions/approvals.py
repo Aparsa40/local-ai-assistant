@@ -106,15 +106,22 @@ class ApprovalService:
             expires_at=now + timedelta(seconds=ttl_seconds),
         )
         stored = self.repository.create(approval)
-        self.audit_service.record(
-            event_type="approval_requested",
-            request_id=stored.request_id,
-            outcome="pending",
-            subject=stored.subject,
-            resource=stored.resource,
-            operation=stored.operation,
-            metadata={"approval_id": stored.approval_id},
-        )
+        try:
+            self.audit_service.record(
+                event_type="approval_requested",
+                request_id=stored.request_id,
+                outcome="pending",
+                subject=stored.subject,
+                resource=stored.resource,
+                operation=stored.operation,
+                metadata={"approval_id": stored.approval_id},
+            )
+        except Exception:
+            self.repository.invalidate(
+                stored.approval_id,
+                invalidated_at=self._clock(),
+            )
+            raise
         return stored
 
     def _decide(
@@ -162,15 +169,23 @@ class ApprovalService:
             raise ApprovalTransitionError("Approval request has expired.")
         if updated.status is not status:
             raise ApprovalTransitionError("Approval request was already decided.")
-        self.audit_service.record(
-            event_type="approval_decision",
-            request_id=updated.request_id,
-            outcome=updated.status.value,
-            subject=updated.subject,
-            resource=updated.resource,
-            operation=updated.operation,
-            metadata={"approval_id": updated.approval_id, "status": updated.status.value},
-        )
+        try:
+            self.audit_service.record(
+                event_type="approval_decision",
+                request_id=updated.request_id,
+                outcome=updated.status.value,
+                subject=updated.subject,
+                resource=updated.resource,
+                operation=updated.operation,
+                metadata={"approval_id": updated.approval_id, "status": updated.status.value},
+            )
+        except Exception:
+            if updated.status is ApprovalStatus.APPROVED:
+                self.repository.invalidate(
+                    updated.approval_id,
+                    invalidated_at=self._clock(),
+                )
+            raise
         return updated
 
     def approve(self, approval_id: str, *, approver: PermissionSubject) -> ApprovalRequest:
