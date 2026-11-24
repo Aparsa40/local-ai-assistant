@@ -189,6 +189,7 @@ def test_public_catalog_does_not_expose_handlers_or_raw_schemas() -> None:
         "operation": "read",
         "risk_class": "read_only",
         "requires_approval": False,
+        "input_schema": _definition().input_schema,
     },)
     assert "handler" not in catalog[0]
     assert "input_schema" not in catalog[0]
@@ -213,4 +214,13 @@ def test_registry_rejects_type_incompatible_schema_keywords() -> None:
     )
 
     with pytest.raises(ToolSchemaDefinitionError):
+        registry.register(definition, _echo)
+
+
+
+def test_registry_requires_object_root_for_tool_input_schema() -> None:
+    registry = ToolRegistry()
+    definition = _definition(input_schema={"type": "string"})
+
+    with pytest.raises(ToolSchemaDefinitionError, match="root must be an object"):
         registry.register(definition, _echo)
