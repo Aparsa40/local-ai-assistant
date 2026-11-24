@@ -22,7 +22,7 @@ from core.permissions.types import (
     SubjectType,
 )
 from core.repositories.approval_repository import ApprovalRepository
-from core.permissions.audit import AuditService
+from core.permissions.audit import AuditPersistenceError, AuditService
 from core.repositories.audit_repository import AuditRepository
 
 
@@ -174,3 +174,30 @@ def test_approval_request_decision_and_consumption_are_audited(db_session) -> No
         "approval_decision",
         "approval_consumed",
     ]
+
+
+
+def test_approval_is_invalidated_if_decision_audit_fails(db_session) -> None:
+    class FailOnDecisionAudit(AuditService):
+        calls = 0
+        def record(self, **kwargs):
+            self.calls += 1
+            if self.calls == 2:
+                raise AuditPersistenceError("audit unavailable")
+            return super().record(**kwargs)
+
+    repository = ApprovalRepository(db_session)
+    service = ApprovalService(
+        repository,
+        FailOnDecisionAudit(AuditRepository(db_session)),
+        decision_policy=AllowUserApproval(),
+    )
+    approval = service.request(_request(), {"action": "delete"}, requested_by="runtime-api")
+
+    with pytest.raises(AuditPersistenceError):
+        service.approve(
+            approval.approval_id,
+            approver=PermissionSubject(SubjectType.USER, "owner-1"),
+        )
+
+    assert repository.get(approval.approval_id).status is ApprovalStatus.REJECTED
