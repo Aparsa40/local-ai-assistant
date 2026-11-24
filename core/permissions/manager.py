@@ -73,9 +73,11 @@ class PermissionManager:
 
         active = next((grant for grant in grants if grant.is_active(now)), None)
         if active is not None:
+            effect = DecisionEffect.REQUIRE_APPROVAL if active.requires_approval else DecisionEffect.ALLOW
+            reason = "matching_grant_requires_approval" if active.requires_approval else "matching_active_grant"
             return PermissionDecision(
-                DecisionEffect.ALLOW,
-                "matching_active_grant",
+                effect,
+                reason,
                 request.request_id,
                 grant_id=active.grant_id,
                 decided_at=now,
