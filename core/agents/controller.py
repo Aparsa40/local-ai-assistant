@@ -124,6 +124,8 @@ class ExecutionController:
                 "No trusted behavior is registered for this agent version."
             )
 
+        if run.status is AgentRunStatus.RUNNING and self.lifecycle.has_executor(run_id):
+            raise AgentConcurrencyError("Another executor already holds this run.")
         if run.status is AgentRunStatus.PENDING:
             run = self.lifecycle.start(run_id, expected_version=run.version)
         elif run.status is AgentRunStatus.PAUSED:
@@ -174,10 +176,18 @@ class ExecutionController:
                     retry_approval = True
                     pending = None
                 else:
-                    decision = behavior.decide(ctx, {
-                        "observations": list(observations),
-                        "iteration": iteration,
-                    })
+                    try:
+                        decision = behavior.decide(ctx, {
+                            "observations": list(observations),
+                            "iteration": iteration,
+                        })
+                    except Exception as exc:
+                        return self._fail(
+                            run_id,
+                            error_code="behavior_error",
+                            error_message=str(exc)[:300],
+                            stop_reason=StopReason.FAILED,
+                        )
                     retry_approval = False
 
                 kind = decision.get("kind")
@@ -440,7 +450,7 @@ class ExecutionController:
         run = self.runs.get(run_id)
         if run is None:
             raise AgentControllerError("The run disappeared during completion.")
-        self._checkpoint(run, {
+        run = self._checkpoint(run, {
             "schema": "agent.checkpoint/1",
             "observations": [],
             "outcome": final,

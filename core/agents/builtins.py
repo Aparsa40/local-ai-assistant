@@ -36,8 +36,12 @@ class KnowledgeAnalysisAgent:
             ),
             input_schema={
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "query": {"type": "string", "minLength": 0, "maxLength": 2000},
+                    "allow_model_transmission": {"type": "boolean"},
+                },
                 "required": [],
+                "additionalProperties": True,
             },
             output_schema={
                 "type": "object",
