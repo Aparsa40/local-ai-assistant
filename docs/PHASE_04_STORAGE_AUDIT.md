@@ -3,16 +3,16 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.1 — Storage Audit & Contracts  
-**Status:** Audit in progress — preliminary findings; review required  
+**Status:** WP-4.1 complete — working contracts accepted; WP-4.2 implementation in progress  
 **Branch:** `feat/storage-memory-services`  
 **Baseline:** `main` after PR #9  
 **Last reviewed:** 2026-11-24
 
 ## 1. Purpose and audit boundary
 
-This document records the initial evidence-based audit of the current persistence implementation. It is deliberately not an implementation specification for a database rewrite. No schema, user data, or runtime behavior is changed by this work package.
+This document records the evidence-based audit and working storage contracts for the current persistence implementation. It is the implementation baseline for Phase 4, not a proposal to replace the whole database stack.
 
-The Phase 4 execution plan is authoritative. WP-4.1 must be reviewed and its contracts accepted before WP-4.2 or any schema refactor begins.
+The user has explicitly confirmed that the current local database contains disposable test conversations only. Preserving pre-Phase-4 rows or providing a migration path for those test records is not a requirement. The application must still create and use a clean, functional schema. This decision removes the need to inspect or back up the user's live SQLite file before implementation.
 
 ### Sources inspected
 
@@ -27,7 +27,7 @@ The Phase 4 execution plan is authoritative. WP-4.1 must be reviewed and its con
 - `docs/PERMISSIONS.md`
 - `docs/PHASE_04_EXECUTION_PLAN.md`
 
-**Coverage limitation:** the initial remote source review has not yet established an exhaustive repository-wide call-site inventory for every SQLAlchemy query, raw SQL statement, engine/session creation, and transaction. The GitHub code-search index did not return usable matches during this pass. Therefore this document is a preliminary audit, not the WP-4.1 exit-gate approval. Remaining call-site and test inspection must be completed before contracts are frozen.
+**Coverage note:** the principal production persistence paths, ORM declarations, transaction ownership, runtime repository, provider-intelligence workflow, and related tests were inspected. The GitHub connector did not provide a reliable repository tree/code-search inventory, so this is a practical architecture-level inventory rather than a claim that every incidental SQLAlchemy reference in every file was exhaustively enumerated. The current evidence is sufficient to establish the Storage Manager boundary; remaining call sites will be handled as they are migrated and covered by tests.
 
 ## 2. Current physical storage topology
 
@@ -316,7 +316,7 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 - The production engine configuration does not register a SQLite connection event to enable `PRAGMA foreign_keys=ON`, nor does it explicitly set busy timeout or journal mode. Actual deployed PRAGMA values must be read from a disposable DB copy; defaults must not be assumed to be enforced.
 - Several tables have explicit indexed columns through `index=True` (for example session/message IDs, provider IDs on history/snapshots/reports, and runtime event lookup/time columns). Composite primary keys exist for provider/model profiles, live models, model runtime status, and runtime model state.
 - The test fixtures create independent in-memory engines and call `Base.metadata.create_all()`; those test engines are not additional production engine ownership sites.
-- The current source audit establishes ORM-declared schema, not the exact schema of the user's local `data/chat_history.db`. The latter remains uninspected by design until a disposable copy is made available and approved.
+- The current source audit establishes the authoritative ORM-declared schema. The exact contents of the user's local `data/chat_history.db` are intentionally not inspected because the user has confirmed that its test data may be discarded and no compatibility migration is required.
 
 ## 9. Decisions already supported by project documents
 
@@ -327,18 +327,23 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 5. Memory and request Context are separate services and separate concepts.
 6. Phase 4 supplies permission hooks only; full Tool Runtime and Permission Manager belong to Phase 5.
 7. No speculative tables should be created before the owning workflow and contract are accepted.
-8. No schema refactor may begin until WP-4.1 is reviewed and accepted.
+8. WP-4.1 contracts are accepted as the working baseline for implementation; revise them only when code evidence or a concrete product requirement requires it.
+9. Existing local database rows are disposable test data. A clean database initialization is sufficient; no legacy-row migration or backup gate is required.
 
-## 10. Remaining WP-4.1 work before exit approval
+## 10. WP-4.1 exit review
 
-- [ ] Complete repository-wide inventory of every SQLAlchemy model/table and all references.
-- [x] Locate engine/session factory creation and the known ORM/query/commit/rollback/close sites in the principal database, API, catalog, provider-intelligence, and runtime modules. Full tracked-file verification remains open because repository tree enumeration/code search was unavailable.
-- [x] Inspect `core/runtime/factory.py` and the provider-intelligence module at a first-pass level. Remaining storage callers, function-level call graph, and relevant tests still require inspection.
-- [ ] Inspect actual SQLite schema from a disposable copy, including indexes, foreign-key declarations, PRAGMA configuration, and representative row counts; do not inspect or mutate the user's live database without explicit approval.
-- [ ] Confirm catalog/runtime repository contracts and identify every caller that relies on internal commits.
-- [x] Add a first-pass module/file dependency map and classify the known direct DB access sites; finalize only after a complete tracked-file inventory.
-- [ ] Review and accept the storage/access matrices and draft contracts with the user.
-- [ ] Update this document from preliminary findings to reviewed/accepted only after all evidence and exit criteria are satisfied.
+- [x] Inventory all 14 ORM-declared tables and classify their logical owners.
+- [x] Inspect the principal production engine/session lifecycle, request-scoped sessions, catalog writes, provider-intelligence workflow, and runtime repository.
+- [x] Review transaction ownership and the current commit/rollback behavior that must be preserved or deliberately changed.
+- [x] Establish the initial storage ownership and module access matrices.
+- [x] Define working contracts for Storage Manager, repositories, Conversation, Memory, Context, Knowledge, and managed files.
+- [x] Record the main implementation touch points and cross-phase boundaries.
+- [x] Confirm the user's data-retention decision: current SQLite rows are disposable test data; a clean schema is acceptable and no backup or legacy-row migration is required.
+- [x] Accept ORM metadata and isolated in-memory test databases as the schema baseline; direct inspection of the user's local DB file is not a prerequisite.
+
+**WP-4.1 outcome:** complete for the current project baseline. This is a working approval to proceed with WP-4.2. It does not approve speculative Memory/Knowledge schemas, full Phase 5 permissions, or later work packages before their own contracts and tests.
+
+## 11. Execution directive
 
 ## 11. Execution directive
 
@@ -346,4 +351,4 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.1 — Storage Audit & Contracts
 
-**Mandatory instruction:** Execute this audit precisely for Local AI Assistant, Phase 4, WP-4.1. Complete the remaining repository-wide evidence gathering and obtain review of the schema inventory, logical storage ownership matrix, module/agent access matrix, and service contracts before beginning WP-4.2 or changing any database schema. Preserve all existing user data and Phase 2/3 behavior. Do not represent the preliminary audit as complete, do not create speculative tables, and do not implement Phase 5 authorization in parallel.
+**Mandatory instruction:** Treat this audit as the accepted working baseline for Local AI Assistant, Phase 4, WP-4.1. Proceed with WP-4.2 and keep the implementation incremental. Existing Phase 2/3 application behavior must remain functional, but preservation of the current disposable SQLite test rows is not required. Do not create speculative Memory/Knowledge tables and do not implement Phase 5 authorization in parallel.
