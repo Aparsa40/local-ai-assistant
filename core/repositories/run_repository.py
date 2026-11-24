@@ -40,7 +40,7 @@ _RUN_FIELDS = frozenset({
     "status", "iteration", "tool_calls", "model_tokens",
     "last_checkpoint_sequence", "pending_approval_id", "stop_reason",
     "error_code", "error_message", "outcome", "started_at", "updated_at",
-    "finished_at",
+    "finished_at", "attempt",
 })
 
 
