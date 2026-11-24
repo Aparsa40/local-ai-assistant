@@ -2,6 +2,7 @@
 import ipaddress
 import json
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 from uuid import uuid4
 from typing import Any, Dict
 
@@ -65,7 +66,7 @@ def get_db():
 
 
 def get_local_access_context(request: Request) -> AccessContext:
-    """Resolve the fixed local principal only for loopback clients."""
+    """Resolve the fixed local principal only for loopback and same-origin requests."""
     client_host = request.client.host if request.client else ""
     try:
         address = ipaddress.ip_address(client_host)
@@ -74,6 +75,24 @@ def get_local_access_context(request: Request) -> AccessContext:
     mapped_address = getattr(address, "ipv4_mapped", None)
     if not address.is_loopback and not (mapped_address and mapped_address.is_loopback):
         raise HTTPException(status_code=403, detail="Local access only.")
+
+    # Reject cross-origin browser requests to the loopback API (basic CSRF defense).
+    origin = request.headers.get("origin")
+    if origin:
+        parsed_origin = urlsplit(origin)
+        origin_host = parsed_origin.hostname or ""
+        try:
+            origin_address = ipaddress.ip_address(origin_host)
+            origin_is_loopback = origin_address.is_loopback
+        except ValueError:
+            origin_is_loopback = origin_host.lower() == "localhost"
+        if (
+            not origin_is_loopback
+            or parsed_origin.scheme != request.url.scheme
+            or parsed_origin.netloc.lower() != request.headers.get("host", "").lower()
+        ):
+            raise HTTPException(status_code=403, detail="Cross-origin local API requests are not allowed.")
+
     return AccessContext(
         subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
         scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
