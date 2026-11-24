@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.config_manager import ConfigManager
-from core.database import ChatMessage, ChatSession, SessionLocal, UserProfile, init_db
+from core.database import ChatMessage, ChatSession, UserProfile, init_db
+from core.storage.manager import get_storage_manager
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
@@ -30,21 +31,20 @@ from core.catalog_storage import (
 )
 
 app = FastAPI(title="Local Modular AI Assistant")
+storage_manager = get_storage_manager()
+SessionLocal = storage_manager.session_factory  # Temporary compatibility for the catalog route fallback.
 interface_manager = InterfaceManager()
 init_db()
-runtime_manager = build_runtime_manager(ConfigManager.load_config, SessionLocal)
+runtime_manager = build_runtime_manager(ConfigManager.load_config, storage_manager.session_factory)
 runtime_monitor = RuntimeMonitor(runtime_manager)
-with SessionLocal() as _catalog_seed_db:
+with storage_manager.session() as _catalog_seed_db:
     seed_operator_catalogs(_catalog_seed_db)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def get_db():
-    db = SessionLocal()
-    try:
+    with storage_manager.session() as db:
         yield db
-    finally:
-        db.close()
 
 
 class ChatRequest(BaseModel):
