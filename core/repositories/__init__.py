@@ -4,6 +4,7 @@ from .approval_repository import ApprovalRepository
 from .audit_repository import AuditRepository
 from .message_repository import MessageRepository
 from .memory_repository import MemoryRepository
+from .knowledge_repository import KnowledgeRepository
 from .profile_repository import ProfileRepository
 from .permission_repository import PermissionRepository
 from .runtime_repository import RuntimeRepository
@@ -15,6 +16,7 @@ __all__ = [
     "AuditRepository",
     "MessageRepository",
     "MemoryRepository",
+    "KnowledgeRepository",
     "ProfileRepository",
     "PermissionRepository",
     "RuntimeRepository",

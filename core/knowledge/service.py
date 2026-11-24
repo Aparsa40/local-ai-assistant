@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import text
+from core.repositories.knowledge_repository import KnowledgeRepository
 from sqlalchemy.orm import Session
 
 from core.database import utcnow_naive
@@ -67,6 +67,7 @@ class KnowledgeService:
         file_storage: ManagedFileStorage | None = None,
     ) -> None:
         self.db = session
+        self.repository = KnowledgeRepository(session)
         self.access_policy = access_policy or DenyAllKnowledgeAccessPolicy()
         self.file_storage = file_storage or ManagedFileStorage()
 
@@ -86,17 +87,7 @@ class KnowledgeService:
 
     def _source(self, scope: KnowledgeScope, source_id: str, action: str) -> KnowledgeSourceRecord:
         self._authorize(scope, action)
-        row = (
-            self.db.query(KnowledgeSourceRecord)
-            .filter(
-                KnowledgeSourceRecord.id == source_id,
-                KnowledgeSourceRecord.scope_type == scope.scope_type,
-                KnowledgeSourceRecord.scope_id == scope.scope_id,
-                KnowledgeSourceRecord.owner_id == scope.owner_id,
-                KnowledgeSourceRecord.status != "deleted",
-            )
-            .first()
-        )
+        row = self.repository.get_source(source_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if row is None:
             raise KnowledgeNotFoundError("Knowledge source not found in the requested scope")
         return row
@@ -179,18 +170,7 @@ class KnowledgeService:
 
     def read_original_file(self, scope: KnowledgeScope, file_id: str) -> bytes:
         self._authorize(scope, "read")
-        record = (
-            self.db.query(KnowledgeFileRecord)
-            .join(KnowledgeSourceRecord, KnowledgeSourceRecord.id == KnowledgeFileRecord.source_id)
-            .filter(
-                KnowledgeFileRecord.id == file_id,
-                KnowledgeSourceRecord.scope_type == scope.scope_type,
-                KnowledgeSourceRecord.scope_id == scope.scope_id,
-                KnowledgeSourceRecord.owner_id == scope.owner_id,
-                KnowledgeSourceRecord.status != "deleted",
-            )
-            .first()
-        )
+        record = self.repository.get_file(file_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if record is None:
             raise KnowledgeNotFoundError("Managed source file not found in the requested scope")
         return self.file_storage.read(record.storage_key)
@@ -230,9 +210,7 @@ class KnowledgeService:
         now = utcnow_naive()
 
         # Replace the active lexical index atomically while preserving extraction history.
-        self.db.query(KnowledgeChunkRecord).filter(KnowledgeChunkRecord.source_id == source.id).delete(
-            synchronize_session=False
-        )
+        self.repository.delete_source_chunks(source.id)
         self.db.add(
             KnowledgeArtifactRecord(
                 id=uuid4().hex,
@@ -290,27 +268,9 @@ class KnowledgeService:
             return []
         # Quote every token and build the MATCH expression ourselves to avoid FTS syntax injection.
         match_query = " OR ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms[:20])
-        rows = self.db.execute(
-            text(
-                "SELECT c.id AS chunk_id, c.source_id AS source_id, s.title AS title, "
-                "c.content AS content, s.source_type AS source_type, s.uri AS uri, "
-                "bm25(knowledge_chunks_fts) AS rank "
-                "FROM knowledge_chunks_fts "
-                "JOIN knowledge_chunks AS c ON c.id = knowledge_chunks_fts.rowid "
-                "JOIN knowledge_sources AS s ON s.id = c.source_id "
-                "WHERE knowledge_chunks_fts MATCH :match_query "
-                "AND s.owner_id = :owner_id AND s.scope_type = :scope_type "
-                "AND s.scope_id = :scope_id AND s.status = 'indexed' "
-                "ORDER BY rank ASC LIMIT :limit"
-            ),
-            {
-                "match_query": match_query,
-                "owner_id": scope.owner_id,
-                "scope_type": scope.scope_type,
-                "scope_id": scope.scope_id,
-                "limit": limit,
-            },
-        ).mappings().all()
+        rows = self.repository.search_rows(
+            scope.scope_type, scope.scope_id, scope.owner_id, match_query, limit
+        )
         return [
             KnowledgeSearchResult(
                 chunk_id=row["chunk_id"],
