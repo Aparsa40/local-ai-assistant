@@ -18,7 +18,7 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 1 — Architecture & Contracts Foundation | [PHASE_01_EXECUTION_PLAN.md](PHASE_01_EXECUTION_PLAN.md) | Completed |
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
-| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | In progress — WP-4.1 to WP-4.3 validated; WP-4.4 in progress |
+| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | In progress — WP-4.1 to WP-4.4 validated; WP-4.5 in progress |
 | 5 — Tool Runtime & Permission Manager | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
@@ -39,6 +39,7 @@ A dedicated execution plan should be added for each later phase before implement
 | [Operator Catalogs](OPERATOR_CATALOGS.md) | Operator-level discovery, free-tier caveats, quota visibility, and evidence policy |
 | [Catalog Storage Schema](CATALOG_STORAGE.md) | Persistent operator/live catalog tables, sync lifecycle, and evidence rules |
 | [Conversation & Profile Services](CONVERSATION_PROFILE_SERVICES.md) | Conversation persistence, chat-turn durability, profile validation, and avatar lifecycle |
+| [Memory Service](MEMORY_SERVICE.md) | Scoped memory lifecycle, provenance, deduplication, retention, and deterministic retrieval |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
 | [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
