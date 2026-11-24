@@ -4,7 +4,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
 from typing import Any
 
 from core.database import MemoryRecord, utcnow_naive
@@ -116,6 +115,8 @@ class MemoryService:
             raise MemoryValidationError("اطلاعات منشأ باید JSON-compatible باشد") from exc
         if len(encoded) > 8000:
             raise MemoryValidationError("اطلاعات منشأ بیش از حد مجاز است")
+        if any(pattern.search(encoded) for pattern in MemoryService._SECRET_PATTERNS):
+            raise MemoryValidationError("ذخیره اطلاعات محرمانه در منشأ حافظه مجاز نیست")
         return dict(provenance)
 
     @staticmethod
@@ -155,6 +156,8 @@ class MemoryService:
             raise MemoryValidationError("مدت نگهداری باید بین ۱ تا ۳۶۵۰۰ روز باشد")
         if dedup_key is not None and (not dedup_key.strip() or len(dedup_key) > 255):
             raise MemoryValidationError("کلید تشخیص تکرار معتبر نیست")
+        if source_ref is not None and (not source_ref.strip() or len(source_ref) > 255):
+            raise MemoryValidationError("شناسه مرجع منبع معتبر نیست")
 
         if dedup_key:
             existing_key = self.repository.find_dedup_key(
@@ -244,6 +247,11 @@ class MemoryService:
         if content is not None:
             updated_content = self._validate_content(content)
             if updated_content != record.content:
+                duplicate = self.repository.find_duplicate(
+                    record.memory_type, scope.scope_type, scope.scope_id, scope.owner_id, updated_content.casefold()
+                )
+                if duplicate and duplicate.id != record.id:
+                    raise MemoryConflictError("محتوای جدید با یک حافظه موجود تکراری است")
                 history = list((record.provenance or {}).get("revision_history", []))
                 history.append({
                     "at": utcnow_naive().isoformat(),
