@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 through WP-5.3 implemented and CI-validated; WP-5.4–WP-5.7 pending  
+**Status:** In progress — WP-5.1 through WP-5.4 implemented and CI-validated; WP-5.5–WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -128,6 +128,8 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - Do not add shell, arbitrary Python, unrestricted filesystem, browser-control, or unrestricted network tools in this phase.
 
 **Exit:** only registered tools with valid bounded schemas can reach the execution gateway.
+
+**WP-5.4 implementation status (2026-11-24):** Added `ToolDefinition`, `ToolCallRequest`, `ToolRiskClass`, and an explicit versioned `ToolRegistry`. The registry validates a restricted JSON Schema subset, required/unknown properties, primitive types, enums, numeric/string/array bounds, JSON compatibility, input byte limits, resource type, and operation mapping. Tool handlers are stored separately and excluded from the public catalog. Duplicate, disabled, and unregistered tools are rejected. Destructive and external-side-effect definitions must require approval. GitHub Actions passed 186 tests, Python compilation, and frontend syntax validation. The registry is not yet connected to execution; WP-5.5 owns that boundary.
 
 ### WP-5.5 — Bounded Tool Runtime & Gateway
 
