@@ -29,6 +29,7 @@ class ContextManager:
     MAX_QUERY_LENGTH = 12000
     MAX_HISTORY_LIMIT = 100
     MAX_MEMORY_LIMIT = 50
+    MAX_MEMORY_SCOPES = 10
     MAX_TOKEN_BUDGET = 32000
 
     def __init__(
@@ -62,8 +63,8 @@ class ContextManager:
                 raise ContextValidationError(f"{label} خارج از محدوده مجاز است")
         if not isinstance(request.include_candidates, bool):
             raise ContextValidationError("include_candidates باید مقدار بولی داشته باشد")
-        if not isinstance(request.memory_scopes, tuple):
-            raise ContextValidationError("memory_scopes باید یک tuple صریح از محدوده‌ها باشد")
+        if not isinstance(request.memory_scopes, tuple) or len(request.memory_scopes) > cls.MAX_MEMORY_SCOPES:
+            raise ContextValidationError("memory_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")
         seen: set[tuple[str, str, str]] = set()
         for scope in request.memory_scopes:
             if not isinstance(scope, MemoryScope):
@@ -130,7 +131,7 @@ class ContextManager:
                     memory_items.append(
                         ContextItem(
                             source_type="memory",
-                            source_ref=memory.source_ref or f"memory:{memory.id}",
+                            source_ref=f"memory:{memory.id}",
                             content=memory.content,
                             relevance_score=result.score,
                             trust_status=memory.status,
@@ -149,10 +150,15 @@ class ContextManager:
                         )
                     )
 
+        # Apply one aggregate memory limit across all explicitly supplied scopes.
+        memory_items.sort(key=selection_key)
+        omitted = max(0, len(memory_items) - request.memory_limit)
+        memory_items = memory_items[:request.memory_limit]
+
         # Prefer memory provenance for exact duplicates rather than shadowing it with chat.
         deduplicated: list[ContextItem] = []
         seen_content: set[str] = set()
-        for item in sorted(memory_items, key=selection_key) + candidates:
+        for item in memory_items + candidates:
             normalized = self._normalize(item.content)
             if normalized in seen_content:
                 continue
@@ -162,7 +168,6 @@ class ContextManager:
         ranked = sorted(deduplicated, key=selection_key)
         selected: list[ContextItem] = []
         estimated_tokens = 0
-        omitted = 0
         for item in ranked:
             item_tokens = self.token_budget.estimate(item.content)
             if estimated_tokens + item_tokens > request.max_tokens:
