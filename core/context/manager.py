@@ -62,7 +62,6 @@ class ContextManager:
             (request.history_limit, 1, cls.MAX_HISTORY_LIMIT, "history_limit"),
             (request.memory_limit, 1, cls.MAX_MEMORY_LIMIT, "memory_limit"),
             (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
-            (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
             (request.max_tokens, 32, cls.MAX_TOKEN_BUDGET, "max_tokens"),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
