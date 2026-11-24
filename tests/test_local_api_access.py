@@ -1,8 +1,9 @@
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
+from fastapi.testclient import TestClient
 
-from main import get_local_access_context
+from main import app, get_local_access_context
 
 
 def _request(host: str) -> Request:
@@ -31,3 +32,11 @@ def test_local_access_context_rejects_non_loopback_clients(host: str) -> None:
         get_local_access_context(_request(host))
 
     assert error.value.status_code == 403
+
+
+
+def test_protected_api_routes_reject_non_loopback_test_clients() -> None:
+    with TestClient(app) as client:
+        assert client.get("/api/settings").status_code == 403
+        assert client.get("/api/providers").status_code == 403
+        assert client.get("/api/runtime/ollama/status").status_code == 403
