@@ -102,7 +102,7 @@ class KnowledgeService:
         mime_type: str | None = None,
         metadata: dict | None = None,
     ) -> KnowledgeSourceRecord:
-        self._authorize(scope, "write")
+        self._authorize(scope, "create")
         if source_type not in self.SOURCE_TYPES:
             raise KnowledgeValidationError("Unsupported Knowledge source type")
         clean_title = title.strip() if isinstance(title, str) else ""
@@ -147,7 +147,7 @@ class KnowledgeService:
         content: bytes,
         mime_type: str | None = None,
     ) -> KnowledgeFileRecord:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         safe_name = filename.replace(chr(92), "/").split("/")[-1].strip() if isinstance(filename, str) else ""
         if not safe_name or len(safe_name) > 255 or safe_name in {".", ".."}:
             raise KnowledgeValidationError("Original filename is invalid")
