@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
+from starlette.requests import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -109,3 +111,31 @@ def test_session_delete_api_requires_and_consumes_owner_approval(local_client):
         params={"approval_id": approval_id},
     )
     assert replay.status_code == 409
+
+
+def make_loopback_request(origin: str) -> Request:
+    return Request({
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/permissions/approvals",
+        "raw_path": b"/api/permissions/approvals",
+        "query_string": b"",
+        "headers": [
+            (b"host", b"127.0.0.1:8000"),
+            (b"origin", origin.encode("ascii")),
+        ],
+        "client": ("127.0.0.1", 45678),
+        "server": ("127.0.0.1", 8000),
+    })
+
+
+def test_local_api_rejects_cross_origin_browser_requests():
+    with pytest.raises(HTTPException) as denied:
+        app_module.get_local_access_context(make_loopback_request("https://attacker.example"))
+    assert denied.value.status_code == 403
+
+    accepted = app_module.get_local_access_context(make_loopback_request("http://127.0.0.1:8000"))
+    assert accepted.subject.subject_id == "local-api"
