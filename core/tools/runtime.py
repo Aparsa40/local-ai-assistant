@@ -178,6 +178,7 @@ class ToolRuntime:
             definition.requires_approval
             or decision.effect is DecisionEffect.REQUIRE_APPROVAL
         )
+        approval_consumed = False
         if needs_approval:
             if self.approval_service is None or not request.approval_id:
                 self.audit_service.record(
@@ -218,6 +219,7 @@ class ToolRuntime:
                     error_category="approval_invalid",
                     error_message="The approval is invalid, expired, or already consumed.",
                 )
+            approval_consumed = True
             self.audit_service.record(
                 event_type="approval_consumed",
                 request_id=request_id,
@@ -226,6 +228,34 @@ class ToolRuntime:
                 resource=access.resource,
                 operation=access.operation,
                 metadata={"tool_id": definition.tool_id, "approval_id": consumed.approval_id},
+            )
+
+        final_decision = self.permission_manager.authorize(access)
+        self.audit_service.record(
+            event_type="permission_recheck",
+            request_id=request_id,
+            outcome=final_decision.effect.value,
+            subject=access.subject,
+            resource=access.resource,
+            operation=access.operation,
+            metadata={
+                "tool_id": definition.tool_id,
+                "reason_code": final_decision.reason_code,
+                "grant_id": final_decision.grant_id or "",
+                "decision": final_decision.effect.value,
+            },
+        )
+        if final_decision.effect is DecisionEffect.DENY:
+            return ToolExecutionResult(
+                False, definition.tool_id, definition.version, request_id,
+                error_category="permission_denied",
+                error_message="Permission was revoked or became unavailable before execution.",
+            )
+        if final_decision.effect is DecisionEffect.REQUIRE_APPROVAL and not approval_consumed:
+            return ToolExecutionResult(
+                False, definition.tool_id, definition.version, request_id,
+                error_category="approval_required",
+                error_message="The latest permission policy requires human approval.",
             )
 
         handler = self.registry._resolve_handler(definition.tool_id, definition.version)
