@@ -187,12 +187,13 @@ class RuntimeEvent(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow_naive, index=True)
 
 
-def init_db():
-    """Create missing ORM tables, then apply ordered, versioned schema migrations."""
+def init_db(bind=None):
+    """Apply versioned migrations, then bootstrap any remaining ORM-owned tables."""
+    target_engine = bind or engine
     from .migrations import run_migrations
 
-    run_migrations(engine)
-    Base.metadata.create_all(bind=engine)
+    run_migrations(target_engine)
+    Base.metadata.create_all(bind=target_engine)
 
 
 class MemoryRecord(Base):
