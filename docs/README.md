@@ -18,7 +18,7 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 1 — Architecture & Contracts Foundation | [PHASE_01_EXECUTION_PLAN.md](PHASE_01_EXECUTION_PLAN.md) | Completed |
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
-| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | Planned — not started |
+| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | In progress — WP-4.1 to WP-4.3 validated; WP-4.4 in progress |
 | 5 — Tool Runtime & Permission Manager | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
