@@ -3,15 +3,15 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Planned — implementation has not started  
-**Execution branch (planned):** `feat/storage-memory-services`  
+**Status:** In progress — WP-4.1 through WP-4.5 validated; WP-4.6 implementation in progress  
+**Execution branches:** `feat/storage-memory-services` (WP-4.1–WP-4.4), `feat/phase-4-memory-service` (WP-4.5; stacked PR), and `feat/phase-4-context-manager` (WP-4.6; stacked PR)  
 **Last reviewed:** 2026-11-24
 
 ## 1. Purpose
 
 Build a coherent, durable, and provider-neutral data foundation for the next agentic phases. This phase consolidates the existing SQLite/SQLAlchemy persistence, introduces stable Storage and Repository boundaries, completes conversation persistence services, and adds independent Memory, Context, and Knowledge Storage services.
 
-This phase is an extension of the existing system, not a database rewrite. Existing sessions, messages, profile data, provider catalogs, runtime state, and runtime events must remain available. Existing Interface Manager and Local Model Runtime behavior must continue to work.
+This phase is an extension of the existing system, not a wholesale database rewrite. Existing sessions, messages, profile, catalog, and runtime functionality must continue to work. The user has confirmed that current local database rows are disposable test data; preserving those rows or migrating them into the new schema is not required. A clean database may be initialized as part of the implementation.
 
 **Core distinction:**
 - Storage is responsible for durable persistence and managed file access.
@@ -31,7 +31,7 @@ A database table by itself is not a Memory system, and Memory is not the same th
 4. Introduce a controlled Memory lifecycle with provenance, retention, and retrieval.
 5. Introduce Context assembly with relevance, token budgets, and access checks.
 6. Establish Knowledge Storage metadata and source/derived-artifact separation.
-7. Introduce repeatable, versioned migrations while preserving existing SQLite data.
+7. Introduce repeatable, versioned migrations for the accepted clean schema baseline; migration of pre-Phase-4 test rows is not required.
 8. Keep the design compatible with a future PostgreSQL adapter without requiring PostgreSQL deployment in this phase.
 9. Provide tests and integration seams required by Tool Runtime, Agent Runtime, Conversation Agent, and AI Librarian phases.
 
@@ -209,7 +209,7 @@ Tasks:
 3. Find direct SQL, ORM queries, commits, rollbacks, and session lifecycle handling.
 4. Map all callers of `core/database.py`, `core/catalog_storage.py`, and `core/runtime/repository.py`.
 5. Identify data ownership, foreign keys, cascade behavior, and implicit transaction boundaries.
-6. Inspect existing database files and schema compatibility assumptions without modifying user data.
+6. Inspect ORM metadata and test-created SQLite schemas; inspect the user's live database file only if a future concrete requirement needs it.
 7. Define Storage Manager, Repository, Conversation, Memory, Context, Knowledge, and File Storage contracts.
 8. Record migration risks and a backward-compatibility plan.
 
@@ -238,11 +238,13 @@ Tasks:
 
 **Deliverables:** Storage Manager, SQLite adapter, session/transaction helpers, storage configuration, and focused tests.
 
-**Exit gate:** application and tests use the centralized manager; no accidental duplicate engine/session configuration remains in the migrated paths.
+**Exit gate:** Storage Manager is wired into application startup and request-scoped sessions. Validation passed on 2026-11-24: 6 focused Storage Manager tests, 115 total tests, and `compileall`. A separate live HTTP startup smoke test remains unrecorded.
 
 ### WP-4.3 — Repository Services
 
 **Goal:** standardize domain data access.
+
+**Validated implementation status (2026-11-24):** Catalog, runtime, profile, session, and message repository modules are implemented. Catalog persistence logic is behind `CatalogRepository`; `core/catalog_storage.py` remains a compatibility facade. The runtime repository implementation is in `core/repositories/runtime_repository.py`, with its previous import path retained. Validation completed: 59 focused repository tests and 120 total tests passed; `python -m compileall -q core main.py` passed. Profile/session/message API routes were subsequently migrated in WP-4.4.
 
 Tasks:
 1. Define the repository base/protocol and transaction conventions.
@@ -273,6 +275,8 @@ Tasks:
 
 **Exit gate:** existing conversations remain readable and current chat behavior is unchanged.
 
+**WP-4.4 implementation status (2026-11-24):** ConversationService and ProfileService are implemented on `feat/storage-memory-services`. Session, message, profile, and avatar endpoints delegate domain operations to these services; route handlers retain HTTP translation and response transport only. Chat still commits the user turn before provider inference and persists the assistant turn only after a successful stream. Avatar normalization and existing validation limits remain in ProfileService. No schema or table changes were made. User-local validation passed: 13 focused service/API tests, 124 total tests, Python compilation, and frontend JavaScript syntax check.
+
 ### WP-4.5 — Memory Service
 
 **Goal:** introduce durable, controlled application memory.
@@ -291,6 +295,8 @@ Tasks:
 **Deliverables:** Memory Service, Memory Repository, schemas, retrieval/ranking, lifecycle policies, and tests.
 
 **Exit gate:** memory records are traceable, scoped, lifecycle-managed, and cannot grant permissions or silently promote unverified content.
+
+**WP-4.5 implementation status (2026-11-24):** Memory Service is implemented on `feat/phase-4-memory-service`, stacked on `feat/storage-memory-services`. It adds the `memories` ORM table, owner- and scope-filtered `MemoryRepository`, typed contracts, default-deny access policy, deterministic retention/scoring, and lifecycle/retrieval operations. Candidate records require explicit reviewer activation; AI-generated records remain candidates. User-local validation passed: 13 focused Memory/Storage tests, 131 total tests, Python compilation, and frontend JavaScript syntax check. GitHub Actions also passed 131 tests and both syntax/compile checks. No vector/embedding service, API endpoint, Phase 5 permission system, or migration framework is included.
 
 ### WP-4.6 — Context Manager
 
@@ -311,6 +317,8 @@ Tasks:
 
 **Exit gate:** a request receives only the context allowed for its scope and budget, with traceable sources.
 
+**WP-4.6 implementation status (2026-11-24):** Initial Context Manager implementation is in progress on `feat/phase-4-context-manager`, stacked on `feat/phase-4-memory-service`. Added typed request/item/package contracts, bounded chronological conversation retrieval, explicit memory-scope retrieval through MemoryService, deterministic cross-source ranking and deduplication, provenance preservation, and a conservative character-based token budget. Knowledge retrieval remains disconnected until WP-4.7; Phase 5 permissions are not implemented here. Focused/full local validation and CI are pending.
+
 ### WP-4.7 — Knowledge Storage & Migration
 
 **Goal:** provide a durable foundation for source metadata and safe schema evolution.
@@ -324,7 +332,7 @@ Tasks:
 6. Keep vector/embedding storage behind a replaceable adapter; do not require an external vector service.
 7. Introduce versioned migrations after baselining the existing schema.
 8. Test fresh database creation and migration from a copy of a representative existing database.
-9. Verify sessions, messages, profile, catalogs, runtime states, and runtime events survive migration.
+9. Verify sessions, messages, profile, catalogs, runtime states, and runtime events are created and usable in a clean database.
 10. Document backup/restore prerequisites for future Phase 11 work.
 
 **Deliverables:** Knowledge Storage metadata foundation, managed file adapter contract, lexical search baseline where accepted, migration history, migration tests, and data-preservation report.
@@ -391,8 +399,8 @@ The exact layout may be adjusted after WP-4.1. Existing `core/database.py`, `cor
 - Keep secrets and credentials out of memory, context, and knowledge records unless a dedicated approved secret-management design explicitly requires otherwise.
 - Use UTC timestamps consistently and document serialization semantics.
 - Destructive operations require explicit scope and safe transaction behavior.
-- Migrations must be tested on disposable copies before touching the user's working database.
-- Never delete or rewrite the current SQLite database as a shortcut for schema changes.
+- Migrations must be tested against temporary databases. The current local test database may be deleted and recreated; no backup or legacy-row migration is required.
+- A clean database reset is permitted for this project baseline because the user has explicitly approved discarding the existing test data. Do not silently reset it; document when a reset is required.
 
 ## 8. Integration requirements
 
@@ -431,11 +439,11 @@ Add focused tests for each work package. At minimum, the complete phase must cov
 - Storage Manager engine/session lifecycle and transaction rollback.
 - SQLite isolation and temporary test databases.
 - Repository CRUD, ownership boundaries, and stable identifiers.
-- Conversation ordering, pagination, and legacy data compatibility.
+- Conversation ordering, pagination, and fresh-database behavior.
 - Memory type/scope/provenance/lifecycle/retrieval and conflict behavior.
 - Context ranking, deduplication, token budgets, and access filtering.
 - Knowledge metadata, file integrity references, and lexical search behavior if enabled.
-- Migration from a pre-phase database copy with data-preservation assertions.
+- Fresh-database migration and schema-version assertions.
 - Regression tests for Interface Manager and Local Model Runtime.
 - Error handling without leaking credentials, file contents, or sensitive metadata.
 
@@ -447,11 +455,11 @@ Phase 4 is complete only when:
 
 1. Storage Manager is the controlled persistence entry point for migrated application services.
 2. Repository contracts are documented and domain ownership is enforced.
-3. Existing conversation history and user profile data are preserved and served through Conversation Storage.
+3. Conversation and profile features operate correctly through Conversation Storage on a clean database; preserving pre-phase test rows is not required.
 4. Memory Service supports scoped, provenance-aware lifecycle and retrieval.
 5. Context Manager produces bounded, traceable, policy-filtered context.
 6. Knowledge Storage can preserve source metadata and derived-artifact relationships without replacing original files.
-7. Schema migrations are versioned, repeatable, and tested against an existing database copy.
+7. Schema migrations are versioned, repeatable, and tested against fresh temporary SQLite databases.
 8. Existing catalog and runtime persistence behavior remains compatible.
 9. Full test suite and frontend syntax checks pass.
 10. Documentation, implementation status, and acceptance evidence agree.
@@ -472,4 +480,4 @@ Phase 4 is complete only when:
 **Project:** Local AI Assistant  
 **Phase:** 4 — Storage & Memory Services
 
-**Mandatory instruction:** This execution plan must be followed precisely for Local AI Assistant, Phase 4, in the order and boundaries defined above. Begin with WP-4.1 (Storage Audit & Contracts); do not start schema refactoring or implementation before the audit and contracts are reviewed. Preserve all existing user data and the behavior of Phases 2 and 3. Do not skip work packages, weaken tests, invent successful migration results, or mark this phase complete until every phase-wide acceptance criterion has verifiable evidence.
+**Mandatory instruction:** This execution plan must be followed precisely for Local AI Assistant, Phase 4, in the order and boundaries defined above. Begin with WP-4.1 (Storage Audit & Contracts); do not start schema refactoring or implementation before the audit and contracts are reviewed. Preserve the behavior of Phases 2 and 3. The current disposable test database may be reset with the user's approval already recorded; do not claim that its rows are migrated. Do not skip work packages, weaken tests, invent successful migration results, or mark this phase complete until every phase-wide acceptance criterion has verifiable evidence.

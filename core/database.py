@@ -5,9 +5,9 @@ from pathlib import Path
 try:
     from sqlalchemy import (
         Boolean, Column, DateTime, ForeignKey, Integer, JSON, LargeBinary,
-        String, Text, create_engine, inspect, text,
+        String, Text, inspect, text,
     )
-    from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+    from sqlalchemy.orm import declarative_base, relationship
 except ImportError as exc:
     raise ImportError("SQLAlchemy is required. Install it with: pip install sqlalchemy") from exc
 
@@ -24,12 +24,14 @@ def to_utc_naive(value: datetime) -> datetime:
     return value.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-DATABASE_PATH = Path("data/chat_history.db")
-DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-DATABASE_URL = f"sqlite:///{DATABASE_PATH.as_posix()}"
+from .storage.manager import get_storage_manager
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Compatibility exports remain available while application callers migrate to StorageManager.
+storage_manager = get_storage_manager()
+DATABASE_URL = storage_manager.config.database_url
+DATABASE_PATH = storage_manager.config.database_path or Path("data/chat_history.db")
+engine = storage_manager.engine
+SessionLocal = storage_manager.session_factory
 Base = declarative_base()
 
 
@@ -186,7 +188,7 @@ class RuntimeEvent(Base):
 
 
 def init_db():
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    """Create missing ORM tables and retain the two existing additive column checks."""
     Base.metadata.create_all(bind=engine)
 
     # create_all does not add columns to existing SQLite tables; migrate this field safely.
@@ -203,3 +205,29 @@ def init_db():
             connection.execute(
                 text("ALTER TABLE provider_runtime_status ADD COLUMN runtime_details JSON")
             )
+
+
+class MemoryRecord(Base):
+    """Scoped, provenance-aware memory candidate and lifecycle record."""
+
+    __tablename__ = "memories"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    memory_type = Column(String(20), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    dedup_key = Column(String(255), nullable=True, index=True)
+    scope_type = Column(String(40), nullable=False, index=True)
+    scope_id = Column(String(160), nullable=False, index=True)
+    owner_id = Column(String(160), nullable=False, default="local")
+    source_type = Column(String(40), nullable=False)
+    source_ref = Column(String(255), nullable=True)
+    provenance = Column(JSON, nullable=False, default=dict)
+    confidence = Column(Integer, nullable=False, default=50)
+    importance = Column(Integer, nullable=False, default=50)
+    status = Column(String(20), nullable=False, default="candidate", index=True)
+    verified_by = Column(String(160), nullable=True)
+    retention_days = Column(Integer, nullable=True)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    superseded_by_id = Column(Integer, ForeignKey("memories.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    updated_at = Column(DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
+    last_accessed_at = Column(DateTime, nullable=True)
