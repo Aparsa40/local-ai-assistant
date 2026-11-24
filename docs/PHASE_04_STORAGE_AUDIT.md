@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.1 — Storage Audit & Contracts  
-**Status:** WP-4.1 complete — working contracts accepted; WP-4.2 implementation in progress  
+**Status:** WP-4.1 complete — working contracts accepted; WP-4.3 implementation in progress  
 **Branch:** `feat/storage-memory-services`  
 **Baseline:** `main` after PR #9  
 **Last reviewed:** 2026-11-24
@@ -343,7 +343,7 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 
 **WP-4.1 outcome:** complete for the current project baseline. This is a working approval to proceed with WP-4.2. It does not approve speculative Memory/Knowledge schemas, full Phase 5 permissions, or later work packages before their own contracts and tests.
 
-## 11. WP-4.2 implementation snapshot
+## 11. WP-4.2 implementation and validation snapshot
 
 The first Storage Manager increment is committed on `feat/storage-memory-services`:
 
@@ -360,12 +360,37 @@ Configuration:
 - `LOCAL_AI_DATABASE_PATH` overrides the default SQLite file path.
 - `LOCAL_AI_SQL_ECHO` enables SQLAlchemy SQL logging when explicitly set to a truthy value.
 
-**WP-4.2 status:** foundation implemented; local test execution and application smoke test are still required before its exit gate is approved. Existing callers continue to work through compatibility exports. Catalog transaction ownership and route-level ORM access are intentionally deferred to WP-4.3/WP-4.4.
+**WP-4.2 status:** complete for the current increment. On 2026-11-24 the user reported 6/6 focused Storage Manager tests, 115/115 full-suite tests, and successful `compileall`. Existing callers continue to work through compatibility exports. A separate live HTTP startup smoke test has not been recorded.
 
-## 12. Execution directive
+## 12. WP-4.3 repository implementation snapshot
+
+The repository layer has been introduced without changing the current table schema:
+
+- `core/repositories/base.py`: shared repository base and minimal session contract.
+- `core/repositories/catalog_repository.py`: catalog, provider observations, quota snapshots, and intelligence report persistence/query operations.
+- `core/catalog_storage.py`: compatibility facade delegating to `CatalogRepository`; current helper signatures and explicit per-operation commit behavior remain intact.
+- `core/repositories/runtime_repository.py`: centralized runtime repository implementation; `core/runtime/repository.py` remains a compatibility import.
+- `core/repositories/profile_repository.py`: profile get/create/save operations.
+- `core/repositories/session_repository.py`: session list/get/create/rename/delete operations.
+- `core/repositories/message_repository.py`: append and stable per-session message retrieval.
+- `tests/test_repository_services.py`: repository behavior and compatibility coverage.
+
+**Transaction decisions in this increment:**
+- Catalog repository operations preserve their existing explicit commit points. In particular, provider-intelligence refresh remains a staged workflow; earlier successful observations are not rolled back if a later report stage fails.
+- Runtime snapshots and their lifecycle event remain committed as one repository unit-of-work.
+- Session, message, and profile mutations use explicit repository-level commits matching current API behavior.
+- No repository or ORM session is exposed as an Agent capability.
+
+**Migration boundary:** API routes and provider-intelligence orchestration still use compatibility functions or request-scoped SQLAlchemy sessions in some paths. Their full service-level migration is intentionally the next integration step (WP-4.4 for conversations/profile and follow-up catalog workflow cleanup), not claimed complete here.
+
+**WP-4.3 status:** repository modules are implemented; focused and full test execution is pending. Do not close WP-4.3 until repository contract tests, the full suite, and the API/runtime regression checks pass.
+
+## 13. Execution directive
 
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.1 — Storage Audit & Contracts
+
+**Current implementation:** WP-4.1 and WP-4.2 complete; WP-4.3 repository layer in progress.
 
 **Mandatory instruction:** Treat this audit as the accepted working baseline for Local AI Assistant, Phase 4, WP-4.1. Proceed with WP-4.2 and keep the implementation incremental. Existing Phase 2/3 application behavior must remain functional, but preservation of the current disposable SQLite test rows is not required. Do not create speculative Memory/Knowledge tables and do not implement Phase 5 authorization in parallel.
