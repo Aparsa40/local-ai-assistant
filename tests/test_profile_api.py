@@ -86,7 +86,10 @@ def test_avatar_upload_is_normalized_and_can_be_deleted(client):
     with Image.open(BytesIO(avatar.content)) as image:
         assert image.size == (256, 256)
 
-    deleted = client.delete("/api/profile/avatar")
+    approval = client.post("/api/permissions/approvals/avatar-delete").json()
+    approved = client.post(f"/api/permissions/approvals/{approval['approval_id']}/approve")
+    assert approved.status_code == 200
+    deleted = client.delete("/api/profile/avatar", params={"approval_id": approval["approval_id"]})
     assert deleted.status_code == 200
     assert deleted.json()["avatar_configured"] is False
     assert client.get("/api/profile/avatar").status_code == 404

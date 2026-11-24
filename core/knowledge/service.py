@@ -102,7 +102,7 @@ class KnowledgeService:
         mime_type: str | None = None,
         metadata: dict | None = None,
     ) -> KnowledgeSourceRecord:
-        self._authorize(scope, "write")
+        self._authorize(scope, "create")
         if source_type not in self.SOURCE_TYPES:
             raise KnowledgeValidationError("Unsupported Knowledge source type")
         clean_title = title.strip() if isinstance(title, str) else ""
@@ -147,7 +147,7 @@ class KnowledgeService:
         content: bytes,
         mime_type: str | None = None,
     ) -> KnowledgeFileRecord:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         safe_name = filename.replace(chr(92), "/").split("/")[-1].strip() if isinstance(filename, str) else ""
         if not safe_name or len(safe_name) > 255 or safe_name in {".", ".."}:
             raise KnowledgeValidationError("Original filename is invalid")
@@ -207,7 +207,7 @@ class KnowledgeService:
         chunk_size: int = 1200,
         overlap: int = 120,
     ) -> int:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         if not isinstance(extracted_text, str) or not extracted_text.strip():
             raise KnowledgeValidationError("Extracted text must not be empty")
         if len(extracted_text) > self.MAX_TEXT_CHARS:
@@ -297,7 +297,7 @@ class KnowledgeService:
         ]
 
     def archive_source(self, scope: KnowledgeScope, source_id: str) -> KnowledgeSourceRecord:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         source.status = "archived"
         source.archived_at = utcnow_naive()
         self.db.commit()

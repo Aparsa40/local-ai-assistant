@@ -195,3 +195,19 @@ class ApprovalRepository(BaseRepository):
         else:
             self.db.rollback()
         return self.get(approval_id)
+
+
+    def list_recent(self, *, limit: int = 100, status: ApprovalStatus | None = None) -> tuple[ApprovalRequest, ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        query = self.db.query(PermissionApprovalRecord)
+        if status is not None:
+            if not isinstance(status, ApprovalStatus):
+                raise ValueError("status must be an ApprovalStatus")
+            query = query.filter(PermissionApprovalRecord.status == status.value)
+        records = (
+            query.order_by(PermissionApprovalRecord.created_at.desc(), PermissionApprovalRecord.approval_id)
+            .limit(limit)
+            .all()
+        )
+        return tuple(self._to_contract(record) for record in records)

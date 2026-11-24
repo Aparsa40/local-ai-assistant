@@ -392,13 +392,20 @@ function chatApp() {
 
         async removeAvatar() {
             if (!confirm('تصویر پروفایل حذف شود؟')) return;
-            const response = await fetch('/api/profile/avatar', { method: 'DELETE' });
-            const data = await response.json();
-            if (!response.ok) {
-                alert(data.detail || 'حذف تصویر ناموفق بود.');
-                return;
+            try {
+                const request = await fetch('/api/permissions/approvals/avatar-delete', { method: 'POST' });
+                const approval = await request.json();
+                if (!request.ok) throw new Error(approval.detail || 'ثبت درخواست تأیید ناموفق بود.');
+                const decision = await fetch(`/api/permissions/approvals/${encodeURIComponent(approval.approval_id)}/approve`, { method: 'POST' });
+                const decisionData = await decision.json();
+                if (!decision.ok) throw new Error(decisionData.detail || 'تأیید حذف ناموفق بود.');
+                const response = await fetch(`/api/profile/avatar?approval_id=${encodeURIComponent(approval.approval_id)}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || 'حذف تصویر ناموفق بود.');
+                this.profile = { ...this.profile, ...data };
+            } catch (error) {
+                alert(error.message);
             }
-            this.profile = { ...this.profile, ...data };
         },
 
         async loadSessions() {
@@ -469,7 +476,13 @@ function chatApp() {
             if (!confirmed) return;
 
             try {
-                const response = await fetch(`/api/sessions/${session.id}`, { method: 'DELETE' });
+                const request = await fetch(`/api/permissions/approvals/session-delete/${session.id}`, { method: 'POST' });
+                const approval = await request.json();
+                if (!request.ok) throw new Error(approval.detail || 'ثبت درخواست تأیید ناموفق بود.');
+                const decision = await fetch(`/api/permissions/approvals/${encodeURIComponent(approval.approval_id)}/approve`, { method: 'POST' });
+                const decisionData = await decision.json();
+                if (!decision.ok) throw new Error(decisionData.detail || 'تأیید حذف ناموفق بود.');
+                const response = await fetch(`/api/sessions/${session.id}?approval_id=${encodeURIComponent(approval.approval_id)}`, { method: 'DELETE' });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || 'حذف نشست ناموفق بود.');
 

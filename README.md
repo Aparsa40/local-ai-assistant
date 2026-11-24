@@ -29,10 +29,10 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
 - **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
 - **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
-- **Permission Manager (Phase 5 in progress):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
-- **Tool Registry & Runtime (Phase 5 in progress):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
+- **Permission Manager (Phase 5 implementation complete; PR pending):** default-deny exact-scope authorization, persisted grants, local-owner grant administration, one-time action-bound approvals, redacted audit APIs, and approval gates for session deletion, avatar deletion, and owned-runtime shutdown. The API is loopback/same-origin restricted; the fixed local principal is not authentication.
+- **Tool Registry & Runtime (Phase 5 infrastructure implemented):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. Production handlers and model-generated tool-call orchestration are intentionally deferred to Agent Runtime (Phase 6).
 - **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
-- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, intelligence reports, permission grants, approval requests, and redacted audit events are stored locally. Phase 5 tables are additive through SQLAlchemy metadata initialization; versioned migrations remain pending in Phase 4 WP-4.7.
+- **SQLite persistence:** chat sessions, messages, profile data, catalogs, runtime observations, memories, Knowledge sources/files/artifacts/chunks, permission grants, approval requests, and redacted audit events are stored locally. Phase 4 adds ordered SQLite schema migrations `0001`–`0004`; PostgreSQL migrations are not implemented. Permission/approval/audit tables are currently registered through ORM metadata.
 
 ## Project structure
 
@@ -82,10 +82,11 @@ Important documents:
 - [Phase 5 execution plan](docs/PHASE_05_EXECUTION_PLAN.md)
 - [Permissions](docs/PERMISSIONS.md)
 - [Tool Runtime](docs/TOOL_RUNTIME.md)
+- [Knowledge Storage](docs/KNOWLEDGE_STORAGE.md)
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.6 are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15; WP-5.1–WP-5.6 are implemented and CI-validated, while WP-5.7 final security regression and documentation acceptance remains. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 foundation PR #15 is merged; final local-owner grant/approval APIs, Knowledge authorization, destructive-action approval, and security regression are implemented on `feat/phase-5-operational-authorization`. Latest CI passed 235 tests; its PR/merge is pending. The local owner identity is not authentication. Read the relevant module contract before changing that area.
 
 ## Requirements
 
@@ -182,10 +183,12 @@ The following target capabilities are **not yet implemented as complete systems*
 - Automatic task-based routing and LLM Supervisor.
 - Unified Conversation Processing with explicit online/offline engines.
 - Response Validator & Composer.
-- Permission Manager and permissioned Tool Runtime.
+- Production tool handlers and model-generated tool-call orchestration (Phase 6 Agent Runtime).
+- Hosted authentication and multi-user authorization; the current local owner principal is not identity verification.
+- General managed-file upload API and external connector framework.
 - External connector framework and Discord synchronization.
-- Document ingestion, AI Librarian, approved shared knowledge, and model-private memory lifecycle.
-- Full repository/migration architecture for SQLite and PostgreSQL.
+- Automated document ingestion, AI Librarian review/publication, approved shared knowledge, and model-private memory lifecycle.
+- PostgreSQL migration adapter/deployment; current versioned migrations target SQLite.
 - Authentication and hosted multi-user security.
 
 The current chat path still uses manual provider/model selection. Agent Runtime, automatic task routing, and Multi-Agent execution are not implemented yet. The application does not implement user authentication. Do not expose the current development server to an untrusted network.

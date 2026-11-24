@@ -56,3 +56,34 @@ class AuditRepository(BaseRepository):
             }
             for item in records
         )
+
+
+    def list_recent(self, *, limit: int = 100) -> tuple[dict[str, object], ...]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        records = (
+            self.db.query(PermissionAuditEventRecord)
+            .order_by(PermissionAuditEventRecord.created_at.desc(), PermissionAuditEventRecord.event_id)
+            .limit(limit)
+            .all()
+        )
+        return tuple(
+            {
+                "event_id": item.event_id,
+                "event_type": item.event_type,
+                "request_id": item.request_id,
+                "subject_type": item.subject_type,
+                "subject_id": item.subject_id,
+                "resource_type": item.resource_type,
+                "resource_id": item.resource_id,
+                "operation": item.operation,
+                "outcome": item.outcome,
+                "created_at": (
+                    item.created_at.replace(tzinfo=timezone.utc)
+                    if item.created_at and item.created_at.tzinfo is None
+                    else item.created_at
+                ),
+                "metadata": dict(item.metadata_json or {}),
+            }
+            for item in records
+        )

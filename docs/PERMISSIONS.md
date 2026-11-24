@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
+**Status:** Phase 5 implementation complete on `feat/phase-5-operational-authorization`; PR/merge pending. Core authorization, local-owner grant administration, approval review, destructive API approval, Knowledge adapter integration, and audit APIs are implemented. Latest CI passed 235 tests plus compile and frontend syntax checks.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -21,7 +21,7 @@ Implemented in `core/permissions/types.py` and `core/permissions/manager.py`, wi
 - `PermissionDecision`: allow/deny/approval-required result with stable reason and request reference.
 - `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, revocation, and optional approval-required state.
 
-`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is additive and currently created through SQLAlchemy metadata initialization; it is not backed by versioned migrations yet.
+`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The permission grant, approval, and audit records are ORM metadata-owned. The Phase 4 migration runner provides ordered SQLite revisions for the Knowledge schema and legacy additive columns; it does not currently provide PostgreSQL migrations or dedicated permission-table revisions.
 
 Identifiers reject empty values, wildcard-like values, control characters, and excessive length. These contracts are descriptive data only; constructing a request, decision, or grant does not itself authorize an operation.
 
@@ -76,7 +76,7 @@ Return a structured denial reason without leaking secrets. Missing, malformed, e
 
 ## 8. Current integration limits
 
-The current application does not implement user authentication, a credential vault, Knowledge Storage, managed file storage, or a connector framework. No production tool handlers are registered. Phase 5 must not claim end-to-end protection for those domains until their owning services exist and are integrated. The outstanding Phase 4 WP-4.7 versioned migration framework is also not replaced by SQLAlchemy `create_all()`.
+The local API uses a fixed `local-api` service principal and fixed `local-user` owner identity behind loopback and same-origin checks. This is not user authentication and is not safe for hosted/multi-user exposure. There is no encrypted credential vault or connector framework. KnowledgeService is integrated through exact persisted grants, but generic managed-file upload APIs are not exposed. No production tool handlers or model-generated tool-call loop are registered; Phase 6 Agent Runtime owns that integration and must call ToolRuntime. Permission/approval/audit records are currently created through ORM metadata; SQLite migrations are implemented for Phase 4 Knowledge but PostgreSQL is not supported.
 
 ## 9. Acceptance criteria
 
@@ -88,3 +88,7 @@ The current application does not implement user authentication, a credential vau
 - Every execution has a prior authorization decision and correlated audit event.
 - Destructive and external side effects have approval tests.
 - Unsupported resource domains remain explicitly unavailable rather than implicitly allowed.
+- KnowledgeService creation, updates, and reads are authorized by separate exact-scope grants.
+- Grant administration and approval decisions are restricted to the fixed local owner behind loopback/same-origin checks.
+- Session deletion, avatar deletion, and runtime shutdown require action-bound, expiring, one-time approvals.
+- The local owner identity is a single-user convenience boundary, not authentication.
