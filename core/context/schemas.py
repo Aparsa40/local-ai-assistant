@@ -22,6 +22,8 @@ class ContextRequest:
     max_tokens: int = 4000
     memory_scopes: tuple[MemoryScope, ...] = field(default_factory=tuple)
     include_candidates: bool = False
+    knowledge_scopes: tuple[KnowledgeScope, ...] = field(default_factory=tuple)
+    knowledge_limit: int = 10
 
 
 @dataclass(frozen=True, slots=True)
