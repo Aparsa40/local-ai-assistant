@@ -1,6 +1,6 @@
 # Agent Runtime
 
-**Status:** Accepted target architecture; not implemented yet.
+**Status:** Implemented in Phase 6 for exactly one bounded agent. Supervisor, Conversation Agent, and multi-agent orchestration remain accepted target design (Phases 7-9).
 
 ## 1. Purpose
 
@@ -114,6 +114,8 @@ For multi-agent runs:
 5. Add a Supervisor and a second specialized agent.
 6. Add multi-agent handoffs and coordination.
 
+Items 1, 2, 3 (route allowlist and transmission authorization), and 4 are implemented in Phase 6. Items 5 and 6 are future phases.
+
 ## 10. Non-goals for the first version
 
 - No unrestricted autonomous computer control.
@@ -122,5 +124,31 @@ For multi-agent runs:
 - No mandatory cloud model.
 - No assumption that every application module must become an agent.
 - No multi-agent complexity before a single-agent workflow is testable.
+
+## 11. Phase 6 implementation record
+
+Phase 6 delivers exactly one bounded, application-owned runtime on the builtin tool set. It is not a general autonomous-agent platform, and no Supervisor, Conversation Agent, multi-agent orchestration, or AI Librarian workflow is implemented.
+
+Implemented components (branch `feat/phase-6-agent-runtime`):
+
+- `core/agents/contracts.py`: immutable `AgentDefinition`, `AgentTask`, `AgentRun`, `AgentBudgets`, `AgentCheckpoint`, `RunEvent`, `CompletionCriteria`, and `DataScope` contracts; the allowed `TRANSITIONS` table with terminal absorbing states; bounded schema and payload validation.
+- `core/agents/registry.py`: trusted registry over persisted definitions; unknown and disabled versions are rejected; returned definitions are deep copies.
+- `core/agents/lifecycle.py`: deterministic create/start/pause/resume/cancel/complete/fail transitions with keyword-only `expected_version` optimistic concurrency, one in-process executor claim per run, truthful pause and failure stop reasons, approval-pointer gating, and `recover_stale_runs()` restart recovery that pauses orphaned runs with error code `restart_recovery` instead of silently re-executing them.
+- `core/agents/context.py`: permission-checked context assembly through the PermissionManager, explicit knowledge `DataScope` resolution, least-privilege `CapabilityBinding` as plain data (no handlers, sessions, or credentials; Phase 6 supports read-only bindings only), and exact per-run grants issued by the trusted local owner.
+- `core/agents/controller.py`: bounded plan/act/observe/evaluate loop enforcing iteration, wall-clock, tool-call, input-byte, output-byte, and model-token budgets; run-identity and scope validation of every tool proposal; model invocation exclusively through the InterfaceManager, gated by the `allowed_models` route list and an explicit task-level `allow_model_transmission` authorization; checkpoints before externally visible transitions; structured outcomes with truthful completion reporting.
+- `core/agents/events.py`: append-only, redacted run event recorder using a safe metadata whitelist and secret-pattern redaction.
+- `core/agents/builtins.py`: one builtin agent, `knowledge-analyzer` 1.0.0, a deterministic read-only knowledge scope analysis workflow with no model dependency on its happy path.
+- `core/agents/bootstrap.py`: composition root owning the single trusted registry activation path and the application ToolRegistry, including the read-only `knowledge_search` 1.0.0 tool with bounded input/output; `LocalOwnerGrantAdministrationPolicy` scopes grant administration to the local owner while everything else stays default-deny.
+- `core/repositories/`: `AgentDefinitionRepository`, `AgentTaskRepository`, and run/event/checkpoint repositories with explicit transaction boundaries.
+- `main.py`: loopback- and same-origin-protected endpoints for listing definitions, inspecting runs and redacted events, creating tasks, and executing, pausing (including approval handoff), resuming, and cancelling runs; startup registers builtin agents and performs restart recovery.
+- `static/`: a minimal run-status and approval-handoff view.
+
+Persistence: migration `0005_agent_runtime` adds the agent definition, task, run, checkpoint, and run-event tables; migrations remain ordered and idempotent.
+
+Tests: `tests/agent_test_models.py` (full composed environment over a private SQLite file), `tests/test_agent_contracts.py`, `tests/test_agent_registry.py`, `tests/test_agent_lifecycle.py`, `tests/test_agent_execution.py`, and `tests/test_agent_permissions.py` cover contract validation, registry trust, the full transition matrix, concurrency conflicts, event-persistence failure surfacing, restart recovery, every budget class, permission denial paths (run identity, scope binding, capability binding, mutating-tool rejection, issuer identity), grant least privilege, and model unavailability.
+
+Validation status: the required validation commands (`python -m compileall -q core main.py`, `python -m pytest -q`, `node --check static/app.js`) plus loopback HTTP smoke tests must pass in CI or on a local checkout before merge. This branch was authored in a web-only environment without a Python runtime, so CI evidence is the pending gate recorded in the pull request.
+
+Known limitations: one bounded builtin agent; no Supervisor, Conversation Agent, multi-agent, autonomous publishing, credential access, or unrestricted execution; capability bindings are read-only by design for this phase; cloud/model routing and response composition remain future work.
 
 Related: AI_ORCHESTRATION.md, INTERFACE_MANAGER.md, PERMISSIONS.md, ARCHITECTURE.md.
