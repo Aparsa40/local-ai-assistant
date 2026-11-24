@@ -2,7 +2,7 @@
 
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11 — Tool Runtime & Permission Manager  
-**Status:** Tool Registry and Tool Runtime implemented and CI-validated; current domain/API permission integration is implemented in WP-5.6. Final security regression and phase acceptance remain in WP-5.7.
+**Status:** Tool Registry and Tool Runtime infrastructure is implemented and merged through PR #15. Final integration and security acceptance remain in progress. No production handlers are registered and no model-generated tool-call loop is connected yet; future Agent Runtime must invoke tools only through this gateway.
 
 ## 1. Security boundary
 
@@ -56,7 +56,10 @@ The runtime does not retry a denied action through another tool. If required aud
 ## 6. Current limitations
 
 - Tool Registry and Tool Runtime exist, but no production tool handlers are registered by this work package.
-- Existing user-facing conversation, memory, provider, runtime, and configuration APIs use `PermissionManager` with `LocalApplicationPolicy` and `require_access`; they are not invoked as model-generated tools and therefore do not route through ToolRuntime.
+- Existing user-facing conversation, memory, provider, runtime, profile, and configuration APIs use `PermissionManager` with `LocalApplicationPolicy` and `require_access`; they are not invoked as model-generated tools and therefore do not route through ToolRuntime.
+- Phase 4 KnowledgeService exists but still needs a PermissionManager-backed KnowledgeAccessPolicy adapter and integration tests.
+- Grant and approval persistence services exist, but operational review/administration endpoints are not yet complete.
+- Direct destructive API operations are not yet consistently protected by action-bound ApprovalService workflows.
 - MemoryService uses an explicit adapter when configured; it remains default-deny without one. ContextManager is used for bounded conversation history in chat, and memory scopes are not attached implicitly.
 - Tool schemas and registration are not a sandbox. Handler code remains trusted application code and must use narrow injected capabilities.
 - No general-purpose shell, arbitrary code execution, unrestricted file access, or external connector is provided.
