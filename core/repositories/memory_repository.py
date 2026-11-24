@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from core.database import MemoryRecord
+from core.database import MemoryRecord, utcnow_naive
 from .base import BaseRepository
 
 
@@ -38,7 +38,7 @@ class MemoryRepository(BaseRepository):
         )
 
     def find_duplicate(self, memory_type: str, scope_type: str, scope_id: str, owner_id: str, normalized_content: str):
-        records = self.list_scope(scope_type, scope_id, owner_id, ("candidate", "active"), datetime.min)
+        records = self.list_scope(scope_type, scope_id, owner_id, ("candidate", "active"), utcnow_naive())
         return next(
             (
                 record for record in records
