@@ -61,7 +61,7 @@ def test_context_uses_bounded_recent_history_in_chronological_order_and_skips_cu
             ContextRequest(conversation_id=session_id, query="درخواست فعلی", history_limit=3)
         )
 
-        assert [item.content for item in package.items] == ["پیام نزدیک", "پاسخ نزدیک"]
+        assert [item.content for item in package.items] == ["پاسخ قدیمی", "پیام نزدیک", "پاسخ نزدیک"]
         assert all(item.source_type == "conversation" for item in package.items)
         assert all(item.trust_status == "historical_unverified" for item in package.items)
         assert all(item.source_ref.startswith("message:") for item in package.items)
