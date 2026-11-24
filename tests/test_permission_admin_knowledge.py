@@ -133,7 +133,7 @@ def test_knowledge_service_uses_exact_permission_manager_grants():
         grant = make_grant(
             subject,
             PermissionResource(ResourceType.KNOWLEDGE_SOURCE, scope.scope_id),
-            PermissionOperation.UPDATE,
+            PermissionOperation.CREATE,
             PermissionScope(ScopeType.USER, scope.scope_id, scope.owner_id),
         )
         manager.issue_grant(grant, issuer=PermissionSubject(SubjectType.USER, "local-user"))
