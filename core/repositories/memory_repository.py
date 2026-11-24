@@ -23,7 +23,7 @@ class MemoryRepository(BaseRepository):
             .first()
         )
 
-    def list_scope(self, scope_type: str, scope_id: str, owner_id: str, statuses: tuple[str, ...]):
+    def list_scope(self, scope_type: str, scope_id: str, owner_id: str, statuses: tuple[str, ...], now: datetime):
         return (
             self.db.query(MemoryRecord)
             .filter(
@@ -31,13 +31,14 @@ class MemoryRepository(BaseRepository):
                 MemoryRecord.scope_id == scope_id,
                 MemoryRecord.owner_id == owner_id,
                 MemoryRecord.status.in_(statuses),
+                or_(MemoryRecord.expires_at.is_(None), MemoryRecord.expires_at > now),
             )
             .order_by(MemoryRecord.updated_at.desc(), MemoryRecord.id.desc())
             .all()
         )
 
     def find_duplicate(self, memory_type: str, scope_type: str, scope_id: str, owner_id: str, normalized_content: str):
-        records = self.list_scope(scope_type, scope_id, owner_id, ("candidate", "active"))
+        records = self.list_scope(scope_type, scope_id, owner_id, ("candidate", "active"), datetime.min)
         return next(
             (
                 record for record in records
