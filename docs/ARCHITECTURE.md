@@ -20,9 +20,9 @@ The current repository contains:
 - Provider contracts and adapters in `core/providers/`.
 - Configuration handling in `core/config_manager.py`.
 - SQLAlchemy/SQLite persistence in `core/database.py`, managed through `core/storage/` and domain repositories in `core/repositories/`.
-- Conversation/Profile Services, scoped MemoryService, and bounded ContextManager in `core/conversations/`, `core/profiles/`, `core/memory/`, and `core/context/`.
-- A default-deny PermissionManager with exact-scope grants, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`.
-- A fixed local single-user policy for loopback API requests; protected API endpoints reject non-loopback clients and route through centralized permission checks.
+- Conversation/Profile Services, scoped MemoryService, bounded ContextManager, and Phase 4 Knowledge Storage in `core/conversations/`, `core/profiles/`, `core/memory/`, `core/context/`, and `core/knowledge/`.
+- A default-deny PermissionManager with exact-scope grants, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`; operational grant/approval administration and complete destructive API approval mediation are still being finalized.
+- A fixed local single-user policy for loopback API requests; protected API endpoints reject non-loopback clients and route through centralized permission checks. This is not authentication; grant and approval management must remain local-owner-only until a real identity system exists.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
 - An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations, including a combined read-only health/inventory snapshot.
@@ -86,7 +86,7 @@ The current credential file is local and ignored by Git, but credentials are not
   Backup & Maintenance ---- Snapshot APIs / Cache Policies
 ```
 
-This is a logical architecture. It does not require a separate process or database for every box. Agent Runtime and its agents are accepted target design, not current shipped functionality.
+This is a logical architecture. It does not require a separate process or database for every box. Agent Runtime and its agents are accepted target design, not current shipped functionality. Phase 4 Knowledge Storage is implemented with SQLite FTS5 and four versioned SQLite migrations; PostgreSQL migrations, automatic extraction, embeddings, and approved publication are not implemented.
 
 This is a logical architecture. It does not require a separate process or database for every box.
 
