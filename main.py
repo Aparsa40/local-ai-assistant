@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 import json
-from typing import Any, Dict
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -387,13 +387,13 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
 
     async def response_generator():
         full_response = ""
-        yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\n\n"
         try:
             async for chunk in interface_manager.stream_chat(
                 provider_id, formatted_messages, model=selected_model
             ):
                 full_response += chunk
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\\n\\n"
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
         except Exception as exc:
             diagnostic_db = SessionLocal()
             try:
@@ -406,7 +406,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
                 )
             finally:
                 diagnostic_db.close()
-            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\\n\\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
             return
         db_session = SessionLocal()
         try:
@@ -416,6 +416,6 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
             )
         finally:
             db_session.close()
-        yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(response_generator(), media_type="text/event-stream")
