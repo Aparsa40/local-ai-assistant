@@ -128,7 +128,7 @@ This map is limited to the inspected source files and must be extended after the
 | `core/runtime/repository.py` | Direct ORM access to runtime state/event tables | Local Runtime persistence adapter | Runtime Repository interface |
 | `core/runtime/manager.py` | Calls injected repository's `record()`; no ORM imports observed | Runtime service delegates persistence | Keep ORM-free |
 | `core/runtime/factory.py` (not yet inspected in this pass) | Runtime manager is built with `SessionLocal` from app startup | Injection seam indicated by `main.py` | Verify factory wiring and keep session factory behind Storage Manager |
-| Provider Intelligence workflows | Receive/pass a DB session into catalog persistence paths (exact complete call graph pending) | Provider Intelligence service | Domain repository contracts; no direct table access from unrelated agents |
+| `core/provider_intelligence.py` | Imports `catalog_storage` and `utcnow_naive`; orchestrates local Ollama process lifecycle and report analysis; uses catalog storage for persisted observations/reports | Provider Intelligence service delegates persistence to catalog storage; complete function-level call graph still pending | Keep runtime process control separate from persistence; route data writes through catalog-owned repository contracts |
 | Interface Manager | No ORM import observed in inspected architecture; catalog service access is indirect | Provider/model control-plane service | Must consume catalog contracts, not SQLAlchemy sessions |
 
 ## 6. Provisional logical storage and access matrix
@@ -250,7 +250,7 @@ Phase 4 must provide scope/policy hooks and safe default-deny behavior for prote
 
 - [ ] Complete repository-wide inventory of every SQLAlchemy model/table and all references.
 - [ ] Locate every engine/session factory creation and every raw SQL/ORM query, commit, rollback, close, and transaction context.
-- [ ] Inspect `core/runtime/factory.py`, provider-intelligence modules, all remaining storage callers, and relevant tests.
+- [x] Inspect `core/runtime/factory.py` and the provider-intelligence module at a first-pass level. Remaining storage callers, function-level call graph, and relevant tests still require inspection.
 - [ ] Inspect actual SQLite schema from a disposable copy, including indexes, foreign-key declarations, PRAGMA configuration, and representative row counts; do not inspect or mutate the user's live database without explicit approval.
 - [ ] Confirm catalog/runtime repository contracts and identify every caller that relies on internal commits.
 - [ ] Add a precise module/file dependency map and classify each direct DB access as retain, wrap, migrate, or remove.
