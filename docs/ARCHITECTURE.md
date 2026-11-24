@@ -19,7 +19,10 @@ The current repository contains:
 - Alpine.js browser UI in `static/`.
 - Provider contracts and adapters in `core/providers/`.
 - Configuration handling in `core/config_manager.py`.
-- SQLAlchemy/SQLite persistence in `core/database.py`.
+- SQLAlchemy/SQLite persistence in `core/database.py`, managed through `core/storage/` and domain repositories in `core/repositories/`.
+- Conversation/Profile Services, scoped MemoryService, and bounded ContextManager in `core/conversations/`, `core/profiles/`, `core/memory/`, and `core/context/`.
+- A default-deny PermissionManager with exact-scope grants, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`.
+- A fixed local single-user policy for loopback API requests; protected API endpoints reject non-loopback clients and route through centralized permission checks.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
 - An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations, including a combined read-only health/inventory snapshot.
@@ -29,7 +32,7 @@ Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemin
 
 Operator-level catalog metadata is maintained locally and separated from exact live model discovery. OpenRouter key usage and observed Groq/Cohere response-header telemetry are exposed where supported; unknown balances remain unknown.
 
-The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not yet implement user authentication. Do not expose the current development server to untrusted networks.
+The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not implement user authentication. The loopback-only `local-api` principal is a local single-user boundary, not identity verification. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## 3. Target high-level architecture
 
@@ -111,7 +114,7 @@ Refreshes provider and model metadata on a schedule or on user request. It detec
 
 ### Conversation Processing Module
 
-Owns the user-facing conversation lifecycle: request intake, conversation history, authorized context assembly, task handoff, event recording, and delivery of the validated result.
+Owns the user-facing conversation lifecycle: request intake, conversation history, authorized context assembly, task handoff, event recording, and delivery of the validated result. The current chat API persists the user turn through ConversationService and assembles bounded conversation history through ContextManager. Memory scopes are not implicitly attached; retrieval requires explicit scope input.
 
 It decides whether a request can be answered directly, handled by a deterministic workflow, or delegated to Agent Runtime. It does not own the lifecycle of specialized agent runs.
 
@@ -127,9 +130,11 @@ An independent quality and policy boundary. It checks output structure, complete
 
 It must not be folded into a provider adapter.
 
-### Tool & Permission Manager
+### Tool & Permission Manager (Phase 5 implementation in progress)
 
-Maintains tool permissions and mediates access. Models can request tool use, but only application code can authorize and execute it.
+The current implementation includes typed authorization contracts, exact-scope persistent grants with expiry/revocation, default-deny PermissionManager decisions, separate default-deny grant administration, action-hash-bound one-time approvals, redacted append-only audit events, an explicit versioned Tool Registry, and an async bounded Tool Runtime. Conversation/Profile Services, ContextManager, provider/runtime/configuration API routes, and the MemoryService adapter use centralized permission checks. The current local policy is loopback-only and single-user; it is not hosted authentication.
+
+Knowledge Storage, managed files, connector services, encrypted credential vault, hosted multi-user identity, and production tool handlers are not yet implemented. Models can request tool use, but only application code can register, authorize, and execute it.
 
 ### Knowledge Access Layer
 
