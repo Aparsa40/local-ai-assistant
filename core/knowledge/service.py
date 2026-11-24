@@ -144,9 +144,11 @@ class KnowledgeService:
         if not safe_name or len(safe_name) > 255 or safe_name in {".", ".."}:
             raise KnowledgeValidationError("Original filename is invalid")
         storage_key, size_bytes, digest = self.file_storage.store(content)
+        next_version = source.version + 1
         record = KnowledgeFileRecord(
             id=uuid4().hex,
             source_id=source.id,
+            source_version=next_version,
             storage_key=storage_key,
             original_filename=safe_name,
             mime_type=mime_type,
@@ -156,6 +158,8 @@ class KnowledgeService:
         source.mime_type = mime_type or source.mime_type
         source.byte_size = size_bytes
         source.content_hash = digest
+        source.version = next_version
+        source.updated_at = utcnow_naive()
         self.db.add(record)
         try:
             self.db.commit()
