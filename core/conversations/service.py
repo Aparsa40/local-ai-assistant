@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from core.repositories import MessageRepository, SessionRepository
+from core.permissions.audit import AuditService
+from core.permissions.guards import require_access
+from core.permissions.manager import PermissionManager
+from core.permissions.types import AccessContext, PermissionOperation, ResourceType
 
 from .schemas import ChatPreparation, ConversationMessage
 
@@ -15,21 +19,43 @@ class ConversationService:
 
     DEFAULT_TITLE = "گفتگوی جدید"
 
-    def __init__(self, db) -> None:
+    def __init__(
+        self,
+        db,
+        permission_manager: PermissionManager | None = None,
+        access_context: AccessContext | None = None,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self.sessions = SessionRepository(db)
         self.messages = MessageRepository(db)
+        self.permission_manager = permission_manager
+        self.access_context = access_context
+        self.audit_service = audit_service
+
+    def _authorize(self, session_id: int | str, operation: PermissionOperation) -> None:
+        require_access(
+            self.permission_manager,
+            self.access_context,
+            ResourceType.CONVERSATION,
+            str(session_id),
+            operation,
+            audit_service=self.audit_service,
+        )
 
     def list_sessions(self) -> list[dict[str, object]]:
+        self._authorize("session-collection", PermissionOperation.READ)
         return [
             {"id": item.id, "title": item.title}
             for item in self.sessions.list_recent()
         ]
 
     def create_session(self) -> dict[str, object]:
+        self._authorize("session-collection", PermissionOperation.CREATE)
         item = self.sessions.create(self.DEFAULT_TITLE)
         return {"id": item.id, "title": item.title}
 
     def delete_session(self, session_id: int) -> dict[str, object]:
+        self._authorize(session_id, PermissionOperation.DELETE)
         item = self.sessions.get(session_id)
         if item is None:
             raise ConversationNotFoundError("نشست یافت نشد")
@@ -37,6 +63,7 @@ class ConversationService:
         return {"status": "success", "deleted_session_id": session_id}
 
     def rename_session(self, session_id: int, title: str) -> dict[str, object]:
+        self._authorize(session_id, PermissionOperation.UPDATE)
         item = self.sessions.get(session_id)
         if item is None:
             raise ConversationNotFoundError("نشست یافت نشد")
@@ -47,6 +74,7 @@ class ConversationService:
         return {"id": item.id, "title": item.title}
 
     def get_messages(self, session_id: int) -> list[dict[str, str | None]]:
+        self._authorize(session_id, PermissionOperation.READ)
         if self.sessions.get(session_id) is None:
             raise ConversationNotFoundError("نشست یافت نشد")
         return [
@@ -60,6 +88,7 @@ class ConversationService:
         # current user turn while still retaining the requested number of prior turns.
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 101:
             raise ValueError("تعداد پیام‌های تاریخچه باید بین ۱ تا ۱۰۱ باشد")
+        self._authorize(session_id, PermissionOperation.READ)
         if self.sessions.get(session_id) is None:
             raise ConversationNotFoundError("نشست یافت نشد")
         return tuple(
@@ -75,6 +104,7 @@ class ConversationService:
 
     def prepare_chat(self, session_id: int, user_message: str) -> ChatPreparation:
         """Persist the user turn before inference and return prior history."""
+        self._authorize(session_id, PermissionOperation.UPDATE)
         session = self.sessions.get(session_id)
         if session is None:
             raise ConversationNotFoundError("نشست یافت نشد")
@@ -100,6 +130,7 @@ class ConversationService:
     def append_assistant_message(
         self, session_id: int, content: str, model_used: str
     ) -> None:
+        self._authorize(session_id, PermissionOperation.UPDATE)
         if self.sessions.get(session_id) is None:
             raise ConversationNotFoundError("نشست یافت نشد")
         self.messages.append(session_id, "assistant", content, model_used=model_used)
