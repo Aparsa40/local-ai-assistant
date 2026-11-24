@@ -211,7 +211,7 @@ class MemoryService:
         reviewer = verified_by.strip() if isinstance(verified_by, str) else ""
         if not reviewer or len(reviewer) > 160:
             raise MemoryValidationError("شناسه بازبین برای تأیید حافظه الزامی است")
-        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
+        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if record is None:
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         if record.status != "candidate":
@@ -236,7 +236,7 @@ class MemoryService:
         retention_days: int | None = None,
     ) -> MemoryRecordView:
         self._authorize(scope, "update")
-        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
+        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if record is None:
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         if record.status not in {"candidate", "active"}:
@@ -267,7 +267,7 @@ class MemoryService:
         self._authorize(scope, "supersede")
         if memory_id == replacement_id:
             raise MemoryValidationError("حافظه نمی‌تواند جایگزین خودش شود")
-        current = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
+        current = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
         replacement = self.repository.get(replacement_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if current is None or replacement is None:
             raise MemoryNotFoundError("حافظه مبدأ یا جایگزین پیدا نشد")
@@ -286,7 +286,7 @@ class MemoryService:
 
     def delete(self, scope: MemoryScope, memory_id: int) -> None:
         self._authorize(scope, "delete")
-        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
+        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if record is None:
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         self.repository.delete(record)
