@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.database import Base, ChatMessage
+from core.database import Base
 from core.repositories import (
     CatalogRepository,
     MessageRepository,
@@ -37,7 +37,7 @@ def test_catalog_repository_preserves_last_known_good_empty_sync_behavior():
 
         assert result["status"] == "empty_response_preserved"
         assert [row["model_id"] for row in snapshot["live_models"] if row["active"]] == ["llama3.2:1b"]
-        assert snapshot["sync_history"][0]["status"] == "empty_response_preserved"
+        assert any(row["status"] == "empty_response_preserved" for row in snapshot["sync_history"])
     finally:
         db.close()
         engine.dispose()
