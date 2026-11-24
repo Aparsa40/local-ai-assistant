@@ -1,5 +1,7 @@
 """Domain persistence repositories."""
 from .catalog_repository import CatalogRepository
+from .approval_repository import ApprovalRepository
+from .audit_repository import AuditRepository
 from .message_repository import MessageRepository
 from .memory_repository import MemoryRepository
 from .profile_repository import ProfileRepository
@@ -9,6 +11,8 @@ from .session_repository import SessionRepository
 
 __all__ = [
     "CatalogRepository",
+    "ApprovalRepository",
+    "AuditRepository",
     "MessageRepository",
     "MemoryRepository",
     "ProfileRepository",
