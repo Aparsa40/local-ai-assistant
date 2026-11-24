@@ -192,3 +192,25 @@ def test_public_catalog_does_not_expose_handlers_or_raw_schemas() -> None:
     },)
     assert "handler" not in catalog[0]
     assert "input_schema" not in catalog[0]
+
+
+
+def test_registry_rejects_synchronous_handlers() -> None:
+    registry = ToolRegistry()
+    definition = _definition()
+
+    with pytest.raises(TypeError, match="async callables"):
+        registry.register(definition, lambda value: value)
+
+
+def test_registry_rejects_type_incompatible_schema_keywords() -> None:
+    registry = ToolRegistry()
+    definition = _definition(
+        input_schema={
+            "type": "string",
+            "properties": {"unexpected": {"type": "string"}},
+        }
+    )
+
+    with pytest.raises(ToolSchemaDefinitionError):
+        registry.register(definition, _echo)
