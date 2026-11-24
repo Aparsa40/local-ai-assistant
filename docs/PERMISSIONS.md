@@ -19,7 +19,7 @@ Implemented in `core/permissions/types.py` and `core/permissions/manager.py`, wi
 - `PermissionScope`: explicit scope type, scope ID, and owner ID.
 - `AccessRequest`: subject/resource/operation/scope plus request ID, sensitivity, destination, and timezone-aware request timestamp.
 - `PermissionDecision`: allow/deny/approval-required result with stable reason and request reference.
-- `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, and revocation timestamps.
+- `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, revocation, and optional approval-required state.
 
 `PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is additive and currently created through SQLAlchemy metadata initialization; it is not backed by versioned migrations yet.
 
@@ -39,7 +39,7 @@ No wildcard, inferred owner, or implicit cross-scope grant is valid.
 
 ## 4. Tool execution boundary
 
-The current `ToolRegistry` accepts only explicitly registered, versioned definitions. It validates a restricted JSON Schema subset, byte limits, resource type, and operation mapping. It rejects unknown/disabled tools, duplicate registrations, unsupported schema keywords, and unexpected object properties. Destructive and external-side-effect tools must require approval. The registry's public catalog excludes handlers and raw schema internals.
+The current `ToolRegistry` accepts only explicitly registered, versioned definitions. It validates a restricted JSON Schema subset, byte limits, resource type, and operation mapping. It rejects unknown/disabled tools, duplicate registrations, unsupported schema keywords, and unexpected object properties. Destructive and external-side-effect tools must require approval. The registry's public catalog exposes the validated input schema needed to form a proposal, but never exposes the registered handler.
 
 The implemented ToolRuntime execution sequence is:
 
@@ -57,7 +57,7 @@ A denied action is terminal. It must not be retried through another tool or prov
 
 - Agents receive least-privilege context scoped to the task.
 - Model-private memory is not shared with another model/agent by default.
-- MemoryService's existing default-deny policy remains authoritative until central integration is complete.
+- MemoryService remains default-deny unless an explicit policy is injected; the tested `PermissionManagerMemoryAccessPolicy` adapter routes exact memory scopes through central authorization. The current chat route does not attach memory scopes implicitly.
 - Knowledge ingestion and publication require explicit grants and approval.
 - Local private context must not be sent to cloud providers through implicit fallback.
 - Database sessions, engines, ORM entities, repositories, raw SQL, and provider credentials are never agent capabilities.
@@ -66,7 +66,7 @@ A denied action is terminal. It must not be retried through another tool or prov
 
 Audit events must capture request, decision, approval transition, execution outcome, and failure with correlation IDs. Persist only redacted metadata: never credentials, raw tokens, private payloads, or unrestricted exception text.
 
-Approval is separate from a persistent grant. The implemented ApprovalService binds a request to the exact action payload SHA-256, subject, target, operation, scope, request ID, and expiry. It requires a separate user approval policy and atomically consumes each approved token at most once. Payload content is not persisted.
+Approval is separate from a persistent grant. The implemented ApprovalService binds a request to the exact action payload SHA-256, subject, target, operation, scope, request ID, and expiry. It requires a separate user approval policy and atomically consumes each approved token at most once. Request, decision, expiry, and consumption transitions are audited. If the required audit write for a request/approval decision fails, the approval is invalidated; a consumed token is never replayed. Payload content is not persisted.
 
 AuditService persists append-only events using an explicit metadata allowlist. Unknown metadata fields and private content are dropped; token-like values in allowed fields are redacted. Audit persistence failures are normalized and can be treated as fail-closed by the execution gateway.
 
@@ -76,7 +76,7 @@ Return a structured denial reason without leaking secrets. Missing, malformed, e
 
 ## 8. Current integration limits
 
-The current application does not implement user authentication, a credential vault, Knowledge Storage, managed file storage, or a connector framework. Phase 5 must not claim end-to-end protection for those domains until their owning services exist and are integrated. The outstanding Phase 4 WP-4.7 versioned migration framework is also not replaced by SQLAlchemy `create_all()`.
+The current application does not implement user authentication, a credential vault, Knowledge Storage, managed file storage, or a connector framework. No production tool handlers are registered. Phase 5 must not claim end-to-end protection for those domains until their owning services exist and are integrated. The outstanding Phase 4 WP-4.7 versioned migration framework is also not replaced by SQLAlchemy `create_all()`.
 
 ## 9. Acceptance criteria
 
