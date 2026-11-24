@@ -1,6 +1,7 @@
 """Explicit tool registration and restricted JSON-schema validation."""
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any, Callable
 
@@ -41,8 +42,19 @@ def _validate_schema_definition(schema: dict[str, Any], *, depth: int = 0) -> No
     if not isinstance(schema, dict) or set(schema) - _SCHEMA_KEYS:
         raise ToolSchemaDefinitionError("Tool schema contains unsupported keywords.")
     schema_type = schema.get("type")
-    if schema_type not in _ALLOWED_TYPES:
+    if not isinstance(schema_type, str) or schema_type not in _ALLOWED_TYPES:
         raise ToolSchemaDefinitionError("Tool schema must declare a supported type.")
+    type_keys = {
+        "object": {"type", "properties", "required", "additionalProperties", "enum"},
+        "array": {"type", "items", "minItems", "maxItems", "enum"},
+        "string": {"type", "minLength", "maxLength", "enum"},
+        "integer": {"type", "minimum", "maximum", "enum"},
+        "number": {"type", "minimum", "maximum", "enum"},
+        "boolean": {"type", "enum"},
+        "null": {"type", "enum"},
+    }
+    if set(schema) - type_keys[schema_type]:
+        raise ToolSchemaDefinitionError("Tool schema contains keywords invalid for its declared type.")
     if "enum" in schema and (
         not isinstance(schema["enum"], list)
         or not schema["enum"]
@@ -153,6 +165,7 @@ class ToolRegistry:
         key = (definition.tool_id, definition.version)
         if key in self._definitions:
             raise ToolRegistryError("A tool with this ID and version is already registered.")
+        definition = copy.deepcopy(definition)
         self._definitions[key] = definition
         self._handlers[key] = handler
 
@@ -163,7 +176,7 @@ class ToolRegistry:
             raise ToolNotFoundError("The requested tool is not registered.")
         if not definition.enabled:
             raise ToolDisabledError("The requested tool is disabled.")
-        return definition
+        return copy.deepcopy(definition)
 
     def validate_call(self, request: ToolCallRequest) -> tuple[ToolDefinition, dict[str, Any]]:
         if not isinstance(request, ToolCallRequest):
@@ -187,7 +200,7 @@ class ToolRegistry:
         if len(encoded) > definition.max_input_bytes:
             raise ToolInputValidationError("Tool input exceeds the registered size limit.")
         _validate_value(request.input_data, definition.input_schema)
-        return definition, request.input_data
+        return definition, copy.deepcopy(request.input_data)
 
     def _resolve_handler(self, tool_id: str, version: str) -> Callable[..., Any]:
         """Internal runtime-only lookup; never serialize or expose handlers to models."""
