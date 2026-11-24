@@ -234,5 +234,5 @@ class ContextManager:
             estimated_tokens=estimated_tokens,
             token_budget=request.max_tokens,
             omitted_items=omitted,
-            knowledge_status="connected" if request.knowledge_scopes else "not_connected",
+            knowledge_status="connected" if self.knowledge is not None else "not_connected",
         )
