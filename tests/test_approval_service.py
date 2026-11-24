@@ -153,3 +153,27 @@ def test_approved_token_expires_before_it_can_be_consumed(db_session) -> None:
     now[0] += timedelta(seconds=5)
     assert service.consume(approval.approval_id, request, payload) is None
     assert ApprovalRepository(db_session).get(approval.approval_id).status is ApprovalStatus.EXPIRED
+
+
+
+def test_approval_request_decision_and_consumption_are_audited(db_session) -> None:
+    service = _service(db_session, policy=AllowUserApproval())
+    request = _request()
+    approval = service.request(request, {"operation": "publish", "target": "knowledge-1"}, requested_by="librarian")
+    service.approve(approval.approval_id, approver=PermissionSubject(SubjectType.USER, "owner-1"))
+    service.consume(
+        approval.approval_id,
+        request,
+        {"target": "knowledge-1", "operation": "publish"},
+    )
+
+    events = ApprovalRepository(db_session)
+    audit_events = __import__(
+        "core.repositories.audit_repository", fromlist=["AuditRepository"]
+    ).AuditRepository(db_session).list_for_request(request.request_id)
+
+    assert [event["event_type"] for event in audit_events] == [
+        "approval_requested",
+        "approval_decision",
+        "approval_consumed",
+    ]
