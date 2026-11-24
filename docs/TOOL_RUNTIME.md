@@ -56,7 +56,8 @@ The runtime does not retry a denied action through another tool. If required aud
 ## 6. Current limitations
 
 - Tool Registry and Tool Runtime exist, but no production tool handlers are registered by this work package.
-- Runtime is not yet wired into the conversation, memory, provider, or Local Model Runtime API routes; WP-5.6 owns integration.
+- Existing user-facing conversation, memory, provider, runtime, and configuration APIs use `PermissionManager` with `LocalApplicationPolicy` and `require_access`; they are not invoked as model-generated tools and therefore do not route through ToolRuntime.
+- MemoryService uses an explicit adapter when configured; it remains default-deny without one. ContextManager is used for bounded conversation history in chat, and memory scopes are not attached implicitly.
 - Tool schemas and registration are not a sandbox. Handler code remains trusted application code and must use narrow injected capabilities.
 - No general-purpose shell, arbitrary code execution, unrestricted file access, or external connector is provided.
 - Hosted authentication and a credential vault are not implemented.
