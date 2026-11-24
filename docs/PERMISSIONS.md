@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Approval workflow, audit persistence, Tool Registry, Tool Runtime, and API/domain integration remain pending.  
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Tool Registry, Tool Runtime, audit-to-runtime wiring, and API/domain integration remain pending.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -64,7 +64,9 @@ A denied action is terminal. It must not be retried through another tool or prov
 
 Audit events must capture request, decision, approval transition, execution outcome, and failure with correlation IDs. Persist only redacted metadata: never credentials, raw tokens, private payloads, or unrestricted exception text.
 
-Approval is separate from a persistent grant. It must be bound to the exact action payload hash, actor, target, operation, and expiry; it is one-time and replay-safe.
+Approval is separate from a persistent grant. The implemented ApprovalService binds a request to the exact action payload SHA-256, subject, target, operation, scope, request ID, and expiry. It requires a separate user approval policy and atomically consumes each approved token at most once. Payload content is not persisted.
+
+AuditService persists append-only events using an explicit metadata allowlist. Unknown metadata fields and private content are dropped; token-like values in allowed fields are redacted. Audit persistence failures are normalized and can be treated as fail-closed by the execution gateway.
 
 ## 7. Denials and failures
 
