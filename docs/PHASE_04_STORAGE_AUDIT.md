@@ -179,7 +179,7 @@ The following source files were fetched directly from `main` and inspected beyon
 2. Conversation and Profile repositories must preserve route-level HTTP behavior, current IDs, ordering, title auto-generation/custom-title rules, and the two-phase user/assistant message persistence.
 3. Runtime snapshots and append-only events are different data products; do not collapse them into one table or treat every poll as an event.
 4. Provider runtime observations, catalog synchronization, quota snapshots, and intelligence reports have different retention and durability semantics. Keep their logical contracts separate even if they remain in the same SQLite file.
-5. `InterfaceManager`, `RuntimeManager`, `RuntimeMonitor`, `Orchestrator`, and provider adapters inspected in this pass do not import SQLAlchemy or directly access the database. Preserve this ORM-free boundary.
+5. `InterfaceManager`, `RuntimeManager`, `RuntimeMonitor`, `Orchestrator`, and provider adapters inspected in this pass do not import SQLAlchemy or directly access the database. Preserve this ORM-free boundary. Interface Manager currently reads version-controlled operator manifests/capability definitions; persisted catalog writes are performed by Provider Intelligence through `catalog_storage`, not by Interface Manager.
 
 ## 6. Provisional logical storage and access matrix
 
@@ -194,8 +194,8 @@ Legend:
 | Module / actor | Conversations | Profile | Provider catalog & observations | Runtime state/events | Memory | Context package | Knowledge metadata/files |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Conversation Processing (planned boundary) | R/W | R (minimum fields only) | R via Interface Manager | R via Runtime Manager snapshot | R via Memory Service | W/assemble | Policy hook |
-| Interface Manager | — | — | R/W via catalog contracts | — | — | — | — |
-| Local Model Runtime | — | — | — | R/W via Runtime Repository | — | — | — |
+| Interface Manager | — | — | R via catalog service/contract only (target); current implementation reads version-controlled operator manifests and provider capabilities, not persisted catalog tables | — | — | — | — |
+| Provider Intelligence service | — | — | R/W through Catalog/Provider Observation repositories | R only through Runtime Manager result contracts when needed | — | — | — |\n| Local Model Runtime | — | — | — | R/W via Runtime Repository | — | — | — |
 | Profile service (current route behavior; target service planned) | — | R/W | — | — | — | — | — |
 | Memory Service (planned) | R only through conversation contract when provenance/source is needed | — | — | — | R/W | — | Policy hook |
 | Context Manager (planned) | R via Conversation service | — | — | — | R via Memory service | W/request-scoped only | Policy hook |
