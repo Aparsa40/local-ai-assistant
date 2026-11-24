@@ -29,8 +29,8 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
 - **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
 - **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
-- **Permission Manager (Phase 5 in progress):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
-- **Tool Registry & Runtime (Phase 5 in progress):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
+- **Permission Manager (Phase 5 complete):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
+- **Tool Registry & Runtime (Phase 5 complete):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
 - **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
 - **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, intelligence reports, permission grants, approval requests, and redacted audit events are stored locally. Phase 5 tables are additive through SQLAlchemy metadata initialization; versioned migrations remain pending in Phase 4 WP-4.7.
 
@@ -85,7 +85,7 @@ Important documents:
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.6 are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15; WP-5.1–WP-5.6 are implemented and CI-validated, while WP-5.7 final security regression and documentation acceptance remains. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.6 are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 WP-5.1–WP-5.7 is complete and merged to `main` through PR #15 (squash commit `342a7fcb0ead3ab9586b671994a5427d812cb175`). Final GitHub Actions validation passed 217 tests, Python compilation, and frontend JavaScript syntax checks. Phase 4 WP-4.7 Knowledge Storage & versioned Migration remains pending. Read the relevant module contract before changing that area.
 
 ## Requirements
 
