@@ -28,8 +28,54 @@ def _legacy_additive_columns(connection) -> None:
 
 def _knowledge_fts(connection) -> None:
     tables = set(inspect(connection).get_table_names())
-    if "knowledge_chunks" not in tables:
-        raise RuntimeError("Knowledge ORM tables must exist before the FTS migration")
+    # Knowledge schema is created by this versioned migration, not by create_all().
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS knowledge_sources ("
+        "id VARCHAR(32) PRIMARY KEY, source_type VARCHAR(20) NOT NULL, title VARCHAR(300) NOT NULL, "
+        "uri TEXT, owner_id VARCHAR(160) NOT NULL, scope_type VARCHAR(40) NOT NULL, "
+        "scope_id VARCHAR(160) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'registered', "
+        "mime_type VARCHAR(160), byte_size INTEGER, content_hash VARCHAR(64), "
+        "version INTEGER NOT NULL DEFAULT 0, metadata_json JSON NOT NULL DEFAULT '{}', "
+        "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, indexed_at DATETIME, archived_at DATETIME)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS knowledge_files ("
+        "id VARCHAR(32) PRIMARY KEY, source_id VARCHAR(32) NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE, "
+        "storage_key VARCHAR(64) NOT NULL UNIQUE, original_filename VARCHAR(255) NOT NULL, "
+        "mime_type VARCHAR(160), size_bytes INTEGER NOT NULL, sha256 VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS knowledge_chunks ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+        "source_id VARCHAR(32) NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE, "
+        "ordinal INTEGER NOT NULL, content TEXT NOT NULL, content_hash VARCHAR(64) NOT NULL, "
+        "locator JSON NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL, "
+        "CONSTRAINT uq_knowledge_chunk_source_ordinal UNIQUE(source_id, ordinal))"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS knowledge_artifacts ("
+        "id VARCHAR(32) PRIMARY KEY, source_id VARCHAR(32) NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE, "
+        "source_version INTEGER NOT NULL, artifact_type VARCHAR(40) NOT NULL, content TEXT NOT NULL, "
+        "status VARCHAR(20) NOT NULL DEFAULT 'unreviewed', provenance JSON NOT NULL DEFAULT '{}', "
+        "created_at DATETIME NOT NULL)"
+    ))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_source_type ON knowledge_sources(source_type)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_owner_id ON knowledge_sources(owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_scope_type ON knowledge_sources(scope_type)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_scope_id ON knowledge_sources(scope_id)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_status ON knowledge_sources(status)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_sources_content_hash ON knowledge_sources(content_hash)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_files_source_id ON knowledge_files(source_id)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_files_sha256 ON knowledge_files(sha256)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_chunks_source_id ON knowledge_chunks(source_id)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_chunks_source_ordinal ON knowledge_chunks(source_id, ordinal)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_artifacts_source_id ON knowledge_artifacts(source_id)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_artifacts_artifact_type ON knowledge_artifacts(artifact_type)",
+        "CREATE INDEX IF NOT EXISTS ix_knowledge_artifacts_status ON knowledge_artifacts(status)",
+    ):
+        connection.execute(text(statement))
+    tables = set(inspect(connection).get_table_names())
     connection.execute(
         text(
             "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunks_fts "
