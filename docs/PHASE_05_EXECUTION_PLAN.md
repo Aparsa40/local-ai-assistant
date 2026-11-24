@@ -3,8 +3,8 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 through WP-5.6 implemented and CI-validated; WP-5.7 pending  
-**Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
+**Status:** Implementation and WP-5.7 acceptance complete on `feat/phase-5-operational-authorization`; PR and merge pending. Latest CI: 235 tests passed, Python compilation and frontend syntax validation passed.  
+**Execution branch:** `feat/phase-5-operational-authorization` (created directly from the Phase 4-complete `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
 
@@ -23,7 +23,7 @@ The repository contains:
 - A default-deny MemoryAccessPolicy seam.
 - Accepted target contracts in `PERMISSIONS.md`, `AGENT_RUNTIME.md`, and `AI_ORCHESTRATION.md`.
 
-Important dependency limitation: the Phase 4 execution plan also defines WP-4.7 (Knowledge Storage & Migration), but the current main-branch documentation and implementation evidence do not establish that work package as complete. Phase 5 therefore integrates only existing domains and provides explicit adapter contracts for future Knowledge, managed-file, and connector services. It must not claim those unavailable domains are already protected end-to-end. New Phase 5 persistence must use the existing SQLAlchemy metadata/Storage Manager conventions and must clearly document that this does not replace the outstanding versioned migration framework.
+Phase 4 WP-4.7 is complete and merged via PR #16. Knowledge source, managed-file, artifact, chunk, FTS5, and SQLite migration contracts now exist. Phase 5 must connect KnowledgeService to the central PermissionManager using exact create/read/update grants. Managed-file and connector exposure remains limited until a dedicated API/connector workflow exists. Permission/approval tables remain ORM metadata-owned; the Phase 4 versioned migration runner is SQLite-only and is not PostgreSQL support.
 
 Before implementation, verify the current `main` head, open-PR state, test baseline, database model conventions, and application composition points. Do not reset or mutate the user's local database.
 
@@ -154,7 +154,7 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 
 **Exit:** existing protected operations fail closed when no explicit application policy is configured; all integrated paths have allow/deny tests and no direct repository/session exposure to callers.
 
-**WP-5.6 implementation status (2026-11-24):** Added `AccessContext`, `LocalApplicationPolicy`, and reusable `require_access` guards. ConversationService and ProfileService now require an explicit PermissionManager and AccessContext for every protected operation and audit decisions before repository side effects; absence of either fails closed. MemoryService can be wired through `PermissionManagerMemoryAccessPolicy`, preserving its default-deny behavior and explicit memory scopes. The chat route now assembles bounded conversation history through ContextManager and supplies no memory scopes implicitly. All application API endpoints for settings, providers, runtime, profile, sessions, and chat require a loopback client and the fixed `local-api` principal; local provider/runtime/configuration operations are centrally policy-checked and audited, while provider credentials remain denied. This is explicitly a local single-user boundary, not authentication or hosted multi-user security. GitHub Actions passed 209 tests, Python compilation, and frontend syntax validation.
+**WP-5.6 implementation status:** Added `AccessContext`, `LocalApplicationPolicy`, reusable `require_access` guards, and the Memory PermissionManager adapter. Phase 4 KnowledgeService is now connected through `PermissionManagerKnowledgeAccessPolicy`; source creation, indexing/archive updates, and search require distinct exact-scope `CREATE`, `UPDATE`, and `READ` grants. New local APIs expose Knowledge source registration, extracted-text indexing, and scoped lexical search. Conversation/Profile services, settings, providers, runtime, sessions, and chat remain behind loopback local policy and audit. The fixed `local-api` principal is not authentication. Cross-origin browser requests are rejected by the local API dependency.
 
 ### WP-5.7 — Integration, Security Regression & Documentation
 
@@ -164,7 +164,7 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - Record schema additions and the migration limitation explicitly; do not claim versioned migration support unless it is implemented and tested.
 - Run full CI-equivalent validation and inspect the final diff and PR checks.
 
-**Exit:** all security invariants are covered by tests, full suite and syntax checks pass, docs match code, and unsupported future domains remain explicitly unavailable.
+**WP-5.7 implementation status:** Added local-owner-only grant administration (list/create/revoke), approval review (list/approve/reject), and bounded audit history APIs. Local-owner policies reject agent self-administration and restrict grants to supported resource classes and the local owner's scope. Destructive session deletion, profile-avatar deletion, and application-owned runtime shutdown now require a one-time action-bound approval; the browser UI obtains approval only after an explicit confirmation dialog. The API checks loopback client addresses and same-origin browser requests. New tests cover Knowledge allow/deny by operation and scope, grant administration, approval binding/replay, destructive API approval, and cross-origin rejection. GitHub Actions on the current head passed 235 tests, Python compilation, and frontend JavaScript syntax validation. This is the local single-user boundary, not hosted authentication.
 
 ## 7. Required package layout (adapt after audit)
 
@@ -213,9 +213,9 @@ This is a proposed organization, not a mandate to duplicate existing abstraction
 - General-purpose shell, arbitrary code execution, unrestricted browser/computer control, or unrestricted filesystem/network access.
 - Automatic permission grants based on model confidence, prompt instructions, tool metadata, or agent declarations.
 - Hosted multi-user authentication/authorization; current application authentication is not implemented.
-- Claiming full Knowledge/file/connector protection before those services and their storage contracts exist.
+- Claiming full file-upload/connector protection before their API and connector workflows are implemented.
 - Encrypted credential vault implementation; Phase 5 may enforce access mediation/redaction seams but must not claim credentials are encrypted at rest.
-- PostgreSQL deployment or completion of the outstanding Phase 4 WP-4.7 migration framework.
+- PostgreSQL migration/deployment support; the current versioned migration runner targets SQLite.
 - Replacing StorageManager, repositories, or Phase 4 services.
 
 ## 9. Validation commands
@@ -265,4 +265,4 @@ Phase 5 is complete only when:
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11 — Tool Runtime & Permission Manager
 
-**Mandatory instruction:** Execute this document in the order WP-5.1 through WP-5.7 on the single branch `feat/phase-5-permission-manager-tool-runtime`, created directly from `main`. Commit each completed work package separately and keep the complete phase in one pull request unless a documented review/CI constraint requires a validated merge boundary. Enforce default-deny authorization, explicit scope, no self-grant, one-time action-bound approvals, bounded tool execution, and redacted auditability. Do not expose database sessions, repositories, ORM entities, credentials, arbitrary code execution, or unrestricted system access to models or agents. Do not claim Knowledge/file/connector coverage, hosted authentication, encrypted credential storage, PostgreSQL support, or versioned migrations unless each is actually implemented and tested. This is the authoritative execution plan for Local AI Assistant, Phase 5; implementation and final completion status must be recorded against this exact phase and branch.
+**Mandatory instruction:** This document records the Phase 5 implementation and acceptance work packages WP-5.1 through WP-5.7 on `feat/phase-5-operational-authorization`, created directly from `main` after Phase 4 completion. Commit each completed work package separately and keep the complete phase in one pull request unless a documented review/CI constraint requires a validated merge boundary. Enforce default-deny authorization, explicit scope, no self-grant, one-time action-bound approvals, bounded tool execution, and redacted auditability. Do not expose database sessions, repositories, ORM entities, credentials, arbitrary code execution, or unrestricted system access to models or agents. Do not claim Knowledge/file/connector coverage, hosted authentication, encrypted credential storage, PostgreSQL support, or versioned migrations unless each is actually implemented and tested. This is the authoritative execution plan for Local AI Assistant, Phase 5; implementation and final completion status must be recorded against this exact phase and branch.
