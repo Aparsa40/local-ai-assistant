@@ -87,15 +87,20 @@ class ApprovalRepository(BaseRepository):
         decided_by: str,
         decided_at: datetime,
     ) -> ApprovalRequest | None:
-        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED}:
-            raise ValueError("Approval decision must be approved or rejected.")
+        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED, ApprovalStatus.EXPIRED}:
+            raise ValueError("Unsupported approval state transition.")
         now = to_utc_naive(decided_at)
+        expiry_filter = (
+            PermissionApprovalRecord.expires_at <= now
+            if status is ApprovalStatus.EXPIRED
+            else PermissionApprovalRecord.expires_at > now
+        )
         result = self.db.execute(
             update(PermissionApprovalRecord)
             .where(
                 PermissionApprovalRecord.approval_id == approval_id,
                 PermissionApprovalRecord.status == ApprovalStatus.PENDING.value,
-                PermissionApprovalRecord.expires_at > now,
+                expiry_filter,
             )
             .values(
                 status=status.value,
@@ -107,16 +112,6 @@ class ApprovalRepository(BaseRepository):
             self.db.commit()
         else:
             self.db.rollback()
-            self.db.execute(
-                update(PermissionApprovalRecord)
-                .where(
-                    PermissionApprovalRecord.approval_id == approval_id,
-                    PermissionApprovalRecord.status == ApprovalStatus.PENDING.value,
-                    PermissionApprovalRecord.expires_at <= now,
-                )
-                .values(status=ApprovalStatus.EXPIRED.value)
-            )
-            self.db.commit()
         return self.get(approval_id)
 
     def consume(
