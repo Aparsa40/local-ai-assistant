@@ -1,6 +1,5 @@
 # pyright: reportMissingImports=false
 import json
-from io import BytesIO
 from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -8,10 +7,11 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.config_manager import ConfigManager
-from core.database import ChatMessage, ChatSession, UserProfile, init_db
+from core.database import init_db
+from core.conversations import ConversationNotFoundError, ConversationService
+from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
@@ -66,26 +66,6 @@ class RuntimeLoadRequest(BaseModel):
     keep_alive: str | int = "5m"
 
 
-def get_or_create_profile(db: Session) -> UserProfile:
-    profile = db.query(UserProfile).filter(UserProfile.id == 1).first()
-    if profile is None:
-        profile = UserProfile(id=1, display_name="کاربر", username="user", email="")
-        db.add(profile)
-        db.commit()
-        db.refresh(profile)
-    return profile
-
-
-def serialize_profile(profile: UserProfile) -> Dict[str, Any]:
-    return {
-        "display_name": profile.display_name,
-        "username": profile.username,
-        "email": profile.email,
-        "avatar_url": "/api/profile/avatar" if profile.avatar_data else "",
-        "avatar_configured": bool(profile.avatar_data),
-    }
-
-
 @app.get("/")
 async def serve_ui():
     return FileResponse("static/index.html")
@@ -107,74 +87,45 @@ async def update_settings(data: Dict[str, Any]):
 
 @app.get("/api/profile")
 async def get_profile(db: Session = Depends(get_db)):
-    return serialize_profile(get_or_create_profile(db))
+    return ProfileService(db).serialize()
 
 
 @app.patch("/api/profile")
 async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
-    display_name = data.display_name.strip()
-    username = data.username.strip()
-    email = data.email.strip()
-    if not display_name or not username:
-        raise HTTPException(status_code=422, detail="نام نمایشی و نام کاربری نمی‌توانند خالی باشند")
-    if email and ("@" not in email or email.startswith("@") or email.endswith("@")):
-        raise HTTPException(status_code=422, detail="فرمت ایمیل معتبر نیست")
-    profile = get_or_create_profile(db)
-    profile.display_name = display_name
-    profile.username = username
-    profile.email = email
-    db.commit()
-    db.refresh(profile)
-    return serialize_profile(profile)
+    try:
+        return ProfileService(db).update(data.display_name, data.username, data.email)
+    except ProfileServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.put("/api/profile/avatar")
 async def upload_profile_avatar(request: Request, db: Session = Depends(get_db)):
-    image_bytes = await request.body()
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="فایلی دریافت نشد")
-    if len(image_bytes) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="حجم تصویر نباید بیشتر از ۲ مگابایت باشد")
     try:
-        with Image.open(BytesIO(image_bytes)) as source:
-            if source.format not in {"PNG", "JPEG", "WEBP"}:
-                raise HTTPException(status_code=415, detail="فقط فرمت‌های PNG، JPG و WebP مجاز هستند")
-            if source.width > 4096 or source.height > 4096:
-                raise HTTPException(status_code=422, detail="ابعاد تصویر نباید از ۴۰۹۶×۴۰۹۶ پیکسل بیشتر باشد")
-            source.load()
-            normalized = ImageOps.fit(source.convert("RGB"), (256, 256))
-            output = BytesIO()
-            normalized.save(output, format="WEBP", quality=85, method=6)
-    except HTTPException:
-        raise
-    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
-        raise HTTPException(status_code=422, detail="فایل تصویر معتبر نیست") from exc
-    profile = get_or_create_profile(db)
-    profile.avatar_data = output.getvalue()
-    profile.avatar_mime = "image/webp"
-    db.commit()
-    return {"status": "success", **serialize_profile(profile)}
+        result = ProfileService(db).set_avatar(await request.body())
+        return {"status": "success", **result}
+    except ProfileServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/profile/avatar")
 async def get_profile_avatar(db: Session = Depends(get_db)):
-    profile = get_or_create_profile(db)
-    if not profile.avatar_data:
-        raise HTTPException(status_code=404, detail="تصویر پروفایل ثبت نشده است")
+    try:
+        content, media_type = ProfileService(db).get_avatar()
+    except ProfileServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return Response(
-        content=profile.avatar_data,
-        media_type=profile.avatar_mime or "image/webp",
+        content=content,
+        media_type=media_type,
         headers={"Cache-Control": "no-store"},
     )
 
 
 @app.delete("/api/profile/avatar")
 async def delete_profile_avatar(db: Session = Depends(get_db)):
-    profile = get_or_create_profile(db)
-    profile.avatar_data = None
-    profile.avatar_mime = None
-    db.commit()
-    return {"status": "success", **serialize_profile(profile)}
+    try:
+        return {"status": "success", **ProfileService(db).delete_avatar()}
+    except ProfileServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/providers")
@@ -385,66 +336,48 @@ async def shutdown_local_runtime(runtime_id: str):
 
 @app.get("/api/sessions")
 async def get_sessions(db: Session = Depends(get_db)):
-    sessions = db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
-    return [{"id": session.id, "title": session.title} for session in sessions]
+    return ConversationService(db).list_sessions()
 
 
 @app.post("/api/sessions")
 async def create_session(db: Session = Depends(get_db)):
-    new_session = ChatSession(title="گفتگوی جدید")
-    db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
-    return {"id": new_session.id, "title": new_session.title}
+    return ConversationService(db).create_session()
 
 
 @app.delete("/api/sessions/{session_id}")
 async def delete_session(session_id: int, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="نشست یافت نشد")
-    db.delete(session)
-    db.commit()
-    return {"status": "success", "deleted_session_id": session_id}
+    try:
+        return ConversationService(db).delete_session(session_id)
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.patch("/api/sessions/{session_id}")
 async def rename_session(session_id: int, data: SessionTitleUpdate, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="نشست یافت نشد")
-    title = data.title.strip()
-    if not title:
-        raise HTTPException(status_code=422, detail="عنوان نشست نمی‌تواند خالی باشد")
-    session.title = title
-    session.title_is_custom = True
-    db.commit()
-    db.refresh(session)
-    return {"id": session.id, "title": session.title}
+    try:
+        return ConversationService(db).rename_session(session_id, data.title)
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/api/sessions/{session_id}/messages")
 async def get_messages(session_id: int, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="نشست یافت نشد")
-    messages = db.query(ChatMessage).filter(ChatMessage.session_id == session_id).all()
-    return [{"role": message.role, "content": message.content, "model": message.model_used} for message in messages]
+    try:
+        return ConversationService(db).get_messages(session_id)
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
-    session = db.query(ChatSession).filter(ChatSession.id == req.session_id).first()
-    if not session:
-        raise HTTPException(status_code=404, detail="نشست یافت نشد")
-    if session.title == "گفتگوی جدید" and not session.title_is_custom:
-        session.title = req.message[:35] + ("..." if len(req.message) > 35 else "")
-        db.commit()
-    user_msg = ChatMessage(session_id=req.session_id, role="user", content=req.message)
-    db.add(user_msg)
-    db.commit()
-    past_msgs = db.query(ChatMessage).filter(ChatMessage.session_id == req.session_id).all()
-    history = [{"role": message.role, "content": message.content} for message in past_msgs[:-1]]
+    try:
+        preparation = ConversationService(db).prepare_chat(req.session_id, req.message)
+    except ConversationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    history = [{"role": item.role, "content": item.content} for item in preparation.history]
     try:
         orchestrator = Orchestrator()
         provider_id = orchestrator.get_provider_id()
@@ -454,13 +387,13 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
 
     async def response_generator():
         full_response = ""
-        yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\n\n"
+        yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\\n\\n"
         try:
             async for chunk in interface_manager.stream_chat(
                 provider_id, formatted_messages, model=selected_model
             ):
                 full_response += chunk
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\\n\\n"
         except Exception as exc:
             diagnostic_db = SessionLocal()
             try:
@@ -473,20 +406,16 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
                 )
             finally:
                 diagnostic_db.close()
-            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\\n\\n"
             return
         db_session = SessionLocal()
         try:
             record_model_runtime(db_session, provider_id, selected_model, "available")
-            db_session.add(ChatMessage(
-                session_id=req.session_id,
-                role="assistant",
-                content=full_response,
-                model_used=selected_model,
-            ))
-            db_session.commit()
+            ConversationService(db_session).append_assistant_message(
+                req.session_id, full_response, selected_model
+            )
         finally:
             db_session.close()
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done'})}\\n\\n"
 
     return StreamingResponse(response_generator(), media_type="text/event-stream")
