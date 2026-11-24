@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-4.1 and WP-4.2 complete; WP-4.3 implementation underway  
+**Status:** In progress — WP-4.1, WP-4.2, and WP-4.3 validated; WP-4.4 implementation in progress  
 **Execution branch (planned):** `feat/storage-memory-services`  
 **Last reviewed:** 2026-11-24
 
@@ -244,7 +244,7 @@ Tasks:
 
 **Goal:** standardize domain data access.
 
-**Current implementation status (2026-11-24):** Catalog, runtime, profile, session, and message repository modules have been introduced. Catalog persistence logic is now behind `CatalogRepository`; `core/catalog_storage.py` remains a compatibility facade. The runtime repository implementation has moved to `core/repositories/runtime_repository.py`, with its previous import path retained. Profile/session/message repositories are available for the Conversation Storage integration in WP-4.4. Existing API routes have not yet been fully migrated to these repositories.
+**Validated implementation status (2026-11-24):** Catalog, runtime, profile, session, and message repository modules are implemented. Catalog persistence logic is behind `CatalogRepository`; `core/catalog_storage.py` remains a compatibility facade. The runtime repository implementation is in `core/repositories/runtime_repository.py`, with its previous import path retained. Validation completed: 59 focused repository tests and 120 total tests passed; `python -m compileall -q core main.py` passed. Profile/session/message API routes were subsequently migrated in WP-4.4.
 
 Tasks:
 1. Define the repository base/protocol and transaction conventions.
@@ -274,6 +274,8 @@ Tasks:
 **Deliverables:** Conversation Storage service, typed schemas, repository integration, and API/UI regression coverage.
 
 **Exit gate:** existing conversations remain readable and current chat behavior is unchanged.
+
+**WP-4.4 implementation status (2026-11-24):** Initial service integration is implemented on `feat/storage-memory-services`. Added `core/conversations/ConversationService` with typed chat preparation contracts and `core/profiles/ProfileService`. Session, message, profile, and avatar endpoints now delegate domain operations to these services; route handlers retain HTTP translation and response transport only. Chat still commits the user turn before provider inference and persists the assistant turn only after a successful stream. Avatar normalization and existing validation limits remain in the profile service. No schema or table changes were made. Focused service tests and existing API regression tests are present; validation is pending on the user's local environment.
 
 ### WP-4.5 — Memory Service
 
