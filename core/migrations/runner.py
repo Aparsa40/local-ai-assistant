@@ -59,7 +59,9 @@ def _knowledge_fts(connection) -> None:
             "VALUES (new.id, new.content, new.source_id); END"
         )
     )
-    # Backfill chunks created before FTS was introduced. A migration runs only once.
+    # Rebuild the index from canonical chunk rows; this is safe if a prior attempt
+    # created the virtual table but failed before recording the migration revision.
+    connection.execute(text("DELETE FROM knowledge_chunks_fts"))
     connection.execute(
         text(
             "INSERT INTO knowledge_chunks_fts(rowid, content, source_id) "
