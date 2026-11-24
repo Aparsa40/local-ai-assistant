@@ -180,6 +180,7 @@ class PermissionGrant:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
+    requires_approval: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "grant_id", _required_identifier(self.grant_id, "grant_id", maximum=80))
@@ -199,6 +200,8 @@ class PermissionGrant:
             raise ValueError("expires_at must be later than created_at")
         if self.revoked_at is not None and self.revoked_at < self.created_at:
             raise ValueError("revoked_at cannot be earlier than created_at")
+        if not isinstance(self.requires_approval, bool):
+            raise ValueError("requires_approval must be a boolean")
 
     def is_active(self, at: datetime) -> bool:
         """Return whether the grant is active at a timezone-aware instant."""
