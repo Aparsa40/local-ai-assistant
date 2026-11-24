@@ -82,12 +82,15 @@ class ContextManager:
         query = request.query.strip()
         candidates: list[ContextItem] = []
 
+        # Fetch one sentinel row beyond the requested history size because the current
+        # user turn may already be persisted and must not consume the historical limit.
         history = self.conversations.get_recent_messages(
-            request.conversation_id, limit=request.history_limit
+            request.conversation_id, limit=request.history_limit + 1
         )
         # The current user turn is already supplied separately as the query.
         if history and history[-1].role == "user" and self._normalize(history[-1].content) == self._normalize(query):
             history = history[:-1]
+        history = history[-request.history_limit:]
 
         total = len(history)
         for index, message in enumerate(history):
