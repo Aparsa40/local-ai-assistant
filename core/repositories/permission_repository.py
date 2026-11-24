@@ -37,6 +37,7 @@ class PermissionRepository(BaseRepository):
             created_at=aware(record.created_at),
             expires_at=aware(record.expires_at),
             revoked_at=aware(record.revoked_at),
+            requires_approval=record.requires_approval,
         )
 
     def create(self, grant: PermissionGrant) -> PermissionGrant:
@@ -54,6 +55,7 @@ class PermissionRepository(BaseRepository):
             created_at=to_utc_naive(grant.created_at),
             expires_at=to_utc_naive(grant.expires_at) if grant.expires_at else None,
             revoked_at=to_utc_naive(grant.revoked_at) if grant.revoked_at else None,
+            requires_approval=grant.requires_approval,
             conditions={},
         )
         self.db.add(record)
