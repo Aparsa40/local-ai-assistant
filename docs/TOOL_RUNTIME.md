@@ -2,7 +2,7 @@
 
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11 — Tool Runtime & Permission Manager  
-**Status:** Tool Registry and Tool Runtime implemented and CI-validated; current domain/API permission integration is implemented in WP-5.6. Final security regression and phase acceptance remain in WP-5.7.
+**Status:** Phase 5 complete and merged via PR #15; Tool Registry, Tool Runtime, and domain/API permission integration are CI-validated (217 tests).
 
 ## 1. Security boundary
 
