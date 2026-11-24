@@ -41,6 +41,9 @@ class LocalApplicationPolicy:
             PermissionOperation.UPDATE,
             PermissionOperation.DELETE,
         },
+        ResourceType.CONFIGURATION: {PermissionOperation.READ, PermissionOperation.UPDATE},
+        ResourceType.PROVIDER: {PermissionOperation.READ, PermissionOperation.EXECUTE},
+        ResourceType.RUNTIME: {PermissionOperation.READ, PermissionOperation.EXECUTE, PermissionOperation.ADMINISTER},
     }
 
     def evaluate(self, request: AccessRequest) -> PermissionDecision | None:
@@ -58,7 +61,13 @@ class LocalApplicationPolicy:
         if request.scope.owner_id != self.OWNER_ID:
             return PermissionDecision(DecisionEffect.DENY, "local_owner_mismatch", request.request_id)
 
-        if request.resource.resource_type in {ResourceType.CONVERSATION, ResourceType.PROFILE}:
+        if request.resource.resource_type in {
+            ResourceType.CONVERSATION,
+            ResourceType.PROFILE,
+            ResourceType.CONFIGURATION,
+            ResourceType.PROVIDER,
+            ResourceType.RUNTIME,
+        }:
             if (
                 request.scope.scope_type is not ScopeType.LOCAL
                 or request.scope.scope_id != self.LOCAL_SCOPE_ID
@@ -69,6 +78,11 @@ class LocalApplicationPolicy:
                 and request.resource.resource_id != self.OWNER_ID
             ):
                 return PermissionDecision(DecisionEffect.DENY, "profile_owner_mismatch", request.request_id)
+            if (
+                request.resource.resource_type is ResourceType.CONFIGURATION
+                and request.resource.resource_id != "application-settings"
+            ):
+                return PermissionDecision(DecisionEffect.DENY, "configuration_resource_mismatch", request.request_id)
         elif request.resource.resource_type is ResourceType.MEMORY_SCOPE:
             if request.scope.scope_type not in {
                 ScopeType.USER,
