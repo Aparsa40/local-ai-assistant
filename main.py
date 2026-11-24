@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from core.config_manager import ConfigManager
 from core.database import init_db
 from core.conversations import ConversationNotFoundError, ConversationService
+from core.context import ContextManager, ContextRequest
 from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
 from core.permissions.audit import AuditService
@@ -103,7 +104,7 @@ async def handle_access_denied(request: Request, exc: AccessDeniedError):
 
 class ChatRequest(BaseModel):
     session_id: int
-    message: str
+    message: str = Field(min_length=1, max_length=12000)
 
 
 class SessionTitleUpdate(BaseModel):
@@ -448,12 +449,25 @@ async def get_messages(session_id: int, db: Session = Depends(get_db), access: A
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    conversation_service = ConversationService(db, permission_manager, access, build_audit_service(db))
     try:
-        preparation = ConversationService(db, permission_manager, access, build_audit_service(db)).prepare_chat(req.session_id, req.message)
+        conversation_service.prepare_chat(req.session_id, req.message)
+        context_package = ContextManager(conversation_service).assemble(
+            ContextRequest(
+                conversation_id=req.session_id,
+                query=req.message,
+                owner_id=access.scope.owner_id,
+                history_limit=20,
+                memory_scopes=(),
+            )
+        )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    history = [{"role": item.role, "content": item.content} for item in preparation.history]
+    history = [
+        {"role": item.role or "user", "content": item.content}
+        for item in context_package.items
+    ]
     try:
         orchestrator = Orchestrator()
         provider_id = orchestrator.get_provider_id()
