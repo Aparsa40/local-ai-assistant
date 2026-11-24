@@ -54,6 +54,23 @@ class ConversationService:
             for item in self.messages.list_for_session(session_id)
         ]
 
+    def get_recent_messages(self, session_id: int, *, limit: int = 20) -> tuple[ConversationMessage, ...]:
+        """Return a bounded chronological history slice with source identifiers."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("تعداد پیام‌های تاریخچه باید بین ۱ تا ۱۰۰ باشد")
+        if self.sessions.get(session_id) is None:
+            raise ConversationNotFoundError("نشست یافت نشد")
+        return tuple(
+            ConversationMessage(
+                role=item.role,
+                content=item.content,
+                model=item.model_used,
+                message_id=item.id,
+                timestamp=item.timestamp,
+            )
+            for item in self.messages.list_recent_for_session(session_id, limit)
+        )
+
     def prepare_chat(self, session_id: int, user_message: str) -> ChatPreparation:
         """Persist the user turn before inference and return prior history."""
         session = self.sessions.get(session_id)
@@ -67,7 +84,13 @@ class ConversationService:
         self.messages.append(session_id, "user", user_message)
         persisted = self.messages.list_for_session(session_id)
         history = tuple(
-            ConversationMessage(role=item.role, content=item.content, model=item.model_used)
+            ConversationMessage(
+                role=item.role,
+                content=item.content,
+                model=item.model_used,
+                message_id=item.id,
+                timestamp=item.timestamp,
+            )
             for item in persisted[:-1]
         )
         return ChatPreparation(session_id=session_id, history=history)
