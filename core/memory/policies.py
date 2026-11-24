@@ -12,13 +12,13 @@ from core.database import utcnow_naive
 
 
 class MemoryAccessPolicy(Protocol):
-    def authorize(self, scope_type: str, scope_id: str, action: str) -> bool: ...
+    def authorize(self, scope_type: str, scope_id: str, owner_id: str, action: str) -> bool: ...
 
 
 class DenyAllMemoryAccessPolicy:
     """Safe default until an owning application explicitly supplies a policy."""
 
-    def authorize(self, scope_type: str, scope_id: str, action: str) -> bool:
+    def authorize(self, scope_type: str, scope_id: str, owner_id: str, action: str) -> bool:
         return False
 
 
