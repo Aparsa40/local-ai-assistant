@@ -92,4 +92,4 @@ def test_audit_persistence_failure_is_normalized() -> None:
             outcome="deny",
         )
 
-    assert "database details" not in str(error.value.__cause__)
+    assert "database details" not in str(error.value)
