@@ -433,4 +433,4 @@ The original WP-4.1 inventory contained 14 ORM tables. WP-4.5 introduces the fir
 - The table is currently created by the existing SQLAlchemy metadata initialization on a clean/current database. Versioned Alembic migration history remains WP-4.7 and is not claimed complete.
 - No memory HTTP API or automatic memory extraction from conversation output is enabled in this work package.
 
-**Pending acceptance evidence:** run the focused memory tests, complete pytest suite, Python compilation, and frontend syntax check on the local branch. Do not mark WP-4.5 complete before those results pass.
+**Validation evidence:** GitHub Actions on the latest WP-4.5 commit passed the full suite (131 tests), Python compilation, and frontend syntax check. The user's local focused/full validation remains pending. Do not mark WP-4.5 complete before local results are recorded.
