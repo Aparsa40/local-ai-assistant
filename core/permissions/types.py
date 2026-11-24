@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+import re
 from uuid import uuid4
 
 
@@ -62,6 +63,14 @@ class DataSensitivity(str, Enum):
     INTERNAL = "internal"
     PRIVATE = "private"
     SECRET = "secret"
+
+
+class ApprovalStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    CONSUMED = "consumed"
 
 
 def _required_identifier(value: str, field_name: str, *, maximum: int = 160) -> str:
@@ -200,3 +209,51 @@ class PermissionGrant:
             and (self.expires_at is None or at < self.expires_at)
             and (self.revoked_at is None or at < self.revoked_at)
         )
+
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalRequest:
+    approval_id: str
+    request_id: str
+    action_hash: str
+    subject: PermissionSubject
+    resource: PermissionResource
+    operation: PermissionOperation
+    scope: PermissionScope
+    requested_by: str
+    created_at: datetime
+    expires_at: datetime
+    status: ApprovalStatus = ApprovalStatus.PENDING
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    consumed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "approval_id", _required_identifier(self.approval_id, "approval_id", maximum=80))
+        object.__setattr__(self, "request_id", _required_identifier(self.request_id, "request_id", maximum=80))
+        object.__setattr__(self, "requested_by", _required_identifier(self.requested_by, "requested_by"))
+        if not isinstance(self.action_hash, str) or not re.fullmatch(r"[a-f0-9]{64}", self.action_hash):
+            raise ValueError("action_hash must be a lowercase SHA-256 hex digest")
+        if not isinstance(self.subject, PermissionSubject):
+            raise ValueError("subject must be a PermissionSubject")
+        if not isinstance(self.resource, PermissionResource):
+            raise ValueError("resource must be a PermissionResource")
+        if not isinstance(self.operation, PermissionOperation):
+            raise ValueError("operation must be a PermissionOperation")
+        if not isinstance(self.scope, PermissionScope):
+            raise ValueError("scope must be a PermissionScope")
+        if not isinstance(self.status, ApprovalStatus):
+            raise ValueError("status must be an ApprovalStatus")
+        for name, value in (
+            ("created_at", self.created_at),
+            ("expires_at", self.expires_at),
+            ("decided_at", self.decided_at),
+            ("consumed_at", self.consumed_at),
+        ):
+            if value is not None and (not isinstance(value, datetime) or value.tzinfo is None):
+                raise ValueError(f"{name} must be timezone-aware")
+        if self.expires_at <= self.created_at:
+            raise ValueError("expires_at must be later than created_at")
+        if (self.decided_by is None) != (self.decided_at is None):
+            raise ValueError("decided_by and decided_at must be set together")
