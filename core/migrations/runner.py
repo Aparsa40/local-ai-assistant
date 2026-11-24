@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
-CURRENT_SCHEMA_REVISION = "0002_knowledge_fts"
+CURRENT_SCHEMA_REVISION = "0003_knowledge_file_versions"
 
 
 def _legacy_additive_columns(connection) -> None:
@@ -116,9 +116,18 @@ def _knowledge_fts(connection) -> None:
     )
 
 
+def _knowledge_file_versions(connection) -> None:
+    columns = {item["name"] for item in inspect(connection).get_columns("knowledge_files")}
+    if "source_version" not in columns:
+        connection.execute(
+            text("ALTER TABLE knowledge_files ADD COLUMN source_version INTEGER NOT NULL DEFAULT 1")
+        )
+
+
 _MIGRATIONS = (
     ("0001_legacy_additive_columns", _legacy_additive_columns),
     ("0002_knowledge_fts", _knowledge_fts),
+    ("0003_knowledge_file_versions", _knowledge_file_versions),
 )
 
 
