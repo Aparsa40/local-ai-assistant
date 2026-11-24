@@ -124,7 +124,7 @@ class ApprovalService:
         if now >= approval.expires_at:
             self.repository.decide(
                 approval_id,
-                status=ApprovalStatus.REJECTED,
+                status=ApprovalStatus.EXPIRED,
                 decided_by=approver.subject_id,
                 decided_at=now,
             )
@@ -181,7 +181,7 @@ class ApprovalService:
         if now >= approval.expires_at:
             self.repository.decide(
                 approval_id,
-                status=ApprovalStatus.REJECTED,
+                status=ApprovalStatus.EXPIRED,
                 decided_by=approval.decided_by or approval.requested_by,
                 decided_at=now,
             )
