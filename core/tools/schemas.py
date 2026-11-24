@@ -111,3 +111,17 @@ class ToolCallRequest:
         ):
             raise ValueError("approval_id is invalid")
         object.__setattr__(self, "input_data", copy.deepcopy(self.input_data))
+
+
+
+@dataclass(frozen=True, slots=True)
+class ToolExecutionResult:
+    ok: bool
+    tool_id: str
+    version: str
+    request_id: str
+    output: Any = None
+    error_category: str | None = None
+    error_message: str | None = None
+    duration_ms: int = 0
+    side_effect_may_have_occurred: bool = False
