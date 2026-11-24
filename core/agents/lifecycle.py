@@ -322,11 +322,11 @@ class AgentLifecycleManager:
         """
         recovered = 0
         for run in self.runs.list_by_status(
-            AgentRunStatus.RUNNING, AgentRunStatus.PENDING, limit=200
+            AgentRunStatus.RUNNING, limit=200
         ):
             if self.has_executor(run.run_id):
                 continue
-            target = AgentRunStatus.PAUSED if run.status is AgentRunStatus.RUNNING else AgentRunStatus.CANCELLED
+            target = AgentRunStatus.PAUSED
             try:
                 require_transition(run.status, target)
             except Exception:
@@ -346,7 +346,7 @@ class AgentLifecycleManager:
                         "The application restarted while this run was active; "
                         "no steps were re-executed."
                     ),
-                    finished_at=self._clock() if target is AgentRunStatus.CANCELLED else None,
+                    finished_at=None,
                 )
             except AgentConcurrencyError:
                 continue
