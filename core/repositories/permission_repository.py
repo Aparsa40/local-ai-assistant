@@ -10,6 +10,9 @@ from core.permissions.types import (
     PermissionResource,
     PermissionScope,
     PermissionSubject,
+    ResourceType,
+    ScopeType,
+    SubjectType,
 )
 from .base import BaseRepository
 
@@ -26,10 +29,10 @@ class PermissionRepository(BaseRepository):
 
         return PermissionGrant(
             grant_id=record.grant_id,
-            subject=PermissionSubject(record.subject_type, record.subject_id),
-            resource=PermissionResource(record.resource_type, record.resource_id),
+            subject=PermissionSubject(SubjectType(record.subject_type), record.subject_id),
+            resource=PermissionResource(ResourceType(record.resource_type), record.resource_id),
             operation=PermissionOperation(record.operation),
-            scope=PermissionScope(record.scope_type, record.scope_id, record.owner_id),
+            scope=PermissionScope(ScopeType(record.scope_type), record.scope_id, record.owner_id),
             issued_by=record.issued_by,
             created_at=aware(record.created_at),
             expires_at=aware(record.expires_at),
