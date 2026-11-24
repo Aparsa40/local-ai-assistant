@@ -38,6 +38,7 @@ A dedicated execution plan should be added for each later phase before implement
 | [Local Model Runtime](LOCAL_MODEL_RUNTIME.md) | Provider-neutral local runtime lifecycle, Ollama adapter, persistence, API, and acceptance criteria |
 | [Operator Catalogs](OPERATOR_CATALOGS.md) | Operator-level discovery, free-tier caveats, quota visibility, and evidence policy |
 | [Catalog Storage Schema](CATALOG_STORAGE.md) | Persistent operator/live catalog tables, sync lifecycle, and evidence rules |
+| [Conversation & Profile Services](CONVERSATION_PROFILE_SERVICES.md) | Conversation persistence, chat-turn durability, profile validation, and avatar lifecycle |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
 | [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
