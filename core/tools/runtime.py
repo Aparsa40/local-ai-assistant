@@ -89,20 +89,6 @@ class ToolRuntime:
             requested_by=requested_by,
             ttl_seconds=ttl_seconds,
         )
-        self.audit_service.record(
-            event_type="approval_requested",
-            request_id=request.access_request.request_id,
-            outcome="pending",
-            subject=request.access_request.subject,
-            resource=request.access_request.resource,
-            operation=request.access_request.operation,
-            metadata={
-                "tool_id": definition.tool_id,
-                "tool_version": definition.version,
-                "approval_id": approval.approval_id,
-                "risk_class": definition.risk_class.value,
-            },
-        )
         return approval
 
     async def execute(self, request: ToolCallRequest) -> ToolExecutionResult:
@@ -220,15 +206,6 @@ class ToolRuntime:
                     error_message="The approval is invalid, expired, or already consumed.",
                 )
             approval_consumed = True
-            self.audit_service.record(
-                event_type="approval_consumed",
-                request_id=request_id,
-                outcome="consumed",
-                subject=access.subject,
-                resource=access.resource,
-                operation=access.operation,
-                metadata={"tool_id": definition.tool_id, "approval_id": consumed.approval_id},
-            )
 
         final_decision = self.permission_manager.authorize(access)
         self.audit_service.record(
