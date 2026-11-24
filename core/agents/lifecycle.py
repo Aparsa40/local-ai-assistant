@@ -245,6 +245,34 @@ class AgentLifecycleManager:
             raise
         return updated
 
+    def clear_pending_approval(self, run_id: str, *, expected_version: int) -> AgentRun:
+        """Clear a decided approval so the run can be resumed.
+
+        Deciding the approval itself is verified by the caller through the
+        ApprovalRepository; this method only clears the stale pointer.
+        """
+        run = self.get_run(run_id)
+        if run.status is not AgentRunStatus.PAUSED or not run.pending_approval_id:
+            raise AgentError("The run has no pending approval to clear.")
+        updated = self.runs.transition(
+            run_id, expected_version=expected_version, pending_approval_id=None,
+        )
+        if updated is None:
+            raise RunNotFoundError("Run was not found.")
+        try:
+            self.events.record(
+                run_id=run_id,
+                event_type="approval_cleared",
+                outcome="paused",
+                metadata={"approval_id": run.pending_approval_id},
+            )
+        except Exception as exc:
+            raise AgentError(
+                "The run state changed but its event could not be persisted; "
+                "inspect the run before relying on this result."
+            ) from exc
+        return updated
+
     def cancel(self, run_id: str, *, expected_version: int, reason: str = "requested_by_owner") -> AgentRun:
         run = self.get_run(run_id)
         updated = self._transition(

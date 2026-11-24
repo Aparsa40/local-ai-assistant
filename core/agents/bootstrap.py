@@ -17,7 +17,6 @@ from core.agents.events import AgentRunEventRecorder
 from core.agents.lifecycle import AgentLifecycleManager
 from core.agents.registry import AgentRegistry
 from core.knowledge import KnowledgeScope, KnowledgeService
-from core.knowledge.service import KnowledgeAccessDeniedError
 from core.permissions.approvals import ApprovalService
 from core.permissions.audit import AuditService
 from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessPolicy
@@ -29,7 +28,6 @@ from core.permissions.types import (
     PermissionSubject,
     ResourceType,
     SubjectType,
-    ToolRiskClass,
 )
 from core.repositories.agent_repository import AgentDefinitionRepository
 from core.repositories.approval_repository import ApprovalRepository
@@ -47,7 +45,6 @@ from core.tools.schemas import ToolDefinition, ToolRiskClass
 
 KNOWLEDGE_SEARCH_TOOL_ID = "knowledge_search"
 KNOWLEDGE_SEARCH_VERSION = "1.0.0"
-_GRANT_ISSUER = PermissionSubject(SubjectType.USER, "local-user")
 
 
 def _knowledge_search_definition() -> ToolDefinition:
@@ -181,7 +178,10 @@ class AgentRuntimeContainer:
         repository = AgentDefinitionRepository(db)
         try:
             repository.register(KnowledgeAnalysisAgent.definition())
-        except ValueError:
+        except Exception:
+            # Startup registration is idempotent: an already persisted builtin
+            # definition is accepted, anything else fails loudly.
+            db.rollback()
             if repository.get(AGENT_ID, AGENT_VERSION) is None:
                 raise
         self.behaviors[(AGENT_ID, AGENT_VERSION)] = KnowledgeAnalysisAgent()
@@ -239,3 +239,9 @@ class AgentRuntimeContainer:
             audit_service=audit,
             tool_runtime=tool_runtime,
         )
+
+    def recover_stale_runs(self) -> int:
+        """Pause runs left RUNNING by an interrupted previous process."""
+        with self._storage_manager.session() as db:
+            services = self.build_services(db)
+            return services.lifecycle.recover_stale_runs()
