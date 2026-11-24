@@ -188,23 +188,11 @@ class RuntimeEvent(Base):
 
 
 def init_db():
-    """Create missing ORM tables and retain the two existing additive column checks."""
+    """Create missing ORM tables, then apply ordered, versioned schema migrations."""
     Base.metadata.create_all(bind=engine)
+    from .migrations import run_migrations
 
-    # create_all does not add columns to existing SQLite tables; migrate this field safely.
-    columns = {column["name"] for column in inspect(engine).get_columns("sessions")}
-    if "title_is_custom" not in columns:
-        with engine.begin() as connection:
-            connection.execute(
-                text("ALTER TABLE sessions ADD COLUMN title_is_custom BOOLEAN NOT NULL DEFAULT 0")
-            )
-
-    runtime_columns = {column["name"] for column in inspect(engine).get_columns("provider_runtime_status")}
-    if "runtime_details" not in runtime_columns:
-        with engine.begin() as connection:
-            connection.execute(
-                text("ALTER TABLE provider_runtime_status ADD COLUMN runtime_details JSON")
-            )
+    run_migrations(engine)
 
 
 class MemoryRecord(Base):
@@ -295,3 +283,7 @@ class PermissionAuditEventRecord(Base):
     outcome = Column(String(40), nullable=False)
     created_at = Column(DateTime, nullable=False, default=utcnow_naive, index=True)
     metadata_json = Column(JSON, nullable=False, default=dict)
+
+
+# Register Knowledge ORM tables on every database import before metadata.create_all().
+from .knowledge import models as _knowledge_models  # noqa: E402,F401

@@ -92,6 +92,10 @@ def test_storage_manager_creates_the_current_eighteen_table_schema():
         "permission_grants",
         "permission_approvals",
         "permission_audit_events",
+        "knowledge_sources",
+        "knowledge_files",
+        "knowledge_chunks",
+        "knowledge_artifacts",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
