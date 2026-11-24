@@ -71,7 +71,7 @@ def test_storage_manager_rejects_unimplemented_database_backends():
         StorageManager(StorageConfig(database_url="postgresql://localhost/assistant"))
 
 
-def test_storage_manager_creates_the_current_sixteen_table_schema():
+def test_storage_manager_creates_the_current_eighteen_table_schema():
     manager = StorageManager(StorageConfig(database_url="sqlite://"))
     expected_tables = {
         "sessions",
@@ -90,6 +90,8 @@ def test_storage_manager_creates_the_current_sixteen_table_schema():
         "runtime_statuses",
         "runtime_events",
         "permission_grants",
+        "permission_approvals",
+        "permission_audit_events",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
