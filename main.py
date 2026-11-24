@@ -64,7 +64,8 @@ def get_local_access_context(request: Request) -> AccessContext:
         address = ipaddress.ip_address(client_host)
     except ValueError as exc:
         raise HTTPException(status_code=403, detail="Local access only.") from exc
-    if not address.is_loopback and not (address.ipv4_mapped and address.ipv4_mapped.is_loopback):
+    mapped_address = getattr(address, "ipv4_mapped", None)
+    if not address.is_loopback and not (mapped_address and mapped_address.is_loopback):
         raise HTTPException(status_code=403, detail="Local access only.")
     return AccessContext(
         subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
