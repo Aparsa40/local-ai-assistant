@@ -1,6 +1,7 @@
 """Application service for controlled, provenance-aware memory lifecycle."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -59,11 +60,11 @@ class MemoryService:
         self.retention_policy = retention_policy or MemoryRetentionPolicy()
 
     def _authorize(self, scope: MemoryScope, action: str) -> None:
-        if not scope.scope_type or scope.scope_type not in self.SCOPE_TYPES:
+        if not isinstance(scope.scope_type, str) or scope.scope_type not in self.SCOPE_TYPES:
             raise MemoryValidationError("نوع محدوده حافظه معتبر نیست")
-        if not scope.scope_id or len(scope.scope_id) > 160:
+        if not isinstance(scope.scope_id, str) or not scope.scope_id or len(scope.scope_id) > 160:
             raise MemoryValidationError("شناسه محدوده حافظه معتبر نیست")
-        if not scope.owner_id or len(scope.owner_id) > 160:
+        if not isinstance(scope.owner_id, str) or not scope.owner_id or len(scope.owner_id) > 160:
             raise MemoryValidationError("شناسه مالک حافظه معتبر نیست")
         if not self.access_policy.authorize(scope.scope_type, scope.scope_id, scope.owner_id, action):
             raise MemoryAccessDeniedError("دسترسی به حافظه برای این محدوده مجاز نشده است")
@@ -79,7 +80,7 @@ class MemoryService:
             owner_id=record.owner_id,
             source_type=record.source_type,
             source_ref=record.source_ref,
-            provenance=dict(record.provenance or {}),
+            provenance=copy.deepcopy(record.provenance or {}),
             confidence=record.confidence,
             importance=record.importance,
             status=record.status,
@@ -140,9 +141,9 @@ class MemoryService:
         retention_days: int | None = None,
     ) -> MemoryRecordView:
         self._authorize(scope, "create")
-        if memory_type not in self.MEMORY_TYPES:
+        if not isinstance(memory_type, str) or memory_type not in self.MEMORY_TYPES:
             raise MemoryValidationError("نوع حافظه معتبر نیست")
-        if source_type not in self.SOURCE_TYPES:
+        if not isinstance(source_type, str) or source_type not in self.SOURCE_TYPES:
             raise MemoryValidationError("نوع منبع حافظه معتبر نیست")
         normalized_content = self._validate_content(content)
         safe_provenance = self._validate_provenance(provenance)
@@ -154,9 +155,9 @@ class MemoryService:
             or not 1 <= retention_days <= self.MAX_RETENTION_DAYS
         ):
             raise MemoryValidationError("مدت نگهداری باید بین ۱ تا ۳۶۵۰۰ روز باشد")
-        if dedup_key is not None and (not dedup_key.strip() or len(dedup_key) > 255):
+        if dedup_key is not None and (not isinstance(dedup_key, str) or not dedup_key.strip() or len(dedup_key) > 255):
             raise MemoryValidationError("کلید تشخیص تکرار معتبر نیست")
-        if source_ref is not None and (not source_ref.strip() or len(source_ref) > 255):
+        if source_ref is not None and (not isinstance(source_ref, str) or not source_ref.strip() or len(source_ref) > 255):
             raise MemoryValidationError("شناسه مرجع منبع معتبر نیست")
         if source_ref is not None and any(pattern.search(source_ref) for pattern in self._SECRET_PATTERNS):
             raise MemoryValidationError("مرجع منبع نباید حاوی اطلاعات محرمانه باشد")
@@ -202,7 +203,7 @@ class MemoryService:
     def get(self, scope: MemoryScope, memory_id: int) -> MemoryRecordView:
         self._authorize(scope, "read")
         record = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
-        if record is None:
+        if record is None or record.status == "expired":
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         now = utcnow_naive()
         if record.expires_at and record.expires_at <= now and record.status in {"candidate", "active"}:
