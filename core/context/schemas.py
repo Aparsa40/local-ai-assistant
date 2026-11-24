@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from core.memory.types import MemoryScope
+from core.knowledge.service import KnowledgeScope
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +28,7 @@ class ContextRequest:
 class ContextItem:
     """One selected source item with traceable provenance."""
 
-    source_type: Literal["conversation", "memory"]
+    source_type: Literal["conversation", "memory", "knowledge"]
     source_ref: str
     content: str
     relevance_score: float
@@ -48,4 +49,4 @@ class ContextPackage:
     estimated_tokens: int
     token_budget: int
     omitted_items: int
-    knowledge_status: Literal["not_connected"] = "not_connected"
+    knowledge_status: Literal["not_connected", "connected"] = "not_connected"
