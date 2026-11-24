@@ -251,6 +251,7 @@ class PermissionGrantRecord(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow_naive)
     expires_at = Column(DateTime, nullable=True, index=True)
     revoked_at = Column(DateTime, nullable=True, index=True)
+    requires_approval = Column(Boolean, nullable=False, default=False)
     conditions = Column(JSON, nullable=False, default=dict)
 
 
