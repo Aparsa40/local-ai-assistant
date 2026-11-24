@@ -26,7 +26,8 @@ class PermissionManagerKnowledgeAccessPolicy:
 
     _OPERATIONS = {
         "read": PermissionOperation.READ,
-        "write": PermissionOperation.UPDATE,
+        "create": PermissionOperation.CREATE,
+        "update": PermissionOperation.UPDATE,
     }
 
     def __init__(
