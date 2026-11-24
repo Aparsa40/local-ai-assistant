@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 through WP-5.4 implemented and CI-validated; WP-5.5–WP-5.7 pending  
+**Status:** In progress — WP-5.1 through WP-5.5 implemented and CI-validated; WP-5.6–WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -140,6 +140,8 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - A denied or failed action must not be silently retried through another tool.
 
 **Exit:** direct handler invocation is not exposed as an application capability; every successful execution has a prior authorization decision and correlated audit event.
+
+**WP-5.5 implementation status (2026-11-24):** Added `ToolRuntime` as the only application execution gateway. It validates registered tool contracts, records request and decision audit events, checks exact permissions, consumes action-bound approval when required, rechecks permission immediately before invoking the handler, enforces asynchronous handler timeout and input/output limits, validates output schema, normalizes handler failures, and records execution outcomes. Audit failure before execution stops the call; audit failure after a side effect returns an explicit uncertainty flag. Handlers must be async and are registered only by trusted application code. GitHub Actions passed 197 tests, Python compilation, and frontend syntax validation.
 
 ### WP-5.6 — Existing Domain Integration
 
