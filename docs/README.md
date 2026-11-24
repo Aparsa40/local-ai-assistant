@@ -19,7 +19,7 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
 | 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | WP-4.1–WP-4.6 implemented and validated; WP-4.7 Knowledge Storage & Migration remains pending |
-| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | In progress — PR #15; WP-5.1 and WP-5.2 implemented and CI-validated |
+| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | In progress — PR #15; WP-5.1 through WP-5.3 implemented and CI-validated |
 | 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
