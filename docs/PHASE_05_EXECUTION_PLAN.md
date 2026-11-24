@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 contracts and security audit delivered; WP-5.2–WP-5.7 pending  
+**Status:** In progress — WP-5.1 and WP-5.2 implemented and CI-validated; WP-5.3–WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -104,6 +104,8 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - Add repository/storage support for grant records only where the existing storage lifecycle supports it; keep authorization logic out of repositories.
 
 **Exit:** positive grants authorize only the exact matching tuple; cross-owner, cross-scope, expired, revoked, malformed, and unknown requests are denied.
+
+**WP-5.2 implementation status (2026-11-24):** Added typed exact-scope permission grant persistence (`permission_grants`), `PermissionRepository`, and a deterministic `PermissionManager`. The manager denies when storage is absent, storage errors, or no exact active grant matches. Grant issuance/revocation is independently default-deny through `GrantAdministrationPolicy`; agent-type and agent-run subjects are explicitly barred from grant administration. Expiry and revocation are evaluated using timezone-aware UTC timestamps. The additive table is created through the current SQLAlchemy metadata initialization; this is not a versioned migration framework. GitHub Actions passed 161 tests, Python compilation, and frontend syntax validation after correcting the repository import cycle and updating the schema-baseline test.
 
 ### WP-5.3 — Approval & Audit Services
 
