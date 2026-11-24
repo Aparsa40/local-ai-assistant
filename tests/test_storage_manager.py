@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
+from core.database import Base
 from core.storage.config import StorageConfig
 from core.storage.exceptions import StorageConfigurationError
 from core.storage.manager import StorageManager
@@ -68,3 +69,28 @@ def test_storage_manager_uses_one_connection_for_in_memory_sqlite():
 def test_storage_manager_rejects_unimplemented_database_backends():
     with pytest.raises(StorageConfigurationError, match="Only SQLite is enabled"):
         StorageManager(StorageConfig(database_url="postgresql://localhost/assistant"))
+
+
+def test_storage_manager_creates_the_current_fourteen_table_schema():
+    manager = StorageManager(StorageConfig(database_url="sqlite://"))
+    expected_tables = {
+        "sessions",
+        "messages",
+        "user_profile",
+        "operator_catalogs",
+        "operator_model_profiles",
+        "live_model_catalog",
+        "provider_runtime_status",
+        "model_runtime_status",
+        "provider_quota_snapshots",
+        "catalog_sync_history",
+        "provider_intelligence_reports",
+        "runtime_model_states",
+        "runtime_statuses",
+        "runtime_events",
+    }
+    try:
+        Base.metadata.create_all(bind=manager.engine)
+        assert set(inspect(manager.engine).get_table_names()) == expected_tables
+    finally:
+        manager.dispose()
