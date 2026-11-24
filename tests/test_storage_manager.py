@@ -89,6 +89,7 @@ def test_storage_manager_creates_the_current_fifteen_table_schema():
         "runtime_model_states",
         "runtime_statuses",
         "runtime_events",
+        "permission_grants",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
