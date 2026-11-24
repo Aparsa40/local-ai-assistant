@@ -106,6 +106,8 @@ def test_original_files_are_stored_under_opaque_keys_and_read_only_in_scope(tmp_
         )
         assert record.original_filename == "private.txt"
         assert record.storage_key not in record.original_filename
+        assert record.source_version == 1
+        assert service.get_source(scope, source.id).version == 1
         assert service.read_original_file(scope, record.id) == b"original bytes"
         with pytest.raises(KnowledgeAccessDeniedError):
             service.read_original_file(KnowledgeScope("user", "other", "owner-a"), record.id)
@@ -135,7 +137,7 @@ def test_migrations_are_versioned_idempotent_and_upgrade_legacy_columns(tmp_path
             connection.execute(text("CREATE TABLE provider_runtime_status (provider_id VARCHAR(80) PRIMARY KEY)"))
             connection.execute(text("INSERT INTO sessions(id) VALUES (41)"))
             connection.execute(text("INSERT INTO provider_runtime_status(provider_id) VALUES ('ollama')"))
-            # Migration runner requires Knowledge ORM tables to be present, as init_db creates them.
+            # Bootstrap the ORM-owned tables while simulating a pre-migration legacy database.
             Base.metadata.create_all(bind=connection)
         assert run_migrations(engine) == CURRENT_SCHEMA_REVISION
         assert run_migrations(engine) == CURRENT_SCHEMA_REVISION
@@ -145,7 +147,7 @@ def test_migrations_are_versioned_idempotent_and_upgrade_legacy_columns(tmp_path
             assert connection.execute(text("SELECT id FROM sessions")).scalar_one() == 41
             assert connection.execute(text("SELECT provider_id FROM provider_runtime_status")).scalar_one() == "ollama"
         revisions = engine.connect().execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
-        assert revisions == 2
+        assert revisions == 3
     finally:
         engine.dispose()
 
@@ -158,7 +160,7 @@ def test_migrations_bootstrap_knowledge_schema_on_a_fresh_database():
         assert {"schema_migrations", "knowledge_sources", "knowledge_files", "knowledge_chunks", "knowledge_artifacts"} <= tables
         with engine.connect() as connection:
             revisions = connection.execute(text("SELECT revision FROM schema_migrations ORDER BY revision")).scalars().all()
-            assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts"]
+            assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts", "0003_knowledge_file_versions"]
             assert connection.execute(text("SELECT COUNT(*) FROM knowledge_chunks_fts")).scalar_one() == 0
     finally:
         engine.dispose()
