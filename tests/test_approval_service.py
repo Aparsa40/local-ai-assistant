@@ -22,6 +22,8 @@ from core.permissions.types import (
     SubjectType,
 )
 from core.repositories.approval_repository import ApprovalRepository
+from core.permissions.audit import AuditService
+from core.repositories.audit_repository import AuditRepository
 
 
 class AllowUserApproval:
@@ -54,6 +56,7 @@ def _request() -> AccessRequest:
 def _service(db_session, *, now=None, policy=None):
     return ApprovalService(
         ApprovalRepository(db_session),
+        AuditService(AuditRepository(db_session)),
         decision_policy=policy,
         clock=lambda: now or datetime.now(timezone.utc),
     )
@@ -138,6 +141,7 @@ def test_approved_token_expires_before_it_can_be_consumed(db_session) -> None:
     now = [datetime(2026, 11, 24, 8, 0, tzinfo=timezone.utc)]
     service = ApprovalService(
         ApprovalRepository(db_session),
+        AuditService(AuditRepository(db_session)),
         decision_policy=AllowUserApproval(),
         clock=lambda: now[0],
     )
