@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Tool Registry, Tool Runtime, audit-to-runtime wiring, and API/domain integration remain pending.  
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Tool Runtime, audit-to-runtime wiring, and API/domain integration remain pending. The explicit Tool Registry and bounded schema validation are implemented.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -38,6 +38,8 @@ Every protected operation must be evaluated against:
 No wildcard, inferred owner, or implicit cross-scope grant is valid.
 
 ## 4. Tool execution boundary
+
+The current `ToolRegistry` accepts only explicitly registered, versioned definitions. It validates a restricted JSON Schema subset, byte limits, resource type, and operation mapping. It rejects unknown/disabled tools, duplicate registrations, unsupported schema keywords, and unexpected object properties. Destructive and external-side-effect tools must require approval. The registry's public catalog excludes handlers and raw schema internals.
 
 The accepted execution sequence is:
 
