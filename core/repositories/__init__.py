@@ -1,4 +1,4 @@
-"""Domain persistence repositories."""
+"""Domain persistence repositories; optional domains are imported lazily."""
 from .catalog_repository import CatalogRepository
 from .approval_repository import ApprovalRepository
 from .audit_repository import AuditRepository
@@ -15,8 +15,16 @@ __all__ = [
     "AuditRepository",
     "MessageRepository",
     "MemoryRepository",
+    "KnowledgeRepository",
     "ProfileRepository",
     "PermissionRepository",
     "RuntimeRepository",
     "SessionRepository",
 ]
+
+
+def __getattr__(name: str):
+    if name == "KnowledgeRepository":
+        from .knowledge_repository import KnowledgeRepository
+        return KnowledgeRepository
+    raise AttributeError(name)

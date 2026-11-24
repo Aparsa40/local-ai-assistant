@@ -14,13 +14,14 @@ def conversation_recency_score(index: int, total: int) -> float:
 
 def selection_key(item: ContextItem) -> tuple[float, int, str]:
     """Higher relevance first; memory wins exact ties; source reference breaks ties."""
-    source_priority = 1 if item.source_type == "memory" else 0
+    source_priority = 2 if item.source_type == "memory" else (1 if item.source_type == "knowledge" else 0)
     return (-item.relevance_score, -source_priority, item.source_ref)
 
 
 def presentation_key(item: ContextItem) -> tuple[int, float, str, str]:
     """Present memory first by score, then conversation history chronologically."""
-    source_group = 0 if item.source_type == "memory" else 1
-    if source_group == 0:
+    if item.source_type == "memory":
         return (0, -item.relevance_score, item.created_at.isoformat() if item.created_at else "", item.source_ref)
-    return (1, 0.0, item.created_at.isoformat() if item.created_at else "", item.source_ref)
+    if item.source_type == "knowledge":
+        return (1, -item.relevance_score, "", item.source_ref)
+    return (2, 0.0, item.created_at.isoformat() if item.created_at else "", item.source_ref)

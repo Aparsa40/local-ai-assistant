@@ -5,7 +5,16 @@ from pathlib import Path
 import pytest
 from sqlalchemy import inspect, text
 
-from core.database import Base
+from core.database import (
+    Base,
+    ChatMessage,
+    ChatSession,
+    OperatorCatalogEntry,
+    RuntimeEvent,
+    RuntimeStatus,
+    UserProfile,
+    init_db,
+)
 from core.storage.config import StorageConfig
 from core.storage.exceptions import StorageConfigurationError
 from core.storage.manager import StorageManager
@@ -71,7 +80,7 @@ def test_storage_manager_rejects_unimplemented_database_backends():
         StorageManager(StorageConfig(database_url="postgresql://localhost/assistant"))
 
 
-def test_storage_manager_creates_the_current_eighteen_table_schema():
+def test_storage_manager_creates_the_current_orm_schema():
     manager = StorageManager(StorageConfig(database_url="sqlite://"))
     expected_tables = {
         "sessions",
@@ -92,9 +101,62 @@ def test_storage_manager_creates_the_current_eighteen_table_schema():
         "permission_grants",
         "permission_approvals",
         "permission_audit_events",
+        "knowledge_sources",
+        "knowledge_files",
+        "knowledge_chunks",
+        "knowledge_artifacts",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
         assert set(inspect(manager.engine).get_table_names()) == expected_tables
+    finally:
+        manager.dispose()
+
+
+
+def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
+    manager = StorageManager(StorageConfig(database_url="sqlite://"))
+    try:
+        init_db(manager.engine)
+        tables = set(inspect(manager.engine).get_table_names())
+        assert {
+            "schema_migrations",
+            "sessions",
+            "messages",
+            "user_profile",
+            "operator_catalogs",
+            "runtime_statuses",
+            "runtime_events",
+            "knowledge_sources",
+            "knowledge_files",
+            "knowledge_chunks",
+            "knowledge_artifacts",
+        } <= tables
+
+        with manager.transaction() as session:
+            chat = ChatSession(title="migration smoke")
+            session.add(chat)
+            session.flush()
+            session.add(ChatMessage(session_id=chat.id, role="user", content="hello"))
+            session.add(UserProfile(display_name="Test user", username="test", email=""))
+            session.add(OperatorCatalogEntry(provider_id="test-provider", name="Test", manifest={}))
+            session.add(RuntimeStatus(runtime_id="test-runtime", state="ready"))
+            session.add(RuntimeEvent(
+                runtime_id="test-runtime",
+                event_type="smoke",
+                state="ready",
+                success=True,
+                details={},
+            ))
+
+        with manager.session() as session:
+            assert session.query(ChatSession).count() == 1
+            assert session.query(ChatMessage).count() == 1
+            assert session.query(UserProfile).count() == 1
+            assert session.query(OperatorCatalogEntry).count() == 1
+            assert session.query(RuntimeStatus).count() == 1
+            assert session.query(RuntimeEvent).count() == 1
+            revisions = session.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
+            assert revisions == 4
     finally:
         manager.dispose()

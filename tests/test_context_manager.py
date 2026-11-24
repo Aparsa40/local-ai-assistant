@@ -5,9 +5,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.context import ContextManager, ContextRequest, ContextValidationError
+from core.context import ContextConfigurationError, ContextManager, ContextRequest, ContextValidationError
 from core.conversations import ConversationService
 from core.database import Base
+from core.knowledge import KnowledgeScope, KnowledgeService
+from core.migrations import run_migrations
 from core.memory import MemoryAccessDeniedError, MemoryScope, MemoryService
 from permission_test_helpers import make_test_access
 
@@ -203,6 +205,59 @@ def test_memory_limit_is_aggregate_across_explicit_scopes():
 
         assert len([item for item in package.items if item.source_type == "memory"]) == 1
         assert package.omitted_items >= 1
+    finally:
+        db.close()
+        engine.dispose()
+
+
+class AllowKnowledgePolicy:
+    def authorize(self, scope_type: str, scope_id: str, owner_id: str, action: str) -> bool:
+        return scope_type == "user" and owner_id == "local" and scope_id == "profile-1"
+
+
+def test_context_retrieves_knowledge_only_from_explicit_authorized_scopes():
+    engine, db = make_db()
+    try:
+        run_migrations(engine)
+        conversations, _ = make_services(db)
+        session_id = conversations.create_session()["id"]
+        scope = KnowledgeScope("user", "profile-1", "local")
+        knowledge = KnowledgeService(db, access_policy=AllowKnowledgePolicy())
+        source = knowledge.create_source(scope, source_type="text", title="Private reference")
+        knowledge.index_extracted_text(
+            scope, source.id, "Scoped lexical retrieval keeps source provenance visible."
+        )
+
+        package = ContextManager(conversations, knowledge=knowledge).assemble(
+            ContextRequest(
+                conversation_id=session_id,
+                query="scoped lexical",
+                knowledge_scopes=(scope,),
+            )
+        )
+
+        assert package.knowledge_status == "connected"
+        assert len(package.items) == 1
+        assert package.items[0].source_type == "knowledge"
+        assert package.items[0].trust_status == "source_unreviewed"
+        assert package.items[0].provenance["source_id"] == source.id
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_context_rejects_knowledge_scope_when_storage_is_not_configured():
+    engine, db = make_db()
+    try:
+        conversations, _ = make_services(db)
+        session_id = conversations.create_session()["id"]
+        request = ContextRequest(
+            conversation_id=session_id,
+            query="private knowledge",
+            knowledge_scopes=(KnowledgeScope("user", "profile-1", "local"),),
+        )
+        with pytest.raises(ContextConfigurationError):
+            ContextManager(conversations).assemble(request)
     finally:
         db.close()
         engine.dispose()
