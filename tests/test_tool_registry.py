@@ -175,7 +175,7 @@ def test_destructive_and_external_tools_must_require_approval() -> None:
         )
 
 
-def test_public_catalog_does_not_expose_handlers_or_raw_schemas() -> None:
+def test_public_catalog_exposes_validated_schema_but_not_handlers() -> None:
     registry = ToolRegistry()
     registry.register(_definition(), _echo)
 
@@ -192,7 +192,7 @@ def test_public_catalog_does_not_expose_handlers_or_raw_schemas() -> None:
         "input_schema": _definition().input_schema,
     },)
     assert "handler" not in catalog[0]
-    assert "input_schema" not in catalog[0]
+    assert catalog[0]["input_schema"] == _definition().input_schema
 
 
 
