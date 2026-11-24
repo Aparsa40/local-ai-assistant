@@ -2,7 +2,7 @@
 
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11 — Tool Runtime & Permission Manager  
-**Status:** Tool Registry implemented; Tool Gateway/Runtime execution is pending WP-5.5.
+**Status:** Tool Registry and Tool Runtime implemented and CI-validated; existing domain/API integration remains pending WP-5.6.
 
 ## 1. Security boundary
 
@@ -40,7 +40,7 @@ Unsupported keywords (including remote/local references and arbitrary schema ext
 - External side-effect tools must declare publish/transmit and require explicit approval.
 - Tool definitions cannot disable the central permission decision or issue grants.
 
-## 5. Runtime sequence (WP-5.5 target)
+## 5. Implemented runtime sequence
 
 1. Resolve exact tool ID and version from the trusted registry.
 2. Validate the typed AccessRequest and complete input schema.
@@ -51,12 +51,12 @@ Unsupported keywords (including remote/local references and arbitrary schema ext
 7. Validate/normalize the result; do not expose raw exceptions or credentials.
 8. Persist correlated redacted audit events.
 
-The runtime must not retry a denied action through another tool. If required audit persistence fails before a side effect, execution must stop. Cancellation and timeout behavior must not falsely report success.
+The runtime does not retry a denied action through another tool. If required audit persistence fails before a side effect, execution stops. Permission is rechecked immediately before handler invocation to reduce revocation races. Cancellation and timeout behavior do not falsely report success. If an operation may have caused a side effect but its final audit event cannot be persisted, the result explicitly reports that the side effect may have occurred.
 
 ## 6. Current limitations
 
-- Tool Registry exists, but no production tool handlers are registered by this work package.
-- Tool Runtime/Gateway execution is not implemented until WP-5.5.
+- Tool Registry and Tool Runtime exist, but no production tool handlers are registered by this work package.
+- Runtime is not yet wired into the conversation, memory, provider, or Local Model Runtime API routes; WP-5.6 owns integration.
 - Tool schemas and registration are not a sandbox. Handler code remains trusted application code and must use narrow injected capabilities.
 - No general-purpose shell, arbitrary code execution, unrestricted file access, or external connector is provided.
 - Hosted authentication and a credential vault are not implemented.
