@@ -130,11 +130,11 @@ An independent quality and policy boundary. It checks output structure, complete
 
 It must not be folded into a provider adapter.
 
-### Tool & Permission Manager (Phase 5 implementation in progress)
+### Tool & Permission Manager (Phase 5 complete; PR #15 merged)
 
 The current implementation includes typed authorization contracts, exact-scope persistent grants with expiry/revocation, default-deny PermissionManager decisions, separate default-deny grant administration, action-hash-bound one-time approvals, redacted append-only audit events, an explicit versioned Tool Registry, and an async bounded Tool Runtime. Conversation/Profile Services, ContextManager, provider/runtime/configuration API routes, and the MemoryService adapter use centralized permission checks. The current local policy is loopback-only and single-user; it is not hosted authentication.
 
-Knowledge Storage, managed files, connector services, encrypted credential vault, hosted multi-user identity, and production tool handlers are not yet implemented. Models can request tool use, but only application code can register, authorize, and execute it.
+Phase 5 is merged to `main` (PR #15) and its final CI passed 217 tests. Knowledge Storage, managed files, connector services, encrypted credential vault, hosted multi-user identity, and production tool handlers are not yet implemented. Models can request tool use, but only application code can register, authorize, and execute it.
 
 ### Knowledge Access Layer
 
