@@ -18,7 +18,7 @@ The repository currently contains a FastAPI backend, lightweight Alpine.js brows
 
 The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
 
-Important limitations remain: credentials are not stored in a dedicated encrypted vault, authentication is not implemented, the complete Storage & Memory architecture is not implemented, and Agent Runtime/Permission Manager/AI Librarian are not implemented as complete systems. Do not expose the current development server to untrusted networks.
+Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Services, Memory Service, and Context Manager) are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15: WP-5.1–WP-5.6 (typed contracts, default-deny PermissionManager, persisted grants, approvals, audit, Tool Registry/Runtime, and local domain/API integration) are implemented and CI-validated; WP-5.7 final acceptance remains. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## Phase 1 — Architecture & Contracts Foundation
 
@@ -85,7 +85,7 @@ Important limitations remain: credentials are not stored in a dedicated encrypte
 
 ## Phase 4 — Storage & Memory Services
 
-**Status:** Planned — implementation has not started.
+**Status:** Partially implemented — WP-4.1–WP-4.6 complete; WP-4.7 Knowledge Storage & Migration remains pending.
 
 **Goal:** Consolidate persistence boundaries and introduce domain repositories, conversation storage, durable memory, request context assembly, and knowledge metadata while preserving existing SQLite data.
 
@@ -114,9 +114,12 @@ Important limitations remain: credentials are not stored in a dedicated encrypte
 
 ## Phase 5 — Tool Runtime & Permission Manager
 
-**Status:** Planned.
+**Status:** In progress — PR #15; WP-5.1–WP-5.6 implemented and CI-validated; WP-5.7 pending.
 
 **Goal:** Mediate every protected data access and tool action through application-owned authorization and execution boundaries.
+
+**Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)  
+**Module contracts:** [PERMISSIONS.md](PERMISSIONS.md), [TOOL_RUNTIME.md](TOOL_RUNTIME.md)
 
 **Core deliverables:**
 - Permission subjects, resources, operations, scopes, grants, expiry, revocation, and audit events.
@@ -125,9 +128,11 @@ Important limitations remain: credentials are not stored in a dedicated encrypte
 - Isolated/bounded Tool Runtime.
 - Approval gates for destructive or externally visible operations.
 - Credential access/redaction integration.
-- Permission checks for conversations, memories, knowledge, files, tools, and connectors.
+- Permission checks for current conversation/profile, memory adapter, provider, runtime, and configuration operations.
+- Loopback-only local application policy for the current single-user deployment; hosted authentication is not implemented.
+- Knowledge/file/connector protection seams remain unavailable until their owning services exist.
 
-**Exit criteria:** no protected read or tool action occurs without an application-side authorization decision; permissions are scoped, revocable, and tested.
+**Exit criteria:** no protected read or tool action occurs without an application-side authorization decision; permissions are scoped, revocable, and tested. The current local policy is not a substitute for authentication. Knowledge/file/connector coverage, credential-vault integration, and hosted multi-user authorization remain outside the implemented scope.
 
 ## Phase 6 — Agent Runtime
 

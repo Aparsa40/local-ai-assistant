@@ -7,6 +7,17 @@ from sqlalchemy.pool import StaticPool
 from core.database import Base
 from core.conversations import ConversationNotFoundError, ConversationService
 from core.profiles import ProfileService, ProfileServiceError
+from permission_test_helpers import make_test_access
+
+
+def make_conversation_service(db):
+    manager, context = make_test_access()
+    return ConversationService(db, manager, context)
+
+
+def make_profile_service(db):
+    manager, context = make_test_access()
+    return ProfileService(db, manager, context)
 
 
 def make_db():
@@ -22,7 +33,7 @@ def make_db():
 def test_conversation_service_preserves_fresh_chat_and_history_order():
     engine, db = make_db()
     try:
-        service = ConversationService(db)
+        service = make_conversation_service(db)
         created = service.create_session()
         session_id = created["id"]
 
@@ -51,7 +62,7 @@ def test_conversation_service_preserves_fresh_chat_and_history_order():
 def test_custom_conversation_title_is_not_overwritten_by_chat():
     engine, db = make_db()
     try:
-        service = ConversationService(db)
+        service = make_conversation_service(db)
         session_id = service.create_session()["id"]
         service.rename_session(session_id, "عنوان انتخابی")
         service.prepare_chat(session_id, "پیام اول")
@@ -65,7 +76,7 @@ def test_custom_conversation_title_is_not_overwritten_by_chat():
 def test_conversation_service_reports_missing_sessions():
     engine, db = make_db()
     try:
-        service = ConversationService(db)
+        service = make_conversation_service(db)
         for operation in (
             lambda: service.delete_session(999),
             lambda: service.rename_session(999, "عنوان"),
@@ -86,7 +97,7 @@ def test_conversation_service_reports_missing_sessions():
 def test_profile_service_validation_and_avatar_lifecycle():
     engine, db = make_db()
     try:
-        service = ProfileService(db)
+        service = make_profile_service(db)
         initial = service.serialize()
         assert initial["username"] == "user"
         assert initial["avatar_configured"] is False

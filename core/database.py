@@ -231,3 +231,67 @@ class MemoryRecord(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow_naive)
     updated_at = Column(DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
     last_accessed_at = Column(DateTime, nullable=True)
+
+
+
+class PermissionGrantRecord(Base):
+    """Persisted exact-scope authorization grant; no wildcard semantics are supported."""
+
+    __tablename__ = "permission_grants"
+    grant_id = Column(String(80), primary_key=True)
+    subject_type = Column(String(40), nullable=False, index=True)
+    subject_id = Column(String(160), nullable=False, index=True)
+    resource_type = Column(String(60), nullable=False, index=True)
+    resource_id = Column(String(255), nullable=False, index=True)
+    operation = Column(String(40), nullable=False, index=True)
+    scope_type = Column(String(40), nullable=False, index=True)
+    scope_id = Column(String(160), nullable=False, index=True)
+    owner_id = Column(String(160), nullable=False, index=True)
+    issued_by = Column(String(160), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    requires_approval = Column(Boolean, nullable=False, default=False)
+    conditions = Column(JSON, nullable=False, default=dict)
+
+
+
+class PermissionApprovalRecord(Base):
+    """One-time approval bound to a specific request and action digest."""
+
+    __tablename__ = "permission_approvals"
+    approval_id = Column(String(80), primary_key=True)
+    request_id = Column(String(80), nullable=False, index=True)
+    action_hash = Column(String(64), nullable=False)
+    subject_type = Column(String(40), nullable=False)
+    subject_id = Column(String(160), nullable=False)
+    resource_type = Column(String(60), nullable=False)
+    resource_id = Column(String(255), nullable=False)
+    operation = Column(String(40), nullable=False)
+    scope_type = Column(String(40), nullable=False)
+    scope_id = Column(String(160), nullable=False)
+    owner_id = Column(String(160), nullable=False)
+    requested_by = Column(String(160), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    expires_at = Column(DateTime, nullable=False)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    decided_by = Column(String(160), nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    consumed_at = Column(DateTime, nullable=True)
+
+
+class PermissionAuditEventRecord(Base):
+    """Append-only redacted authorization and tool execution audit event."""
+
+    __tablename__ = "permission_audit_events"
+    event_id = Column(String(80), primary_key=True)
+    event_type = Column(String(80), nullable=False, index=True)
+    request_id = Column(String(80), nullable=False, index=True)
+    subject_type = Column(String(40), nullable=True)
+    subject_id = Column(String(160), nullable=True)
+    resource_type = Column(String(60), nullable=True)
+    resource_id = Column(String(255), nullable=True)
+    operation = Column(String(40), nullable=True)
+    outcome = Column(String(40), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive, index=True)
+    metadata_json = Column(JSON, nullable=False, default=dict)

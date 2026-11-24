@@ -1,9 +1,11 @@
 # pyright: reportMissingImports=false
+import ipaddress
 import json
+from uuid import uuid4
 from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -11,8 +13,15 @@ from sqlalchemy.orm import Session
 from core.config_manager import ConfigManager
 from core.database import init_db
 from core.conversations import ConversationNotFoundError, ConversationService
+from core.context import ContextManager, ContextRequest
 from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
+from core.permissions.audit import AuditService
+from core.permissions.guards import AccessDeniedError, require_access
+from core.permissions.local_policy import LocalApplicationPolicy
+from core.permissions.manager import PermissionManager
+from core.permissions.types import AccessContext, PermissionOperation, PermissionScope, PermissionSubject, ResourceType, ScopeType, SubjectType
+from core.repositories.audit_repository import AuditRepository
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
@@ -31,6 +40,7 @@ from core.catalog_storage import (
 )
 
 app = FastAPI(title="Local Modular AI Assistant")
+permission_manager = PermissionManager(policies=(LocalApplicationPolicy(),))
 storage_manager = get_storage_manager()
 SessionLocal = storage_manager.session_factory  # Temporary compatibility for the catalog route fallback.
 interface_manager = InterfaceManager()
@@ -47,9 +57,55 @@ def get_db():
         yield db
 
 
+def get_local_access_context(request: Request) -> AccessContext:
+    """Resolve the fixed local principal only for loopback clients."""
+    client_host = request.client.host if request.client else ""
+    try:
+        address = ipaddress.ip_address(client_host)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="Local access only.") from exc
+    mapped_address = getattr(address, "ipv4_mapped", None)
+    if not address.is_loopback and not (mapped_address and mapped_address.is_loopback):
+        raise HTTPException(status_code=403, detail="Local access only.")
+    return AccessContext(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
+        request_id=str(uuid4()),
+    )
+
+
+def build_audit_service(db: Session) -> AuditService:
+    return AuditService(AuditRepository(db))
+
+
+def authorize_local_api_access(
+    access: AccessContext,
+    resource_type: ResourceType,
+    resource_id: str,
+    operation: PermissionOperation,
+    db: Session | None = None,
+) -> None:
+    if db is not None:
+        require_access(
+            permission_manager, access, resource_type, resource_id, operation,
+            audit_service=build_audit_service(db),
+        )
+        return
+    with storage_manager.session() as audit_db:
+        require_access(
+            permission_manager, access, resource_type, resource_id, operation,
+            audit_service=build_audit_service(audit_db),
+        )
+
+
+@app.exception_handler(AccessDeniedError)
+async def handle_access_denied(request: Request, exc: AccessDeniedError):
+    return JSONResponse(status_code=403, content={"detail": "Access denied."})
+
+
 class ChatRequest(BaseModel):
     session_id: int
-    message: str
+    message: str = Field(min_length=1, max_length=12000)
 
 
 class SessionTitleUpdate(BaseModel):
@@ -72,12 +128,14 @@ async def serve_ui():
 
 
 @app.get("/api/settings")
-async def get_settings():
+async def get_settings(access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ)
     return ConfigManager.public_config()
 
 
 @app.post("/api/settings")
-async def update_settings(data: Dict[str, Any]):
+async def update_settings(data: Dict[str, Any], access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE)
     try:
         updated = ConfigManager.update_config(data)
     except (ValueError, KeyError) as exc:
@@ -86,31 +144,31 @@ async def update_settings(data: Dict[str, Any]):
 
 
 @app.get("/api/profile")
-async def get_profile(db: Session = Depends(get_db)):
-    return ProfileService(db).serialize()
+async def get_profile(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    return ProfileService(db, permission_manager, access, build_audit_service(db)).serialize()
 
 
 @app.patch("/api/profile")
-async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db)):
+async def update_profile(data: ProfileUpdate, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        return ProfileService(db).update(data.display_name, data.username, data.email)
+        return ProfileService(db, permission_manager, access, build_audit_service(db)).update(data.display_name, data.username, data.email)
     except ProfileServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.put("/api/profile/avatar")
-async def upload_profile_avatar(request: Request, db: Session = Depends(get_db)):
+async def upload_profile_avatar(request: Request, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        result = ProfileService(db).set_avatar(await request.body())
+        result = ProfileService(db, permission_manager, access, build_audit_service(db)).set_avatar(await request.body())
         return {"status": "success", **result}
     except ProfileServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/profile/avatar")
-async def get_profile_avatar(db: Session = Depends(get_db)):
+async def get_profile_avatar(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        content, media_type = ProfileService(db).get_avatar()
+        content, media_type = ProfileService(db, permission_manager, access, build_audit_service(db)).get_avatar()
     except ProfileServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return Response(
@@ -121,20 +179,22 @@ async def get_profile_avatar(db: Session = Depends(get_db)):
 
 
 @app.delete("/api/profile/avatar")
-async def delete_profile_avatar(db: Session = Depends(get_db)):
+async def delete_profile_avatar(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        return {"status": "success", **ProfileService(db).delete_avatar()}
+        return {"status": "success", **ProfileService(db, permission_manager, access, build_audit_service(db)).delete_avatar()}
     except ProfileServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @app.get("/api/providers")
-async def list_providers():
+async def list_providers(access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, "provider-collection", PermissionOperation.READ)
     return interface_manager.list_providers()
 
 
 @app.get("/api/providers/{provider_id}/capabilities")
-async def provider_capabilities(provider_id: str):
+async def provider_capabilities(provider_id: str, access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ)
     try:
         return interface_manager.get_capabilities(provider_id)
     except InterfaceManagerError as exc:
@@ -143,8 +203,9 @@ async def provider_capabilities(provider_id: str):
 
 
 @app.get("/api/providers/{provider_id}/catalog")
-async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+async def provider_catalog(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Return repository-owned operator metadata and persisted catalog data without network I/O."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     owns_session = not isinstance(db, Session)
     if owns_session:
         db = SessionLocal()
@@ -168,8 +229,9 @@ async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/providers/{provider_id}/models")
-async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
+async def list_provider_models(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Read the last successfully synchronized model IDs from SQLite; never performs network I/O."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     try:
         operator_catalog = interface_manager.get_provider_catalog(provider_id).get("operator", {})
     except InterfaceManagerError as exc:
@@ -182,8 +244,9 @@ async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/providers/{provider_id}/catalog/sync")
-async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Refresh provider runtime, model inventory, and intelligence report."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         result = await refresh_provider_intelligence(
             db, interface_manager, provider_id, ConfigManager.load_config
@@ -204,7 +267,8 @@ async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db))
 
 
 @app.get("/api/operational-report")
-async def operational_report(db: Session = Depends(get_db)):
+async def operational_report(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, "provider-collection", PermissionOperation.READ, db)
     return get_operational_report(db)
 
 
@@ -213,7 +277,9 @@ async def latest_intelligence_report(
     provider_id: str,
     report_type: str | None = None,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     try:
         interface_manager.get_provider_catalog(provider_id)
     except InterfaceManagerError as exc:
@@ -228,7 +294,9 @@ async def latest_intelligence_report(
 async def generate_offline_intelligence_report(
     provider_id: str,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         interface_manager.get_provider_catalog(provider_id)
     except InterfaceManagerError as exc:
@@ -237,7 +305,8 @@ async def generate_offline_intelligence_report(
 
 
 @app.get("/api/providers/{provider_id}/quota")
-async def provider_quota_status(provider_id: str, db: Session = Depends(get_db)):
+async def provider_quota_status(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         status = await interface_manager.get_quota_status(provider_id)
         record_quota_snapshot(db, provider_id, status)
@@ -252,7 +321,9 @@ async def provider_connection_status(
     provider_id: str,
     response: Response,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     # Connection checks may start a local runtime, discover models, and persist reports.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -265,8 +336,9 @@ async def provider_connection_status(
 
 
 @app.get("/api/runtime/{runtime_id}/status")
-async def get_local_runtime_status(runtime_id: str):
+async def get_local_runtime_status(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Read runtime readiness without starting a local process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.ensure_runtime(runtime_id, auto_start=False)
     except KeyError as exc:
@@ -274,8 +346,9 @@ async def get_local_runtime_status(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/snapshot")
-async def get_local_runtime_snapshot(runtime_id: str):
+async def get_local_runtime_snapshot(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Return one read-only runtime-health and model-inventory snapshot."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_monitor.snapshot(runtime_id)
     except KeyError as exc:
@@ -283,8 +356,9 @@ async def get_local_runtime_snapshot(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/models")
-async def get_local_runtime_models(runtime_id: str):
+async def get_local_runtime_models(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Read installed/loaded model state without starting a local process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.list_models(runtime_id, refresh=False)
     except KeyError as exc:
@@ -292,7 +366,8 @@ async def get_local_runtime_models(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/models/{model_id:path}")
-async def get_local_runtime_model(runtime_id: str, model_id: str):
+async def get_local_runtime_model(runtime_id: str, model_id: str, access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.inspect_model(runtime_id, model_id)
     except KeyError as exc:
@@ -300,8 +375,9 @@ async def get_local_runtime_model(runtime_id: str, model_id: str):
 
 
 @app.post("/api/runtime/{runtime_id}/models/{model_id:path}/load")
-async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest):
+async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest, access: AccessContext = Depends(get_local_access_context)):
     """Explicitly load a model; this may start Ollama when configured to do so."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.EXECUTE)
     try:
         config = ConfigManager.load_config() or {}
         ollama_config = (config.get("providers_config") or {}).get("ollama", {})
@@ -316,8 +392,9 @@ async def load_local_runtime_model(runtime_id: str, model_id: str, data: Runtime
 
 
 @app.post("/api/runtime/{runtime_id}/models/{model_id:path}/unload")
-async def unload_local_runtime_model(runtime_id: str, model_id: str):
+async def unload_local_runtime_model(runtime_id: str, model_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Explicitly unload a model; never stops the Ollama server process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.EXECUTE)
     try:
         return await runtime_manager.unload_model(runtime_id, model_id)
     except KeyError as exc:
@@ -325,8 +402,9 @@ async def unload_local_runtime_model(runtime_id: str, model_id: str):
 
 
 @app.post("/api/runtime/{runtime_id}/shutdown")
-async def shutdown_local_runtime(runtime_id: str):
+async def shutdown_local_runtime(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Stop only a runtime process explicitly owned by this application."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.ADMINISTER)
     try:
         results = await runtime_manager.shutdown(runtime_id)
         return results[0] if results else {"ok": True, "runtime_id": runtime_id, "state": "stopped"}
@@ -335,27 +413,27 @@ async def shutdown_local_runtime(runtime_id: str):
 
 
 @app.get("/api/sessions")
-async def get_sessions(db: Session = Depends(get_db)):
-    return ConversationService(db).list_sessions()
+async def get_sessions(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    return ConversationService(db, permission_manager, access, build_audit_service(db)).list_sessions()
 
 
 @app.post("/api/sessions")
-async def create_session(db: Session = Depends(get_db)):
-    return ConversationService(db).create_session()
+async def create_session(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    return ConversationService(db, permission_manager, access, build_audit_service(db)).create_session()
 
 
 @app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: int, db: Session = Depends(get_db)):
+async def delete_session(session_id: int, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        return ConversationService(db).delete_session(session_id)
+        return ConversationService(db, permission_manager, access, build_audit_service(db)).delete_session(session_id)
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.patch("/api/sessions/{session_id}")
-async def rename_session(session_id: int, data: SessionTitleUpdate, db: Session = Depends(get_db)):
+async def rename_session(session_id: int, data: SessionTitleUpdate, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        return ConversationService(db).rename_session(session_id, data.title)
+        return ConversationService(db, permission_manager, access, build_audit_service(db)).rename_session(session_id, data.title)
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -363,21 +441,34 @@ async def rename_session(session_id: int, data: SessionTitleUpdate, db: Session 
 
 
 @app.get("/api/sessions/{session_id}/messages")
-async def get_messages(session_id: int, db: Session = Depends(get_db)):
+async def get_messages(session_id: int, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     try:
-        return ConversationService(db).get_messages(session_id)
+        return ConversationService(db, permission_manager, access, build_audit_service(db)).get_messages(session_id)
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
+async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    conversation_service = ConversationService(db, permission_manager, access, build_audit_service(db))
     try:
-        preparation = ConversationService(db).prepare_chat(req.session_id, req.message)
+        conversation_service.prepare_chat(req.session_id, req.message)
+        context_package = ContextManager(conversation_service).assemble(
+            ContextRequest(
+                conversation_id=req.session_id,
+                query=req.message,
+                owner_id=access.scope.owner_id,
+                history_limit=20,
+                memory_scopes=(),
+            )
+        )
     except ConversationNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    history = [{"role": item.role, "content": item.content} for item in preparation.history]
+    history = [
+        {"role": item.role or "user", "content": item.content}
+        for item in context_package.items
+    ]
     try:
         orchestrator = Orchestrator()
         provider_id = orchestrator.get_provider_id()
@@ -411,7 +502,7 @@ async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db)):
         db_session = SessionLocal()
         try:
             record_model_runtime(db_session, provider_id, selected_model, "available")
-            ConversationService(db_session).append_assistant_message(
+            ConversationService(db_session, permission_manager, access, build_audit_service(db_session)).append_assistant_message(
                 req.session_id, full_response, selected_model
             )
         finally:

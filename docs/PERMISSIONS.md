@@ -1,39 +1,90 @@
 # Permissions and Tool Safety
 
-**Status:** Accepted target architecture; centralized Permission Manager and Tool Runtime are not implemented.
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
+**Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
-Default deny. An Agent, model, provider, or tool definition cannot grant permissions. Only application-side policy code and explicit user approvals can authorize protected actions.
 
-## 2. Permission decision dimensions
-Every protected operation should be evaluated against:
-- subject: user, module, agent type, or specific agent run;
-- resource: file, conversation, memory scope, provider credential, connector, or external target;
-- operation: read, create, update, delete, execute, publish, or transmit;
-- scope: exact resource, project, folder, provider, or task;
-- conditions: expiry, approval requirement, sensitivity, and allowed destination.
+Authorization is application-owned and default-deny. A model, provider, agent definition, agent run, or tool definition cannot grant permissions. Only trusted application policy code acting on an explicitly authorized owner decision may issue or revoke a grant.
 
-## 3. Tool execution
-- Model-generated tool calls are proposals only.
-- Tool Gateway validates the tool ID and input schema.
-- Permission Manager authorizes the actor/resource/operation/scope.
-- Tool Runtime executes only the authorized operation.
-- Sensitive writes and externally visible side effects require explicit approval.
-- Record a redacted audit event for request, decision, execution result, and failure.
+The first implementation is a local single-user application boundary, not hosted multi-user authentication or a security boundary for an exposed server. API dependencies reject non-loopback client addresses and issue only the fixed `local-api` principal; this is not proof of an individual user's identity. Do not expose the application through a LAN, reverse proxy, or public network without adding real authentication and a new threat review.
 
-## 4. Context and data boundaries
+## 2. Typed authorization contracts
+
+Implemented in `core/permissions/types.py` and `core/permissions/manager.py`, with persistence in `core/repositories/permission_repository.py`:
+
+- `PermissionSubject`: typed subject category and stable identifier.
+- `PermissionResource`: typed resource category and stable identifier.
+- `PermissionOperation`: finite operation vocabulary.
+- `PermissionScope`: explicit scope type, scope ID, and owner ID.
+- `AccessRequest`: subject/resource/operation/scope plus request ID, sensitivity, destination, and timezone-aware request timestamp.
+- `PermissionDecision`: allow/deny/approval-required result with stable reason and request reference.
+- `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, revocation, and optional approval-required state.
+
+`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is additive and currently created through SQLAlchemy metadata initialization; it is not backed by versioned migrations yet.
+
+Identifiers reject empty values, wildcard-like values, control characters, and excessive length. These contracts are descriptive data only; constructing a request, decision, or grant does not itself authorize an operation.
+
+## 3. Permission decision dimensions
+
+Every protected operation must be evaluated against:
+
+- **Subject:** user, trusted application service, agent type, or specific agent run.
+- **Resource:** conversation, memory scope, profile, tool, file, knowledge source, connector, provider credential, or a future explicitly registered resource.
+- **Operation:** read, create, update, delete, execute, publish, transmit, approve, or administer.
+- **Scope:** exact local/user/conversation/task/project/folder/provider scope and owner.
+- **Conditions:** expiry, revocation, approval requirement, sensitivity, and allowed destination.
+
+No wildcard, inferred owner, or implicit cross-scope grant is valid.
+
+## 4. Tool execution boundary
+
+The current `ToolRegistry` accepts only explicitly registered, versioned definitions. It validates a restricted JSON Schema subset, byte limits, resource type, and operation mapping. It rejects unknown/disabled tools, duplicate registrations, unsupported schema keywords, and unexpected object properties. Destructive and external-side-effect tools must require approval. The registry's public catalog exposes the validated input schema needed to form a proposal, but never exposes the registered handler.
+
+The implemented ToolRuntime execution sequence is:
+
+1. Treat model-generated tool calls as untrusted proposals.
+2. Resolve a registered tool ID and version.
+3. Validate the complete input schema and resource mapping.
+4. Ask Permission Manager for an application-side decision and persist the decision event.
+5. Obtain and consume a one-time approval when required.
+6. Recheck permission immediately before executing through Tool Runtime.
+7. Normalize the result and persist a redacted audit event.
+
+A denied action is terminal. It must not be retried through another tool or provider to evade policy. Tool metadata and caller-supplied capability labels are not authorization.
+
+## 5. Context and data boundaries
+
 - Agents receive least-privilege context scoped to the task.
 - Model-private memory is not shared with another model/agent by default.
-- Librarian source ingestion requires an explicit grant.
-- Draft Librarian reports cannot be published as Approved Knowledge without user approval.
+- MemoryService remains default-deny unless an explicit policy is injected; the tested `PermissionManagerMemoryAccessPolicy` adapter routes exact memory scopes through central authorization. The current chat route does not attach memory scopes implicitly.
+- Knowledge ingestion and publication require explicit grants and approval.
 - Local private context must not be sent to cloud providers through implicit fallback.
+- Database sessions, engines, ORM entities, repositories, raw SQL, and provider credentials are never agent capabilities.
 
-## 5. Denials and failures
-Return a structured denial reason without leaking secrets. A denied operation must not be retried through another tool or provider to evade policy. Permission failures are not transient network errors.
+## 6. Audit and approval
 
-## 6. Acceptance criteria
+Audit events must capture request, decision, approval transition, execution outcome, and failure with correlation IDs. Persist only redacted metadata: never credentials, raw tokens, private payloads, or unrestricted exception text.
+
+Approval is separate from a persistent grant. The implemented ApprovalService binds a request to the exact action payload SHA-256, subject, target, operation, scope, request ID, and expiry. It requires a separate user approval policy and atomically consumes each approved token at most once. Request, decision, expiry, and consumption transitions are audited. If the required audit write for a request/approval decision fails, the approval is invalidated; a consumed token is never replayed. Payload content is not persisted.
+
+AuditService persists append-only events using an explicit metadata allowlist. Unknown metadata fields and private content are dropped; token-like values in allowed fields are redacted. Audit persistence failures are normalized and can be treated as fail-closed by the execution gateway.
+
+## 7. Denials and failures
+
+Return a structured denial reason without leaking secrets. Missing, malformed, expired, revoked, ambiguous, or unsupported authorization means deny. Permission failures are not transient network errors. Tool timeout, schema failure, output-limit failure, and handler exceptions must be normalized without exposing internal details.
+
+## 8. Current integration limits
+
+The current application does not implement user authentication, a credential vault, Knowledge Storage, managed file storage, or a connector framework. No production tool handlers are registered. Phase 5 must not claim end-to-end protection for those domains until their owning services exist and are integrated. The outstanding Phase 4 WP-4.7 versioned migration framework is also not replaced by SQLAlchemy `create_all()`.
+
+## 9. Acceptance criteria
+
 - Default-deny behavior is tested.
-- Permission grants are scoped, revocable, and auditable.
+- Grants are exact-scoped, expiring/revocable, and auditable.
 - Agents cannot expand their own permissions.
+- Approval is action-bound, one-time, and replay-safe.
 - Tool execution cannot be invoked outside Tool Runtime.
+- Every execution has a prior authorization decision and correlated audit event.
 - Destructive and external side effects have approval tests.
+- Unsupported resource domains remain explicitly unavailable rather than implicitly allowed.

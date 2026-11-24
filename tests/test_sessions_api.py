@@ -5,7 +5,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from core.database import Base
-from main import app, get_db
+from main import app, get_db, get_local_access_context
+from core.permissions.types import AccessContext, PermissionScope, PermissionSubject, ScopeType, SubjectType
+
+
+def override_local_access_context():
+    return AccessContext(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
+    )
 
 
 @pytest.fixture
@@ -26,6 +34,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_local_access_context] = override_local_access_context
     with TestClient(app) as test_client:
         yield test_client
 
