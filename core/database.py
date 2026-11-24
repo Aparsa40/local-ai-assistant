@@ -231,3 +231,24 @@ class MemoryRecord(Base):
     created_at = Column(DateTime, nullable=False, default=utcnow_naive)
     updated_at = Column(DateTime, nullable=False, default=utcnow_naive, onupdate=utcnow_naive)
     last_accessed_at = Column(DateTime, nullable=True)
+
+
+
+class PermissionGrantRecord(Base):
+    """Persisted exact-scope authorization grant; no wildcard semantics are supported."""
+
+    __tablename__ = "permission_grants"
+    grant_id = Column(String(80), primary_key=True)
+    subject_type = Column(String(40), nullable=False, index=True)
+    subject_id = Column(String(160), nullable=False, index=True)
+    resource_type = Column(String(60), nullable=False, index=True)
+    resource_id = Column(String(255), nullable=False, index=True)
+    operation = Column(String(40), nullable=False, index=True)
+    scope_type = Column(String(40), nullable=False, index=True)
+    scope_id = Column(String(160), nullable=False, index=True)
+    owner_id = Column(String(160), nullable=False, index=True)
+    issued_by = Column(String(160), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=utcnow_naive)
+    expires_at = Column(DateTime, nullable=True, index=True)
+    revoked_at = Column(DateTime, nullable=True, index=True)
+    conditions = Column(JSON, nullable=False, default=dict)
