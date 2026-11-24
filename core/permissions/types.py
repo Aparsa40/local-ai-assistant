@@ -50,6 +50,7 @@ class ScopeType(str, Enum):
     PROJECT = "project"
     FOLDER = "folder"
     PROVIDER = "provider"
+    GLOBAL = "global"
 
 
 class DecisionEffect(str, Enum):
@@ -260,3 +261,33 @@ class ApprovalRequest:
             raise ValueError("expires_at must be later than created_at")
         if (self.decided_by is None) != (self.decided_at is None):
             raise ValueError("decided_by and decided_at must be set together")
+
+
+
+@dataclass(frozen=True, slots=True)
+class AccessContext:
+    """Explicit trusted application identity and scope for one service request."""
+
+    subject: PermissionSubject
+    scope: PermissionScope
+    request_id: str = field(default_factory=lambda: str(uuid4()))
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.subject, PermissionSubject):
+            raise ValueError("subject must be a PermissionSubject")
+        if not isinstance(self.scope, PermissionScope):
+            raise ValueError("scope must be a PermissionScope")
+        object.__setattr__(self, "request_id", _required_identifier(self.request_id, "request_id", maximum=80))
+
+    def build_request(
+        self,
+        resource: PermissionResource,
+        operation: PermissionOperation,
+    ) -> AccessRequest:
+        return AccessRequest(
+            subject=self.subject,
+            resource=resource,
+            operation=operation,
+            scope=self.scope,
+            request_id=self.request_id,
+        )
