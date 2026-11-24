@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
-CURRENT_SCHEMA_REVISION = "0003_knowledge_file_versions"
+CURRENT_SCHEMA_REVISION = "0004_knowledge_fts_trigger_fix"
 
 
 def _legacy_additive_columns(connection) -> None:
@@ -92,15 +92,13 @@ def _knowledge_fts(connection) -> None:
     connection.execute(
         text(
             "CREATE TRIGGER IF NOT EXISTS knowledge_chunks_ad AFTER DELETE ON knowledge_chunks BEGIN "
-            "INSERT INTO knowledge_chunks_fts(knowledge_chunks_fts, rowid, content, source_id) "
-            "VALUES ('delete', old.id, old.content, old.source_id); END"
+            "DELETE FROM knowledge_chunks_fts WHERE rowid = old.id; END"
         )
     )
     connection.execute(
         text(
             "CREATE TRIGGER IF NOT EXISTS knowledge_chunks_au AFTER UPDATE ON knowledge_chunks BEGIN "
-            "INSERT INTO knowledge_chunks_fts(knowledge_chunks_fts, rowid, content, source_id) "
-            "VALUES ('delete', old.id, old.content, old.source_id); "
+            "DELETE FROM knowledge_chunks_fts WHERE rowid = old.id; "
             "INSERT INTO knowledge_chunks_fts(rowid, content, source_id) "
             "VALUES (new.id, new.content, new.source_id); END"
         )
@@ -124,10 +122,39 @@ def _knowledge_file_versions(connection) -> None:
         )
 
 
+def _knowledge_fts_trigger_fix(connection) -> None:
+    # FTS5's special 'delete' command caused SQLite logic errors in bulk chunk replacement.
+    # Direct rowid deletion is supported by the normal FTS5 content table and is simpler.
+    connection.execute(text("DROP TRIGGER IF EXISTS knowledge_chunks_ai"))
+    connection.execute(text("DROP TRIGGER IF EXISTS knowledge_chunks_ad"))
+    connection.execute(text("DROP TRIGGER IF EXISTS knowledge_chunks_au"))
+    connection.execute(text(
+        "CREATE TRIGGER knowledge_chunks_ai AFTER INSERT ON knowledge_chunks BEGIN "
+        "INSERT INTO knowledge_chunks_fts(rowid, content, source_id) "
+        "VALUES (new.id, new.content, new.source_id); END"
+    ))
+    connection.execute(text(
+        "CREATE TRIGGER knowledge_chunks_ad AFTER DELETE ON knowledge_chunks BEGIN "
+        "DELETE FROM knowledge_chunks_fts WHERE rowid = old.id; END"
+    ))
+    connection.execute(text(
+        "CREATE TRIGGER knowledge_chunks_au AFTER UPDATE ON knowledge_chunks BEGIN "
+        "DELETE FROM knowledge_chunks_fts WHERE rowid = old.id; "
+        "INSERT INTO knowledge_chunks_fts(rowid, content, source_id) "
+        "VALUES (new.id, new.content, new.source_id); END"
+    ))
+    connection.execute(text("DELETE FROM knowledge_chunks_fts"))
+    connection.execute(text(
+        "INSERT INTO knowledge_chunks_fts(rowid, content, source_id) "
+        "SELECT id, content, source_id FROM knowledge_chunks"
+    ))
+
+
 _MIGRATIONS = (
     ("0001_legacy_additive_columns", _legacy_additive_columns),
     ("0002_knowledge_fts", _knowledge_fts),
     ("0003_knowledge_file_versions", _knowledge_file_versions),
+    ("0004_knowledge_fts_trigger_fix", _knowledge_fts_trigger_fix),
 )
 
 
