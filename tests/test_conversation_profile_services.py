@@ -7,16 +7,16 @@ from sqlalchemy.pool import StaticPool
 from core.database import Base
 from core.conversations import ConversationNotFoundError, ConversationService
 from core.profiles import ProfileService, ProfileServiceError
-from permission_test_helpers import test_access
+from permission_test_helpers import make_test_access
 
 
 def make_conversation_service(db):
-    manager, context = test_access()
+    manager, context = make_test_access()
     return ConversationService(db, manager, context)
 
 
 def make_profile_service(db):
-    manager, context = test_access()
+    manager, context = make_test_access()
     return ProfileService(db, manager, context)
 
 
