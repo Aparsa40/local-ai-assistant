@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 and WP-5.2 implemented and CI-validated; WP-5.3–WP-5.7 pending  
+**Status:** In progress — WP-5.1 through WP-5.3 implemented and CI-validated; WP-5.4–WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -116,6 +116,8 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - Redact credentials, tokens, private content, and raw exception data before persistence or display.
 
 **Exit:** approval cannot be replayed or transferred to a different action; audit records explain decisions without retaining secrets.
+
+**WP-5.3 implementation status (2026-11-24):** Added persistent `permission_approvals` and `permission_audit_events` records, atomic one-time approval consumption, exact request/action-hash binding, expiry/rejection/consumption transitions, and a default-deny user approval policy. Approval payloads are hashed and never stored. Audit metadata uses a strict allowlist and redacts token-like values; the repository exposes append and read operations only. GitHub Actions passed 172 tests, Python compilation, and frontend syntax validation. Audit event emission is not yet wired into Tool Runtime; that is completed as part of WP-5.5.
 
 ### WP-5.4 — Tool Registry & Contracts
 
