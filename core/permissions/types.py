@@ -28,6 +28,9 @@ class ResourceType(str, Enum):
     FILE = "file"
     CONNECTOR = "connector"
     PROVIDER_CREDENTIAL = "provider_credential"
+    PROVIDER = "provider"
+    RUNTIME = "runtime"
+    CONFIGURATION = "configuration"
 
 
 class PermissionOperation(str, Enum):
