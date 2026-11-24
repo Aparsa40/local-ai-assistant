@@ -16,10 +16,10 @@ from core.conversations import ConversationNotFoundError, ConversationService
 from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
 from core.permissions.audit import AuditService
-from core.permissions.guards import AccessDeniedError
+from core.permissions.guards import AccessDeniedError, require_access
 from core.permissions.local_policy import LocalApplicationPolicy
 from core.permissions.manager import PermissionManager
-from core.permissions.types import AccessContext, PermissionScope, PermissionSubject, ScopeType, SubjectType
+from core.permissions.types import AccessContext, PermissionOperation, PermissionScope, PermissionSubject, ResourceType, ScopeType, SubjectType
 from core.repositories.audit_repository import AuditRepository
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
@@ -76,6 +76,26 @@ def build_audit_service(db: Session) -> AuditService:
     return AuditService(AuditRepository(db))
 
 
+def authorize_local_api_access(
+    access: AccessContext,
+    resource_type: ResourceType,
+    resource_id: str,
+    operation: PermissionOperation,
+    db: Session | None = None,
+) -> None:
+    if db is not None:
+        require_access(
+            permission_manager, access, resource_type, resource_id, operation,
+            audit_service=build_audit_service(db),
+        )
+        return
+    with storage_manager.session() as audit_db:
+        require_access(
+            permission_manager, access, resource_type, resource_id, operation,
+            audit_service=build_audit_service(audit_db),
+        )
+
+
 @app.exception_handler(AccessDeniedError)
 async def handle_access_denied(request: Request, exc: AccessDeniedError):
     return JSONResponse(status_code=403, content={"detail": "Access denied."})
@@ -106,12 +126,14 @@ async def serve_ui():
 
 
 @app.get("/api/settings")
-async def get_settings():
+async def get_settings(access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ)
     return ConfigManager.public_config()
 
 
 @app.post("/api/settings")
-async def update_settings(data: Dict[str, Any]):
+async def update_settings(data: Dict[str, Any], access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE)
     try:
         updated = ConfigManager.update_config(data)
     except (ValueError, KeyError) as exc:
@@ -163,12 +185,14 @@ async def delete_profile_avatar(db: Session = Depends(get_db), access: AccessCon
 
 
 @app.get("/api/providers")
-async def list_providers():
+async def list_providers(access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, "provider-collection", PermissionOperation.READ)
     return interface_manager.list_providers()
 
 
 @app.get("/api/providers/{provider_id}/capabilities")
-async def provider_capabilities(provider_id: str):
+async def provider_capabilities(provider_id: str, access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ)
     try:
         return interface_manager.get_capabilities(provider_id)
     except InterfaceManagerError as exc:
@@ -177,8 +201,9 @@ async def provider_capabilities(provider_id: str):
 
 
 @app.get("/api/providers/{provider_id}/catalog")
-async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+async def provider_catalog(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Return repository-owned operator metadata and persisted catalog data without network I/O."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     owns_session = not isinstance(db, Session)
     if owns_session:
         db = SessionLocal()
@@ -202,8 +227,9 @@ async def provider_catalog(provider_id: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/providers/{provider_id}/models")
-async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
+async def list_provider_models(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Read the last successfully synchronized model IDs from SQLite; never performs network I/O."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     try:
         operator_catalog = interface_manager.get_provider_catalog(provider_id).get("operator", {})
     except InterfaceManagerError as exc:
@@ -216,8 +242,9 @@ async def list_provider_models(provider_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/providers/{provider_id}/catalog/sync")
-async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db)):
+async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
     """Refresh provider runtime, model inventory, and intelligence report."""
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         result = await refresh_provider_intelligence(
             db, interface_manager, provider_id, ConfigManager.load_config
@@ -238,7 +265,8 @@ async def sync_provider_catalog(provider_id: str, db: Session = Depends(get_db))
 
 
 @app.get("/api/operational-report")
-async def operational_report(db: Session = Depends(get_db)):
+async def operational_report(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, "provider-collection", PermissionOperation.READ, db)
     return get_operational_report(db)
 
 
@@ -247,7 +275,9 @@ async def latest_intelligence_report(
     provider_id: str,
     report_type: str | None = None,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.READ, db)
     try:
         interface_manager.get_provider_catalog(provider_id)
     except InterfaceManagerError as exc:
@@ -262,7 +292,9 @@ async def latest_intelligence_report(
 async def generate_offline_intelligence_report(
     provider_id: str,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         interface_manager.get_provider_catalog(provider_id)
     except InterfaceManagerError as exc:
@@ -271,7 +303,8 @@ async def generate_offline_intelligence_report(
 
 
 @app.get("/api/providers/{provider_id}/quota")
-async def provider_quota_status(provider_id: str, db: Session = Depends(get_db)):
+async def provider_quota_status(provider_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     try:
         status = await interface_manager.get_quota_status(provider_id)
         record_quota_snapshot(db, provider_id, status)
@@ -286,7 +319,9 @@ async def provider_connection_status(
     provider_id: str,
     response: Response,
     db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
 ):
+    authorize_local_api_access(access, ResourceType.PROVIDER, provider_id, PermissionOperation.EXECUTE, db)
     # Connection checks may start a local runtime, discover models, and persist reports.
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
@@ -299,8 +334,9 @@ async def provider_connection_status(
 
 
 @app.get("/api/runtime/{runtime_id}/status")
-async def get_local_runtime_status(runtime_id: str):
+async def get_local_runtime_status(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Read runtime readiness without starting a local process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.ensure_runtime(runtime_id, auto_start=False)
     except KeyError as exc:
@@ -308,8 +344,9 @@ async def get_local_runtime_status(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/snapshot")
-async def get_local_runtime_snapshot(runtime_id: str):
+async def get_local_runtime_snapshot(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Return one read-only runtime-health and model-inventory snapshot."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_monitor.snapshot(runtime_id)
     except KeyError as exc:
@@ -317,8 +354,9 @@ async def get_local_runtime_snapshot(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/models")
-async def get_local_runtime_models(runtime_id: str):
+async def get_local_runtime_models(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Read installed/loaded model state without starting a local process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.list_models(runtime_id, refresh=False)
     except KeyError as exc:
@@ -326,7 +364,8 @@ async def get_local_runtime_models(runtime_id: str):
 
 
 @app.get("/api/runtime/{runtime_id}/models/{model_id:path}")
-async def get_local_runtime_model(runtime_id: str, model_id: str):
+async def get_local_runtime_model(runtime_id: str, model_id: str, access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.READ)
     try:
         return await runtime_manager.inspect_model(runtime_id, model_id)
     except KeyError as exc:
@@ -334,8 +373,9 @@ async def get_local_runtime_model(runtime_id: str, model_id: str):
 
 
 @app.post("/api/runtime/{runtime_id}/models/{model_id:path}/load")
-async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest):
+async def load_local_runtime_model(runtime_id: str, model_id: str, data: RuntimeLoadRequest, access: AccessContext = Depends(get_local_access_context)):
     """Explicitly load a model; this may start Ollama when configured to do so."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.EXECUTE)
     try:
         config = ConfigManager.load_config() or {}
         ollama_config = (config.get("providers_config") or {}).get("ollama", {})
@@ -350,8 +390,9 @@ async def load_local_runtime_model(runtime_id: str, model_id: str, data: Runtime
 
 
 @app.post("/api/runtime/{runtime_id}/models/{model_id:path}/unload")
-async def unload_local_runtime_model(runtime_id: str, model_id: str):
+async def unload_local_runtime_model(runtime_id: str, model_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Explicitly unload a model; never stops the Ollama server process."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.EXECUTE)
     try:
         return await runtime_manager.unload_model(runtime_id, model_id)
     except KeyError as exc:
@@ -359,8 +400,9 @@ async def unload_local_runtime_model(runtime_id: str, model_id: str):
 
 
 @app.post("/api/runtime/{runtime_id}/shutdown")
-async def shutdown_local_runtime(runtime_id: str):
+async def shutdown_local_runtime(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
     """Stop only a runtime process explicitly owned by this application."""
+    authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.ADMINISTER)
     try:
         results = await runtime_manager.shutdown(runtime_id)
         return results[0] if results else {"ok": True, "runtime_id": runtime_id, "state": "stopped"}
