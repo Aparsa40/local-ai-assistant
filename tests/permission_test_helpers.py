@@ -20,7 +20,7 @@ class AllowTestPolicy:
         )
 
 
-def test_access():
+def make_test_access():
     context = AccessContext(
         subject=PermissionSubject(SubjectType.SERVICE, "unit-test-service"),
         scope=PermissionScope(ScopeType.LOCAL, "test-machine", "test-owner"),
