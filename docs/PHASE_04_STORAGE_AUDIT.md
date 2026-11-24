@@ -271,6 +271,39 @@ These are contract requirements, not implementation claims.
 
 Phase 4 must provide scope/policy hooks and safe default-deny behavior for protected reads. It must not implement a parallel permission database or attempt to complete Phase 5's Permission Manager. The authoritative permission model remains the Phase 5 contract.
 
+
+## 8.1 Repository gap analysis and planned change map
+
+This is a preliminary file-level change forecast, not authorization to modify every listed file at once. Work-package boundaries in `PHASE_04_EXECUTION_PLAN.md` remain controlling.
+
+| Existing file | Current responsibility / gap | Planned treatment | Earliest WP |
+|---|---|---|---|
+| `core/database.py` | ORM models, global engine/session factory, SQLite path creation, schema initialization and inline ALTERs coexist in one module | Retain model definitions during transition; move engine/session/migration lifecycle behind Storage Manager; keep a temporary compatibility facade until all callers migrate | 4.2 |
+| `main.py` | Application startup, global session factory use, request dependency, direct Profile/Conversation ORM operations, catalog orchestration | Replace startup/session wiring with Storage Manager dependency; move Profile/Conversation operations to services incrementally; preserve API payloads and stream persistence behavior | 4.2–4.4 |
+| `core/catalog_storage.py` | Domain persistence is centralized by table family, but accepts raw Session and commits internally | Wrap/adapt behind Catalog and Provider Observation repositories; normalize unit-of-work ownership only with characterization tests | 4.3 |
+| `core/provider_intelligence.py` | Provider/runtime orchestration receives raw Session and invokes several independently committing storage functions | Inject domain repository/service interfaces; preserve separation between process control and DB persistence | 4.3 |
+| `core/runtime/repository.py` | Runtime persistence adapter owns raw session creation and transaction | Retain behavior; inject Storage Manager-owned unit of work/session factory and keep ORM confined to adapter | 4.2–4.3 |
+| `core/runtime/factory.py` | Composition root injects raw session factory into RuntimeRepository | Change injection to Storage Manager/repository factory while keeping the runtime manager ORM-free | 4.2–4.3 |
+| `core/interface_manager.py` | Provider-neutral interface; no direct SQLAlchemy access | Retain ORM-free; only consume catalog service contracts if persistent catalog data is needed | 4.3 |
+| `core/runtime/manager.py`, `monitor.py` | Runtime orchestration/monitoring; no DB access observed | Retain ORM-free; do not add SQLAlchemy | 4.3 |
+| `core/orchestrator.py` and `core/providers/*` | Model/provider selection and adapter invocation; no DB access observed | Retain ORM-free | No planned persistence change |
+| `tests/test_catalog_storage.py` | Catalog persistence characterization and legacy additive-column migration test | Extend to repository contract, transaction ownership, and migration compatibility | 4.2–4.3, 4.7 |
+| `tests/test_runtime_manager.py` | Runtime manager and RuntimeRepository persistence behavior | Retain and extend to Storage Manager injection and rollback behavior | 4.2–4.3 |
+| `tests/test_provider_intelligence.py` | Provider intelligence orchestration using in-memory SQLite fixtures | Preserve workflow assertions and adapt fixture wiring as repositories are introduced | 4.3 |
+| New `core/storage/*` | Not present | Add Storage Manager, SQLite adapter, config, session/unit-of-work helpers and normalized exceptions; avoid empty future placeholders | 4.2 |
+| New `core/repositories/*` | Not present | Add typed repositories incrementally for Profile, Conversation, Catalog, Runtime, Memory and Knowledge | 4.3 onward |
+| New `core/conversations/*` | Not present | Add conversation service and typed schemas; preserve existing tables and API behavior | 4.4 |
+| New `core/memory/*`, `core/context/*`, `core/knowledge/*` | Not present | Implement only when each package's data contract and scope rules are accepted; no speculative tables | 4.5–4.7 |
+
+### 8.2 Confirmed schema constraints and unresolved database facts
+
+- The ORM declares 14 tables in the current shared metadata: `sessions`, `messages`, `user_profile`, `operator_catalogs`, `operator_model_profiles`, `live_model_catalog`, `provider_runtime_status`, `model_runtime_status`, `provider_quota_snapshots`, `catalog_sync_history`, `provider_intelligence_reports`, `runtime_model_states`, `runtime_statuses`, and `runtime_events`.
+- `messages.session_id` is nullable by ORM default and references `sessions.id`; no `ondelete` action is declared. The relationship's `delete-orphan` cascade is an ORM behavior, not proof of SQLite foreign-key enforcement.
+- The production engine configuration does not register a SQLite connection event to enable `PRAGMA foreign_keys=ON`, nor does it explicitly set busy timeout or journal mode. Actual deployed PRAGMA values must be read from a disposable DB copy; defaults must not be assumed to be enforced.
+- Several tables have explicit indexed columns through `index=True` (for example session/message IDs, provider IDs on history/snapshots/reports, and runtime event lookup/time columns). Composite primary keys exist for provider/model profiles, live models, model runtime status, and runtime model state.
+- The test fixtures create independent in-memory engines and call `Base.metadata.create_all()`; those test engines are not additional production engine ownership sites.
+- The current source audit establishes ORM-declared schema, not the exact schema of the user's local `data/chat_history.db`. The latter remains uninspected by design until a disposable copy is made available and approved.
+
 ## 8. Initial migration and compatibility risk register
 
 | Risk | Evidence / impact | Required mitigation before schema changes |
