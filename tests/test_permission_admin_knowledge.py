@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from core.database import Base
+from core.migrations import run_migrations
 from core.knowledge import KnowledgeAccessDeniedError, KnowledgeScope, KnowledgeService
 from core.permissions.approvals import ApprovalService
 from core.permissions.audit import AuditService
@@ -42,6 +43,7 @@ def make_db():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
     return engine, sessionmaker(bind=engine)()
 
 
