@@ -66,7 +66,7 @@ class MemoryService:
             raise MemoryValidationError("شناسه محدوده حافظه معتبر نیست")
         if not scope.owner_id or len(scope.owner_id) > 160:
             raise MemoryValidationError("شناسه مالک حافظه معتبر نیست")
-        if not self.access_policy.authorize(scope.scope_type, scope.scope_id, action):
+        if not self.access_policy.authorize(scope.scope_type, scope.scope_id, scope.owner_id, action):
             raise MemoryAccessDeniedError("دسترسی به حافظه برای این محدوده مجاز نشده است")
 
     @staticmethod
@@ -158,7 +158,7 @@ class MemoryService:
 
         if dedup_key:
             existing_key = self.repository.find_dedup_key(
-                dedup_key, scope.scope_type, scope.scope_id
+                dedup_key, scope.scope_type, scope.scope_id, scope.owner_id
             )
             if existing_key:
                 if " ".join(existing_key.content.casefold().split()) == normalized_content.casefold():
@@ -166,7 +166,7 @@ class MemoryService:
                 raise MemoryConflictError("برای این کلید، حافظه فعال دیگری با محتوای متفاوت وجود دارد")
 
         duplicate = self.repository.find_duplicate(
-            memory_type, scope.scope_type, scope.scope_id, normalized_content.casefold()
+            memory_type, scope.scope_type, scope.scope_id, scope.owner_id, normalized_content.casefold()
         )
         if duplicate:
             return self._view(duplicate)
@@ -196,7 +196,7 @@ class MemoryService:
 
     def get(self, scope: MemoryScope, memory_id: int) -> MemoryRecordView:
         self._authorize(scope, "read")
-        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
+        record = self.repository.get(memory_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if record is None:
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         now = utcnow_naive()
@@ -268,7 +268,7 @@ class MemoryService:
         if memory_id == replacement_id:
             raise MemoryValidationError("حافظه نمی‌تواند جایگزین خودش شود")
         current = self.repository.get(memory_id, scope.scope_type, scope.scope_id)
-        replacement = self.repository.get(replacement_id, scope.scope_type, scope.scope_id)
+        replacement = self.repository.get(replacement_id, scope.scope_type, scope.scope_id, scope.owner_id)
         if current is None or replacement is None:
             raise MemoryNotFoundError("حافظه مبدأ یا جایگزین پیدا نشد")
         if current.status not in {"candidate", "active"} or replacement.status != "active":
@@ -282,7 +282,7 @@ class MemoryService:
 
     def expire_due(self, scope: MemoryScope) -> int:
         self._authorize(scope, "expire")
-        return self.repository.expire_due(scope.scope_type, scope.scope_id, utcnow_naive())
+        return self.repository.expire_due(scope.scope_type, scope.scope_id, scope.owner_id, utcnow_naive())
 
     def delete(self, scope: MemoryScope, memory_id: int) -> None:
         self._authorize(scope, "delete")
@@ -305,9 +305,9 @@ class MemoryService:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise MemoryValidationError("تعداد نتایج باید بین ۱ تا ۱۰۰ باشد")
         now = utcnow_naive()
-        self.repository.expire_due(scope.scope_type, scope.scope_id, now)
+        self.repository.expire_due(scope.scope_type, scope.scope_id, scope.owner_id, now)
         statuses = ("active", "candidate") if include_candidates else ("active",)
-        records = self.repository.list_scope(scope.scope_type, scope.scope_id, statuses)
+        records = self.repository.list_scope(scope.scope_type, scope.scope_id, scope.owner_id, statuses)
         ranked = []
         for record in records:
             score, matched = score_memory(
