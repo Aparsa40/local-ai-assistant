@@ -207,8 +207,6 @@ class MemoryService:
             raise MemoryNotFoundError("حافظه در این محدوده پیدا نشد")
         now = utcnow_naive()
         if record.expires_at and record.expires_at <= now and record.status in {"candidate", "active"}:
-            record.status = "expired"
-            self.repository.save(record)
             raise MemoryNotFoundError("حافظه منقضی شده است")
         return self._view(self.repository.touch(record, now))
 
@@ -322,9 +320,8 @@ class MemoryService:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise MemoryValidationError("تعداد نتایج باید بین ۱ تا ۱۰۰ باشد")
         now = utcnow_naive()
-        self.repository.expire_due(scope.scope_type, scope.scope_id, scope.owner_id, now)
         statuses = ("active", "candidate") if include_candidates else ("active",)
-        records = self.repository.list_scope(scope.scope_type, scope.scope_id, scope.owner_id, statuses)
+        records = self.repository.list_scope(scope.scope_type, scope.scope_id, scope.owner_id, statuses, now)
         ranked = []
         for record in records:
             score, matched = score_memory(
