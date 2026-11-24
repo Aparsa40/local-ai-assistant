@@ -151,7 +151,7 @@ class KnowledgeService:
         mime_type: str | None = None,
     ) -> KnowledgeFileRecord:
         source = self._source(scope, source_id, "write")
-        safe_name = Path(filename).name.strip() if isinstance(filename, str) else ""
+        safe_name = filename.replace("\\\\", "/").split("/")[-1].strip() if isinstance(filename, str) else ""
         if not safe_name or len(safe_name) > 255 or safe_name in {".", ".."}:
             raise KnowledgeValidationError("Original filename is invalid")
         storage_key, size_bytes, digest = self.file_storage.store(content)
