@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
+**Status:** Phase 5 core foundation merged via PR #15; final operational integration and security acceptance remain in progress. Typed authorization contracts, exact-scope grant persistence, default-deny PermissionManager, action-bound approvals, redacted audit, Tool Registry/Runtime, and local API guards exist. Knowledge Storage was added in Phase 4 PR #16, but its service is not yet wired to the central Permission Manager. Loopback local principal is not authentication.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -21,7 +21,7 @@ Implemented in `core/permissions/types.py` and `core/permissions/manager.py`, wi
 - `PermissionDecision`: allow/deny/approval-required result with stable reason and request reference.
 - `PermissionGrant`: exact subject/resource/operation/scope grant with issuer, creation, expiry, revocation, and optional approval-required state.
 
-`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is additive and currently created through SQLAlchemy metadata initialization; it is not backed by versioned migrations yet.
+`PermissionManager` returns a structured deny when the policy store is unavailable, fails, or has no exact active match. Grant issuance and revocation are separate privileged operations guarded by `GrantAdministrationPolicy`, whose default implementation denies all changes. Agent-type and agent-run subjects cannot administer grants. The `permission_grants` table is covered by the Phase 4 versioned SQLite schema migration baseline. The migration runner currently targets SQLite only. The current application composition uses `LocalApplicationPolicy` for the fixed local API principal; a persistent grant repository must be explicitly injected for agent/tool subjects.
 
 Identifiers reject empty values, wildcard-like values, control characters, and excessive length. These contracts are descriptive data only; constructing a request, decision, or grant does not itself authorize an operation.
 
@@ -76,7 +76,7 @@ Return a structured denial reason without leaking secrets. Missing, malformed, e
 
 ## 8. Current integration limits
 
-The current application does not implement user authentication, a credential vault, Knowledge Storage, managed file storage, or a connector framework. No production tool handlers are registered. Phase 5 must not claim end-to-end protection for those domains until their owning services exist and are integrated. The outstanding Phase 4 WP-4.7 versioned migration framework is also not replaced by SQLAlchemy `create_all()`.
+The current application does not implement user authentication, an encrypted credential vault, or a connector framework. Phase 4 Knowledge Storage and managed file storage now exist, but the KnowledgeService access policy has not yet been adapted to central PermissionManager decisions. No production tool handlers are registered and no model-generated tool-call loop is connected; Phase 6 Agent Runtime must use ToolRuntime rather than bypassing it. Grant and approval services exist, but user-facing administration/review APIs are not yet complete. Direct destructive API actions are not all mediated by action-bound approvals. Keep the server loopback-only and do not treat the local principal as authentication.
 
 ## 9. Acceptance criteria
 
@@ -88,3 +88,6 @@ The current application does not implement user authentication, a credential vau
 - Every execution has a prior authorization decision and correlated audit event.
 - Destructive and external side effects have approval tests.
 - Unsupported resource domains remain explicitly unavailable rather than implicitly allowed.
+- KnowledgeService reads/writes are mediated by a central PermissionManager adapter.
+- Grant issuance/revocation and approval review are exposed only through a local-owner-controlled administration surface.
+- Destructive API operations have an explicit approval decision before their side effect, or are clearly classified as local-owner-confirmed actions with tests.
