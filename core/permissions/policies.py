@@ -27,3 +27,16 @@ class DenyAllGrantAdministrationPolicy:
         action: str,
     ) -> bool:
         return False
+
+
+class ApprovalDecisionPolicy(Protocol):
+    """Trusted application authority for approving or rejecting a pending action."""
+
+    def authorize_approval(self, approver: PermissionSubject, approval: object, action: str) -> bool: ...
+
+
+class DenyAllApprovalDecisionPolicy:
+    """Safe default: approval decisions require an explicitly injected authority."""
+
+    def authorize_approval(self, approver: PermissionSubject, approval: object, action: str) -> bool:
+        return False
