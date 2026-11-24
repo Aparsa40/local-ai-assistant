@@ -81,7 +81,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 **Exit criteria:** lifecycle behavior is provider-neutral, bounded, accurately verified, safely persisted, and regression-tested.
 
-**Completion evidence:** PR #7 merged with commit `d30621e85f7f58096f57cf0e40f7dace23a60b21`; PR CI recorded 109 passing tests. Windows smoking checks verified local connectivity, inventory, inspection, and process ownership. The Qwen 0.5B load attempt was hardware-constrained on the observed 4 GB RAM / mechanical-HDD machine; larger models were deliberately not attempted. This is an environment validation gap, not a demonstrated code defect. Do not repeat resource-intensive tests on that machine.
+**Completion evidence:** PR #7 merged with commit `d30621e85f7f58096f57cf0e40f7dace23a60b21`; PR CI recorded 109 passing tests. Windows sm` + `oke checks verified local connectivity, inventory, inspection, and process ownership. The Qwen 0.5B load attempt was hardware-constrained on the observed 4 GB RAM / mechanical-HDD machine; larger models were deliberately not attempted. This is an environment validation gap, not a demonstrated code defect. Do not repeat resource-intensive tests on that machine.
 
 ## Phase 4 — Storage & Memory Services
 
