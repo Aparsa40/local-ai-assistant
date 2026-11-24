@@ -56,8 +56,10 @@ class ConversationService:
 
     def get_recent_messages(self, session_id: int, *, limit: int = 20) -> tuple[ConversationMessage, ...]:
         """Return a bounded chronological history slice with source identifiers."""
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
-            raise ValueError("تعداد پیام‌های تاریخچه باید بین ۱ تا ۱۰۰ باشد")
+        # Context assembly may request one extra row to exclude the already-persisted
+        # current user turn while still retaining the requested number of prior turns.
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 101:
+            raise ValueError("تعداد پیام‌های تاریخچه باید بین ۱ تا ۱۰۱ باشد")
         if self.sessions.get(session_id) is None:
             raise ConversationNotFoundError("نشست یافت نشد")
         return tuple(
