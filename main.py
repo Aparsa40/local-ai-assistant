@@ -1,6 +1,6 @@
 # pyright: reportMissingImports=false
 import json
-from typing import Any
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
