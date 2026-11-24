@@ -139,6 +139,34 @@ def test_knowledge_service_uses_exact_permission_manager_grants():
         manager.issue_grant(grant, issuer=PermissionSubject(SubjectType.USER, "local-user"))
         source = knowledge.create_source(scope, source_type="text", title="Private")
         assert source.title == "Private"
+
+        with pytest.raises(KnowledgeAccessDeniedError):
+            knowledge.index_extracted_text(scope, source.id, "a private knowledge phrase")
+
+        manager.issue_grant(
+            make_grant(
+                subject,
+                PermissionResource(ResourceType.KNOWLEDGE_SOURCE, scope.scope_id),
+                PermissionOperation.UPDATE,
+                PermissionScope(ScopeType.USER, scope.scope_id, scope.owner_id),
+            ),
+            issuer=PermissionSubject(SubjectType.USER, "local-user"),
+        )
+        assert knowledge.index_extracted_text(scope, source.id, "a private knowledge phrase") == 1
+
+        with pytest.raises(KnowledgeAccessDeniedError):
+            knowledge.search(scope, "private phrase")
+
+        manager.issue_grant(
+            make_grant(
+                subject,
+                PermissionResource(ResourceType.KNOWLEDGE_SOURCE, scope.scope_id),
+                PermissionOperation.READ,
+                PermissionScope(ScopeType.USER, scope.scope_id, scope.owner_id),
+            ),
+            issuer=PermissionSubject(SubjectType.USER, "local-user"),
+        )
+        assert knowledge.search(scope, "private phrase")
     finally:
         db.close()
         engine.dispose()
