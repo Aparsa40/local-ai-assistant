@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-5.1 through WP-5.5 implemented and CI-validated; WP-5.6–WP-5.7 pending  
+**Status:** In progress — WP-5.1 through WP-5.6 implemented and CI-validated; WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -153,6 +153,8 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 - Do not pretend the current app has user authentication. Local application identity is not a hosted multi-user security boundary.
 
 **Exit:** existing protected operations fail closed when no explicit application policy is configured; all integrated paths have allow/deny tests and no direct repository/session exposure to callers.
+
+**WP-5.6 implementation status (2026-11-24):** Added `AccessContext`, `LocalApplicationPolicy`, and reusable `require_access` guards. ConversationService and ProfileService now require an explicit PermissionManager and AccessContext for every protected operation and audit decisions before repository side effects; absence of either fails closed. MemoryService can be wired through `PermissionManagerMemoryAccessPolicy`, preserving its default-deny behavior and explicit memory scopes. The chat route now assembles bounded conversation history through ContextManager and supplies no memory scopes implicitly. All application API endpoints for settings, providers, runtime, profile, sessions, and chat require a loopback client and the fixed `local-api` principal; local provider/runtime/configuration operations are centrally policy-checked and audited, while provider credentials remain denied. This is explicitly a local single-user boundary, not authentication or hosted multi-user security. GitHub Actions passed 209 tests, Python compilation, and frontend syntax validation.
 
 ### WP-5.7 — Integration, Security Regression & Documentation
 
