@@ -21,6 +21,10 @@ from core.tools.registry import (
 from core.tools.schemas import ToolCallRequest, ToolDefinition, ToolRiskClass
 
 
+async def _echo(value):
+    return value
+
+
 def _definition(**overrides) -> ToolDefinition:
     values = {
         "tool_id": "conversation.read",
@@ -64,7 +68,7 @@ def _call(definition: ToolDefinition, input_data=None, **overrides) -> ToolCallR
 
 def test_registry_registers_and_validates_a_bounded_tool() -> None:
     registry = ToolRegistry()
-    registry.register(_definition(), lambda payload: payload)
+    registry.register(_definition(), _echo)
 
     definition, normalized = registry.validate_call(_call(_definition()))
 
@@ -106,7 +110,7 @@ def test_registry_rejects_duplicate_id_and_version() -> None:
 def test_registry_rejects_invalid_inputs(payload) -> None:
     registry = ToolRegistry()
     definition = _definition()
-    registry.register(definition, lambda value: value)
+    registry.register(definition, _echo)
 
     with pytest.raises(ToolInputValidationError):
         registry.validate_call(_call(definition, payload))
@@ -173,7 +177,7 @@ def test_destructive_and_external_tools_must_require_approval() -> None:
 
 def test_public_catalog_does_not_expose_handlers_or_raw_schemas() -> None:
     registry = ToolRegistry()
-    registry.register(_definition(), lambda secret: secret)
+    registry.register(_definition(), _echo)
 
     catalog = registry.public_catalog()
 
