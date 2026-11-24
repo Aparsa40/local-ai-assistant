@@ -272,7 +272,21 @@ These are contract requirements, not implementation claims.
 Phase 4 must provide scope/policy hooks and safe default-deny behavior for protected reads. It must not implement a parallel permission database or attempt to complete Phase 5's Permission Manager. The authoritative permission model remains the Phase 5 contract.
 
 
-## 8.1 Repository gap analysis and planned change map
+## 8. Initial migration and compatibility risk register
+
+| Risk | Evidence / impact | Required mitigation before schema changes |
+|---|---|---|
+| Existing user data loss | One SQLite file stores chat, profile, catalogs, and runtime state | Work only on disposable copies; inventory real schema and record counts; preserve stable IDs |
+| Unversioned schema history | `create_all()` plus two inline ALTER checks | Baseline actual deployed schemas; choose migration tool only after validating startup and legacy DB behavior |
+| Session/message relationship ambiguity | ORM cascade but nullable FK/default DB cascade behavior | Inspect actual SQLite DDL and PRAGMA settings; test ORM and direct DB deletion behavior |
+| Transaction boundary mismatch | Catalog functions commit internally; runtime repository owns sessions; routes commit directly | Define unit-of-work ownership and add rollback/atomicity tests |
+| SQLite locking/concurrency | Current connection options do not document busy timeout/journal policy | Reproduce under tests; tune only with evidence and avoid heavy tests on constrained hardware |
+| Avatar BLOB coupling | Profile image bytes reside in `user_profile` | Preserve in initial migration; consider managed file storage only as a separately tested migration |
+| JSON payload drift | Provider/runtime JSON fields are flexible and weakly versioned | Document payload schemas/versioning and redaction before cross-module reuse |
+| Startup coupling | Import/startup calls DB init and catalog seed | Preserve externally visible startup semantics; add isolated app/database fixtures |
+| Future agent overreach | No current agent runtime or Permission Manager exists | Do not grant DB/session access; keep typed service contracts and default-deny policy hooks |
+
+### 8.1 Repository gap analysis and planned change map
 
 This is a preliminary file-level change forecast, not authorization to modify every listed file at once. Work-package boundaries in `PHASE_04_EXECUTION_PLAN.md` remain controlling.
 
@@ -303,20 +317,6 @@ This is a preliminary file-level change forecast, not authorization to modify ev
 - Several tables have explicit indexed columns through `index=True` (for example session/message IDs, provider IDs on history/snapshots/reports, and runtime event lookup/time columns). Composite primary keys exist for provider/model profiles, live models, model runtime status, and runtime model state.
 - The test fixtures create independent in-memory engines and call `Base.metadata.create_all()`; those test engines are not additional production engine ownership sites.
 - The current source audit establishes ORM-declared schema, not the exact schema of the user's local `data/chat_history.db`. The latter remains uninspected by design until a disposable copy is made available and approved.
-
-## 8. Initial migration and compatibility risk register
-
-| Risk | Evidence / impact | Required mitigation before schema changes |
-|---|---|---|
-| Existing user data loss | One SQLite file stores chat, profile, catalogs, and runtime state | Work only on disposable copies; inventory real schema and record counts; preserve stable IDs |
-| Unversioned schema history | `create_all()` plus two inline ALTER checks | Baseline actual deployed schemas; choose migration tool only after validating startup and legacy DB behavior |
-| Session/message relationship ambiguity | ORM cascade but nullable FK/default DB cascade behavior | Inspect actual SQLite DDL and PRAGMA settings; test ORM and direct DB deletion behavior |
-| Transaction boundary mismatch | Catalog functions commit internally; runtime repository owns sessions; routes commit directly | Define unit-of-work ownership and add rollback/atomicity tests |
-| SQLite locking/concurrency | Current connection options do not document busy timeout/journal policy | Reproduce under tests; tune only with evidence and avoid heavy tests on constrained hardware |
-| Avatar BLOB coupling | Profile image bytes reside in `user_profile` | Preserve in initial migration; consider managed file storage only as a separately tested migration |
-| JSON payload drift | Provider/runtime JSON fields are flexible and weakly versioned | Document payload schemas/versioning and redaction before cross-module reuse |
-| Startup coupling | Import/startup calls DB init and catalog seed | Preserve externally visible startup semantics; add isolated app/database fixtures |
-| Future agent overreach | No current agent runtime or Permission Manager exists | Do not grant DB/session access; keep typed service contracts and default-deny policy hooks |
 
 ## 9. Decisions already supported by project documents
 
