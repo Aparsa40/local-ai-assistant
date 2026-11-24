@@ -87,14 +87,10 @@ class ApprovalRepository(BaseRepository):
         decided_by: str,
         decided_at: datetime,
     ) -> ApprovalRequest | None:
-        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED, ApprovalStatus.EXPIRED}:
-            raise ValueError("Unsupported approval state transition.")
+        if status not in {ApprovalStatus.APPROVED, ApprovalStatus.REJECTED}:
+            raise ValueError("Unsupported approval decision.")
         now = to_utc_naive(decided_at)
-        expiry_filter = (
-            PermissionApprovalRecord.expires_at <= now
-            if status is ApprovalStatus.EXPIRED
-            else PermissionApprovalRecord.expires_at > now
-        )
+        expiry_filter = PermissionApprovalRecord.expires_at > now
         result = self.db.execute(
             update(PermissionApprovalRecord)
             .where(
@@ -148,3 +144,24 @@ class ApprovalRepository(BaseRepository):
             return self.get(approval_id)
         self.db.rollback()
         return None
+
+
+    def expire(self, approval_id: str, *, expired_at: datetime) -> ApprovalRequest | None:
+        """Expire a pending or approved request after its deadline."""
+        now = to_utc_naive(expired_at)
+        result = self.db.execute(
+            update(PermissionApprovalRecord)
+            .where(
+                PermissionApprovalRecord.approval_id == approval_id,
+                PermissionApprovalRecord.status.in_(
+                    (ApprovalStatus.PENDING.value, ApprovalStatus.APPROVED.value)
+                ),
+                PermissionApprovalRecord.expires_at <= now,
+            )
+            .values(status=ApprovalStatus.EXPIRED.value)
+        )
+        if result.rowcount:
+            self.db.commit()
+        else:
+            self.db.rollback()
+        return self.get(approval_id)
