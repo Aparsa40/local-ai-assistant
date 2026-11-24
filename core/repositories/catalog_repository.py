@@ -43,7 +43,7 @@ class CatalogRepository(BaseRepository):
     WP-4.3 does not silently combine previously durable stages into one transaction.
     """
 
-def seed_operator_catalogs(db: Session) -> int:
+    def seed_operator_catalogs(self) -> int:
         """Upsert repository-owned operator manifests and curated model profiles."""
         manifests = list_operator_catalogs()
         for provider_id, manifest in manifests.items():
@@ -78,7 +78,7 @@ def seed_operator_catalogs(db: Session) -> int:
         self.db.commit()
         return len(manifests)
 
-def sync_live_models(
+    def sync_live_models(
     self,
     provider_id: str,
     model_ids: list[str],
@@ -170,7 +170,7 @@ def sync_live_models(
             "synced_at": now.isoformat(),
         }
 
-def record_sync_failure(self, provider_id: str, error: dict[str, Any]) -> None:
+    def record_sync_failure(self, provider_id: str, error: dict[str, Any]) -> None:
         self.db.add(CatalogSyncHistory(
             provider_id=provider_id,
             status="failed",
@@ -179,7 +179,7 @@ def record_sync_failure(self, provider_id: str, error: dict[str, Any]) -> None:
         ))
         self.db.commit()
 
-def record_provider_runtime(self, provider_id: str, result: dict[str, Any]) -> None:
+    def record_provider_runtime(self, provider_id: str, result: dict[str, Any]) -> None:
         row = self.db.get(ProviderRuntimeStatus, provider_id)
         if row is None:
             row = ProviderRuntimeStatus(provider_id=provider_id)
@@ -197,7 +197,7 @@ def record_provider_runtime(self, provider_id: str, result: dict[str, Any]) -> N
         row.runtime_details = result.get("runtime")
         self.db.commit()
 
-def record_quota_snapshot(self, provider_id: str, status: dict[str, Any]) -> None:
+    def record_quota_snapshot(self, provider_id: str, status: dict[str, Any]) -> None:
         self.db.add(ProviderQuotaSnapshot(
             provider_id=provider_id,
             status=status,
@@ -205,7 +205,7 @@ def record_quota_snapshot(self, provider_id: str, status: dict[str, Any]) -> Non
         ))
         self.db.commit()
 
-def record_model_runtime(
+    def record_model_runtime(
     self,
     provider_id: str,
     model_id: str,
@@ -227,7 +227,7 @@ def record_model_runtime(
             row.observed_limits = observed_limits
         self.db.commit()
 
-def get_provider_catalog_snapshot(self, provider_id: str) -> dict[str, Any]:
+    def get_provider_catalog_snapshot(self, provider_id: str) -> dict[str, Any]:
         operator = self.db.get(OperatorCatalogEntry, provider_id)
         profiles = self.db.query(OperatorModelProfile).filter_by(provider_id=provider_id).order_by(OperatorModelProfile.model_id).all()
         profile_by_model = {row.model_id: row.profile for row in profiles}
@@ -291,14 +291,14 @@ def get_provider_catalog_snapshot(self, provider_id: str) -> dict[str, Any]:
             ],
         }
 
-def get_operational_report(db: Session) -> dict[str, Any]:
+    def get_operational_report(self) -> dict[str, Any]:
         providers = self.db.query(OperatorCatalogEntry).order_by(OperatorCatalogEntry.provider_id).all()
         return {
             "generated_at": utcnow_naive().isoformat(),
-            "providers": [self.get_provider_catalog_snapshot( row.provider_id) for row in providers],
+            "providers": [self.get_provider_catalog_snapshot(row.provider_id) for row in providers],
         }
 
-def save_intelligence_report(self, report: dict[str, Any], history_limit: int = 20) -> dict[str, Any]:
+    def save_intelligence_report(self, report: dict[str, Any], history_limit: int = 20) -> dict[str, Any]:
         """Persist changed report snapshots only and retain bounded per-provider/type history."""
         latest = (
             self.db.query(ProviderIntelligenceReport)
@@ -357,7 +357,7 @@ def save_intelligence_report(self, report: dict[str, Any], history_limit: int = 
             "generated_at": row.generated_at.isoformat(),
         }
 
-def get_latest_intelligence_report(self, provider_id: str, report_type: str | None = None) -> dict[str, Any] | None:
+    def get_latest_intelligence_report(self, provider_id: str, report_type: str | None = None) -> dict[str, Any] | None:
         query = self.db.query(ProviderIntelligenceReport).filter_by(provider_id=provider_id)
         if report_type:
             query = query.filter_by(report_type=report_type)
