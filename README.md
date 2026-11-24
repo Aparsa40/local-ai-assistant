@@ -26,7 +26,13 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Connection diagnostics:** the Provider settings panel can save the current configuration and probe model-catalog reachability; it does not claim that inference is fully healthy.
 - **Quota diagnostics:** OpenRouter key usage can be read through its key endpoint; Groq/Cohere telemetry is shown only when response headers have actually been observed. Other unavailable balances remain unknown.
 - **Secret-safe settings responses:** API keys/tokens are redacted from browser-facing settings responses; current local credential storage is not an encrypted vault.
-- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, and bounded intelligence report history are stored locally.
+- **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
+- **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
+- **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
+- **Permission Manager (Phase 5 in progress):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
+- **Tool Registry & Runtime (Phase 5 in progress):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
+- **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
+- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, intelligence reports, permission grants, approval requests, and redacted audit events are stored locally. Phase 5 tables are additive through SQLAlchemy metadata initialization; versioned migrations remain pending in Phase 4 WP-4.7.
 
 ## Project structure
 
@@ -40,6 +46,14 @@ local-ai-assistant/
 ├── core/orchestrator.py
 ├── core/interface_manager.py # provider-neutral service boundary
 ├── core/runtime/            # local runtime adapters, lifecycle manager and persistence
+├── core/storage/            # centralized Storage Manager and SQLite adapter
+├── core/repositories/       # domain-owned persistence repositories
+├── core/conversations/     # conversation and message services
+├── core/profiles/          # profile service
+├── core/memory/            # scoped memory lifecycle and retrieval
+├── core/context/           # bounded request context assembly
+├── core/permissions/       # default-deny Permission Manager and approval/audit services
+├── core/tools/             # Tool Registry and bounded Tool Runtime
 ├── core/provider_intelligence.py # local runtime lifecycle and provider/model reports
 ├── core/catalog_storage.py  # durable operator/live catalog and report repository
 ├── data/                    # local SQLite database (git-ignored)
@@ -65,11 +79,13 @@ Important documents:
 - [Catalog Storage Schema](docs/CATALOG_STORAGE.md)
 - [Provider system](docs/PROVIDER_SYSTEM.md)
 - [Model Manager](docs/MODEL_MANAGER.md)
+- [Phase 5 execution plan](docs/PHASE_05_EXECUTION_PLAN.md)
 - [Permissions](docs/PERMISSIONS.md)
+- [Tool Runtime](docs/TOOL_RUNTIME.md)
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.6 are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15; WP-5.1–WP-5.6 are implemented and CI-validated, while WP-5.7 final security regression and documentation acceptance remains. Read the relevant module contract before changing that area.
 
 ## Requirements
 
@@ -142,7 +158,7 @@ Default URL: `http://localhost:11434`.
 
 The complete example is in `config/settings.example.json`. The real `config/settings.json` is ignored by Git. Never commit it, API keys, tokens, local databases, or chat history.
 
-Current local credential storage is not an encrypted vault. Protect access to the operating-system account and do not expose the development server to untrusted networks.
+Current local credential storage is not an encrypted vault. The API now rejects non-loopback clients, but the fixed local principal is not authentication and does not protect against other processes/users on the same machine. Do not expose the development server through a LAN, reverse proxy, or public network.
 
 ## Extend providers
 
