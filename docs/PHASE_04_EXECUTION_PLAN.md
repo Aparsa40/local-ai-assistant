@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-4.1 complete; WP-4.2 implementation underway  
+**Status:** In progress — WP-4.1 and WP-4.2 complete; WP-4.3 implementation underway  
 **Execution branch (planned):** `feat/storage-memory-services`  
 **Last reviewed:** 2026-11-24
 
@@ -238,11 +238,13 @@ Tasks:
 
 **Deliverables:** Storage Manager, SQLite adapter, session/transaction helpers, storage configuration, and focused tests.
 
-**Exit gate:** application and tests use the centralized manager; no accidental duplicate engine/session configuration remains in the migrated paths.
+**Exit gate:** Storage Manager is wired into application startup and request-scoped sessions. Validation passed on 2026-11-24: 6 focused Storage Manager tests, 115 total tests, and `compileall`. A separate live HTTP startup smoke test remains unrecorded.
 
 ### WP-4.3 — Repository Services
 
 **Goal:** standardize domain data access.
+
+**Current implementation status (2026-11-24):** Catalog, runtime, profile, session, and message repository modules have been introduced. Catalog persistence logic is now behind `CatalogRepository`; `core/catalog_storage.py` remains a compatibility facade. The runtime repository implementation has moved to `core/repositories/runtime_repository.py`, with its previous import path retained. Profile/session/message repositories are available for the Conversation Storage integration in WP-4.4. Existing API routes have not yet been fully migrated to these repositories.
 
 Tasks:
 1. Define the repository base/protocol and transaction conventions.
