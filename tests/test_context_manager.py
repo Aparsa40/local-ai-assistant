@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.context import ContextManager, ContextRequest, ContextValidationError
+from core.context import ContextConfigurationError, ContextManager, ContextRequest, ContextValidationError
 from core.conversations import ConversationService
 from core.database import Base
 from core.knowledge import KnowledgeScope, KnowledgeService
@@ -256,7 +256,7 @@ def test_context_rejects_knowledge_scope_when_storage_is_not_configured():
             query="private knowledge",
             knowledge_scopes=(KnowledgeScope("user", "profile-1", "local"),),
         )
-        with pytest.raises(Exception):
+        with pytest.raises(ContextConfigurationError):
             ContextManager(conversations).assemble(request)
     finally:
         db.close()
