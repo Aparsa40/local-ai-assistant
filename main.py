@@ -588,7 +588,11 @@ async def get_profile_avatar(db: Session = Depends(get_db), access: AccessContex
 
 
 @app.delete("/api/profile/avatar")
-async def delete_profile_avatar(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+async def delete_profile_avatar(approval_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    consume_api_approval(
+        db, approval_id, access, ResourceType.PROFILE, "local-user", PermissionOperation.DELETE,
+        {"action": "delete_profile_avatar", "profile_id": "local-user"},
+    )
     try:
         return {"status": "success", **ProfileService(db, permission_manager, access, build_audit_service(db)).delete_avatar()}
     except ProfileServiceError as exc:
@@ -811,8 +815,12 @@ async def unload_local_runtime_model(runtime_id: str, model_id: str, access: Acc
 
 
 @app.post("/api/runtime/{runtime_id}/shutdown")
-async def shutdown_local_runtime(runtime_id: str, access: AccessContext = Depends(get_local_access_context)):
-    """Stop only a runtime process explicitly owned by this application."""
+async def shutdown_local_runtime(runtime_id: str, approval_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Stop only an application-owned runtime process after explicit owner approval."""
+    consume_api_approval(
+        db, approval_id, access, ResourceType.RUNTIME, runtime_id, PermissionOperation.ADMINISTER,
+        {"action": "runtime_shutdown", "runtime_id": runtime_id},
+    )
     authorize_local_api_access(access, ResourceType.RUNTIME, runtime_id, PermissionOperation.ADMINISTER)
     try:
         results = await runtime_manager.shutdown(runtime_id)
@@ -832,7 +840,11 @@ async def create_session(db: Session = Depends(get_db), access: AccessContext = 
 
 
 @app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: int, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+async def delete_session(session_id: int, approval_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    consume_api_approval(
+        db, approval_id, access, ResourceType.CONVERSATION, str(session_id), PermissionOperation.DELETE,
+        {"action": "delete_session", "session_id": session_id},
+    )
     try:
         return ConversationService(db, permission_manager, access, build_audit_service(db)).delete_session(session_id)
     except ConversationNotFoundError as exc:
