@@ -189,10 +189,10 @@ class RuntimeEvent(Base):
 
 def init_db():
     """Create missing ORM tables, then apply ordered, versioned schema migrations."""
-    Base.metadata.create_all(bind=engine)
     from .migrations import run_migrations
 
     run_migrations(engine)
+    Base.metadata.create_all(bind=engine)
 
 
 class MemoryRecord(Base):
