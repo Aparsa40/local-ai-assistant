@@ -9,7 +9,7 @@ from core.context import ContextManager, ContextRequest, ContextValidationError
 from core.conversations import ConversationService
 from core.database import Base
 from core.memory import MemoryAccessDeniedError, MemoryScope, MemoryService
-from permission_test_helpers import test_access
+from permission_test_helpers import make_test_access
 
 
 class AllowScopedPolicy:
@@ -28,7 +28,7 @@ def make_db():
 
 
 def make_services(db, *, allow_memory: bool = True):
-    manager, context = test_access()
+    manager, context = make_test_access()
     conversations = ConversationService(db, manager, context)
     memory = MemoryService(db, access_policy=AllowScopedPolicy()) if allow_memory else MemoryService(db)
     return conversations, memory
