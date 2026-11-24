@@ -1,6 +1,7 @@
 # pyright: reportMissingImports=false
 import ipaddress
 import json
+from datetime import datetime, timezone
 from uuid import uuid4
 from typing import Any, Dict
 
@@ -12,16 +13,22 @@ from sqlalchemy.orm import Session
 
 from core.config_manager import ConfigManager
 from core.database import init_db
+from core.knowledge import KnowledgeScope, KnowledgeService, KnowledgeAccessDeniedError, KnowledgeNotFoundError, KnowledgeValidationError
 from core.conversations import ConversationNotFoundError, ConversationService
 from core.context import ContextManager, ContextRequest
 from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
 from core.permissions.audit import AuditService
+from core.permissions.approvals import ApprovalService, ApprovalDeniedError, ApprovalNotFoundError, ApprovalTransitionError
+from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessPolicy
+from core.permissions.owner_policies import LocalOwnerApprovalDecisionPolicy, LocalOwnerGrantAdministrationPolicy
 from core.permissions.guards import AccessDeniedError, require_access
 from core.permissions.local_policy import LocalApplicationPolicy
 from core.permissions.manager import PermissionManager
-from core.permissions.types import AccessContext, PermissionOperation, PermissionScope, PermissionSubject, ResourceType, ScopeType, SubjectType
+from core.permissions.types import (AccessContext, ApprovalStatus, PermissionGrant, PermissionOperation, PermissionResource, PermissionScope, PermissionSubject, ResourceType, ScopeType, SubjectType)
 from core.repositories.audit_repository import AuditRepository
+from core.repositories.approval_repository import ApprovalRepository
+from core.repositories.permission_repository import PermissionRepository
 from core.orchestrator import Orchestrator
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
@@ -120,6 +127,408 @@ class ProfileUpdate(BaseModel):
 
 class RuntimeLoadRequest(BaseModel):
     keep_alive: str | int = "5m"
+
+
+
+class PermissionGrantCreateRequest(BaseModel):
+    subject_type: SubjectType
+    subject_id: str = Field(min_length=1, max_length=160)
+    resource_type: ResourceType
+    resource_id: str = Field(min_length=1, max_length=255)
+    operation: PermissionOperation
+    scope_type: ScopeType
+    scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+    expires_at: datetime | None = None
+    requires_approval: bool = False
+
+
+class KnowledgeSourceCreateRequest(BaseModel):
+    scope_type: str = Field(min_length=1, max_length=40)
+    scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+    source_type: str = Field(min_length=1, max_length=20)
+    title: str = Field(min_length=1, max_length=300)
+    uri: str | None = Field(default=None, max_length=4000)
+
+
+class KnowledgeIndexRequest(BaseModel):
+    scope_type: str = Field(min_length=1, max_length=40)
+    scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+    extracted_text: str = Field(min_length=1, max_length=5_000_000)
+    extractor: str = Field(default="manual", max_length=120)
+    extractor_version: str = Field(default="1", max_length=80)
+
+
+def build_admin_permission_manager(db: Session) -> PermissionManager:
+    return PermissionManager(
+        PermissionRepository(db),
+        grant_policy=LocalOwnerGrantAdministrationPolicy(),
+        policies=(LocalApplicationPolicy(),),
+    )
+
+
+def build_approval_service(db: Session) -> ApprovalService:
+    return ApprovalService(
+        ApprovalRepository(db),
+        build_audit_service(db),
+        decision_policy=LocalOwnerApprovalDecisionPolicy(),
+    )
+
+
+def build_knowledge_service(db: Session, access: AccessContext) -> KnowledgeService:
+    manager = PermissionManager(
+        PermissionRepository(db),
+        policies=(LocalApplicationPolicy(),),
+    )
+    policy = PermissionManagerKnowledgeAccessPolicy(
+        manager,
+        access.subject,
+        audit_service=build_audit_service(db),
+    )
+    return KnowledgeService(db, access_policy=policy)
+
+
+def serialize_grant(grant: PermissionGrant) -> dict:
+    return {
+        "grant_id": grant.grant_id,
+        "subject": {"type": grant.subject.subject_type.value, "id": grant.subject.subject_id},
+        "resource": {"type": grant.resource.resource_type.value, "id": grant.resource.resource_id},
+        "operation": grant.operation.value,
+        "scope": {"type": grant.scope.scope_type.value, "id": grant.scope.scope_id, "owner_id": grant.scope.owner_id},
+        "issued_by": grant.issued_by,
+        "created_at": grant.created_at.isoformat(),
+        "expires_at": grant.expires_at.isoformat() if grant.expires_at else None,
+        "revoked_at": grant.revoked_at.isoformat() if grant.revoked_at else None,
+        "requires_approval": grant.requires_approval,
+        "active": grant.is_active(datetime.now(timezone.utc)),
+    }
+
+
+def serialize_approval(approval) -> dict:
+    return {
+        "approval_id": approval.approval_id,
+        "request_id": approval.request_id,
+        "action_hash": approval.action_hash,
+        "subject": {"type": approval.subject.subject_type.value, "id": approval.subject.subject_id},
+        "resource": {"type": approval.resource.resource_type.value, "id": approval.resource.resource_id},
+        "operation": approval.operation.value,
+        "scope": {"type": approval.scope.scope_type.value, "id": approval.scope.scope_id, "owner_id": approval.scope.owner_id},
+        "requested_by": approval.requested_by,
+        "created_at": approval.created_at.isoformat(),
+        "expires_at": approval.expires_at.isoformat(),
+        "status": approval.status.value,
+        "decided_by": approval.decided_by,
+        "decided_at": approval.decided_at.isoformat() if approval.decided_at else None,
+        "consumed_at": approval.consumed_at.isoformat() if approval.consumed_at else None,
+    }
+
+
+def create_api_approval(
+    db: Session,
+    access: AccessContext,
+    resource_type: ResourceType,
+    resource_id: str,
+    operation: PermissionOperation,
+    payload: dict,
+):
+    request = access.build_request(
+        PermissionResource(resource_type, resource_id),
+        operation,
+    )
+    return build_approval_service(db).request(
+        request,
+        payload,
+        requested_by="local-user",
+        ttl_seconds=300,
+    )
+
+
+def consume_api_approval(
+    db: Session,
+    approval_id: str,
+    access: AccessContext,
+    resource_type: ResourceType,
+    resource_id: str,
+    operation: PermissionOperation,
+    payload: dict,
+) -> None:
+    approval = ApprovalRepository(db).get(approval_id)
+    if approval is None:
+        raise HTTPException(status_code=409, detail="A valid owner approval is required.")
+    approval_context = AccessContext(
+        subject=access.subject,
+        scope=access.scope,
+        request_id=approval.request_id,
+    )
+    request = approval_context.build_request(
+        PermissionResource(resource_type, resource_id),
+        operation,
+    )
+    consumed = build_approval_service(db).consume(approval_id, request, payload)
+    if consumed is None:
+        raise HTTPException(status_code=409, detail="Approval is invalid, expired, mismatched, or already consumed.")
+
+
+@app.get("/api/permissions/grants")
+async def list_permission_grants(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    try:
+        grants = PermissionRepository(db).list_recent(limit=limit)
+        return {"grants": [serialize_grant(item) for item in grants]}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/permissions/grants")
+async def create_permission_grant(
+    data: PermissionGrantCreateRequest,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    now = datetime.now(timezone.utc)
+    if data.expires_at is not None and data.expires_at.tzinfo is None:
+        raise HTTPException(status_code=422, detail="expires_at must include a timezone.")
+    try:
+        grant = PermissionGrant(
+            grant_id=str(uuid4()),
+            subject=PermissionSubject(data.subject_type, data.subject_id),
+            resource=PermissionResource(data.resource_type, data.resource_id),
+            operation=data.operation,
+            scope=PermissionScope(data.scope_type, data.scope_id, data.owner_id),
+            issued_by="local-user",
+            created_at=now,
+            expires_at=data.expires_at,
+            requires_approval=data.requires_approval,
+        )
+        manager = build_admin_permission_manager(db)
+        issued = manager.issue_grant(
+            grant,
+            issuer=PermissionSubject(SubjectType.USER, "local-user"),
+        )
+        try:
+            build_audit_service(db).record(
+                event_type="permission_grant_issued",
+                request_id=access.request_id,
+                outcome="issued",
+                subject=issued.subject,
+                resource=issued.resource,
+                operation=issued.operation,
+                metadata={"grant_id": issued.grant_id, "status": "active"},
+            )
+        except Exception:
+            manager.revoke_grant(issued.grant_id, issuer=PermissionSubject(SubjectType.USER, "local-user"))
+            raise
+        return serialize_grant(issued)
+    except PermissionManagementDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Grant administration is not authorized for this scope or resource.") from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/permissions/grants/{grant_id}")
+async def revoke_permission_grant(
+    grant_id: str,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    manager = build_admin_permission_manager(db)
+    actor = PermissionSubject(SubjectType.USER, "local-user")
+    try:
+        revoked = manager.revoke_grant(grant_id, issuer=actor)
+    except PermissionManagementDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Grant revocation is not authorized.") from exc
+    if revoked is None:
+        raise HTTPException(status_code=404, detail="Permission grant not found.")
+    build_audit_service(db).record(
+        event_type="permission_grant_revoked",
+        request_id=access.request_id,
+        outcome="revoked",
+        subject=revoked.subject,
+        resource=revoked.resource,
+        operation=revoked.operation,
+        metadata={"grant_id": revoked.grant_id, "status": "revoked"},
+    )
+    return serialize_grant(revoked)
+
+
+@app.get("/api/permissions/approvals")
+async def list_permission_approvals(
+    status: ApprovalStatus | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    try:
+        items = ApprovalRepository(db).list_recent(limit=limit, status=status)
+        return {"approvals": [serialize_approval(item) for item in items]}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/permissions/approvals/{approval_id}/approve")
+async def approve_permission_request(
+    approval_id: str,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        result = build_approval_service(db).approve(
+            approval_id,
+            approver=PermissionSubject(SubjectType.USER, "local-user"),
+        )
+        return serialize_approval(result)
+    except ApprovalNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Approval request not found.") from exc
+    except ApprovalDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Approval decision is not authorized.") from exc
+    except ApprovalTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/permissions/approvals/{approval_id}/reject")
+async def reject_permission_request(
+    approval_id: str,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        result = build_approval_service(db).reject(
+            approval_id,
+            approver=PermissionSubject(SubjectType.USER, "local-user"),
+        )
+        return serialize_approval(result)
+    except ApprovalNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Approval request not found.") from exc
+    except ApprovalDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Approval decision is not authorized.") from exc
+    except ApprovalTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/permissions/audit")
+async def list_permission_audit(
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    try:
+        return {"events": AuditRepository(db).list_recent(limit=limit)}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/permissions/approvals/session-delete/{session_id}")
+async def request_session_delete_approval(
+    session_id: int,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    return serialize_approval(create_api_approval(
+        db, access, ResourceType.CONVERSATION, str(session_id), PermissionOperation.DELETE,
+        {"action": "delete_session", "session_id": session_id},
+    ))
+
+
+@app.post("/api/permissions/approvals/avatar-delete")
+async def request_avatar_delete_approval(
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    return serialize_approval(create_api_approval(
+        db, access, ResourceType.PROFILE, "local-user", PermissionOperation.DELETE,
+        {"action": "delete_profile_avatar", "profile_id": "local-user"},
+    ))
+
+
+@app.post("/api/permissions/approvals/runtime-shutdown/{runtime_id}")
+async def request_runtime_shutdown_approval(
+    runtime_id: str,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    return serialize_approval(create_api_approval(
+        db, access, ResourceType.RUNTIME, runtime_id, PermissionOperation.ADMINISTER,
+        {"action": "runtime_shutdown", "runtime_id": runtime_id},
+    ))
+
+
+@app.get("/api/knowledge/search")
+async def search_knowledge(
+    query: str,
+    scope_type: str,
+    scope_id: str,
+    owner_id: str = "local-user",
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    try:
+        results = build_knowledge_service(db, access).search(
+            KnowledgeScope(scope_type, scope_id, owner_id),
+            query,
+            limit=limit,
+        )
+        return {"results": [item.__dict__ for item in results]}
+    except KnowledgeAccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Knowledge access denied.") from exc
+    except KnowledgeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/knowledge/sources")
+async def create_knowledge_source(
+    data: KnowledgeSourceCreateRequest,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    try:
+        source = build_knowledge_service(db, access).create_source(
+            KnowledgeScope(data.scope_type, data.scope_id, data.owner_id),
+            source_type=data.source_type,
+            title=data.title,
+            uri=data.uri,
+        )
+        return {"source_id": source.id, "title": source.title, "scope_id": source.scope_id, "version": source.version, "status": source.status}
+    except KnowledgeAccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Knowledge access denied.") from exc
+    except KnowledgeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/knowledge/sources/{source_id}/index")
+async def index_knowledge_source(
+    source_id: str,
+    data: KnowledgeIndexRequest,
+    db: Session = Depends(get_db),
+    access: AccessContext = Depends(get_local_access_context),
+):
+    try:
+        count = build_knowledge_service(db, access).index_extracted_text(
+            KnowledgeScope(data.scope_type, data.scope_id, data.owner_id),
+            source_id,
+            data.extracted_text,
+            extractor=data.extractor,
+            extractor_version=data.extractor_version,
+        )
+        return {"source_id": source_id, "indexed_chunks": count}
+    except KnowledgeAccessDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Knowledge access denied.") from exc
+    except KnowledgeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Knowledge source not found.") from exc
+    except KnowledgeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.get("/")
