@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from uuid import uuid4
@@ -56,6 +57,7 @@ class KnowledgeService:
 
     SOURCE_TYPES = {"file", "url", "text", "manual"}
     MAX_TEXT_CHARS = 5_000_000
+    SECRET_PATTERN = re.compile(r"(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)\\s*[:=]")
 
     def __init__(
         self,
@@ -110,6 +112,12 @@ class KnowledgeService:
             raise KnowledgeValidationError("Source URI is invalid or too long")
         if metadata is not None and not isinstance(metadata, dict):
             raise KnowledgeValidationError("Source metadata must be an object")
+        try:
+            metadata_text = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
+        except (TypeError, ValueError) as exc:
+            raise KnowledgeValidationError("Source metadata must be JSON-serializable") from exc
+        if self.SECRET_PATTERN.search(metadata_text) or (uri and self.SECRET_PATTERN.search(uri)):
+            raise KnowledgeValidationError("Credential-like material cannot be stored in Knowledge metadata")
         source = KnowledgeSourceRecord(
             id=uuid4().hex,
             source_type=source_type,
@@ -207,6 +215,8 @@ class KnowledgeService:
         if chunk_size < 100 or chunk_size > 8000 or overlap < 0 or overlap >= chunk_size:
             raise KnowledgeValidationError("Chunk size or overlap is outside the supported range")
         normalized = extracted_text.strip()
+        if self.SECRET_PATTERN.search(normalized):
+            raise KnowledgeValidationError("Credential-like material cannot be indexed as Knowledge")
         digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
         next_version = source.version + 1
         now = utcnow_naive()
