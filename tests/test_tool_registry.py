@@ -82,7 +82,7 @@ def test_registry_rejects_unknown_or_disabled_tools() -> None:
         registry.get_definition("unknown.tool", "1.0.0")
 
     disabled = _definition(enabled=False)
-    registry.register(disabled, lambda payload: payload)
+    registry.register(disabled, _echo)
     with pytest.raises(ToolDisabledError):
         registry.validate_call(_call(disabled))
 
@@ -90,10 +90,10 @@ def test_registry_rejects_unknown_or_disabled_tools() -> None:
 def test_registry_rejects_duplicate_id_and_version() -> None:
     registry = ToolRegistry()
     definition = _definition()
-    registry.register(definition, lambda payload: payload)
+    registry.register(definition, _echo)
 
     with pytest.raises(ToolRegistryError, match="already registered"):
-        registry.register(definition, lambda payload: payload)
+        registry.register(definition, _echo)
 
 
 @pytest.mark.parametrize(
@@ -119,14 +119,14 @@ def test_registry_rejects_invalid_inputs(payload) -> None:
 def test_registry_rejects_non_json_and_oversized_inputs() -> None:
     registry = ToolRegistry()
     definition = _definition(max_input_bytes=20)
-    registry.register(definition, lambda value: value)
+    registry.register(definition, _echo)
 
     with pytest.raises(ToolInputValidationError):
         registry.validate_call(_call(definition, {"limit": 10, "include_metadata": True}))
 
     larger = _definition(max_input_bytes=1024)
     registry2 = ToolRegistry()
-    registry2.register(larger, lambda value: value)
+    registry2.register(larger, _echo)
     with pytest.raises(ToolInputValidationError):
         registry2.validate_call(_call(larger, {"limit": object()}))
 
@@ -134,7 +134,7 @@ def test_registry_rejects_non_json_and_oversized_inputs() -> None:
 def test_registry_rejects_resource_and_operation_mismatch() -> None:
     registry = ToolRegistry()
     definition = _definition()
-    registry.register(definition, lambda value: value)
+    registry.register(definition, _echo)
     bad_request = AccessRequest(
         subject=PermissionSubject(SubjectType.SERVICE, "tool-gateway"),
         resource=PermissionResource(ResourceType.FILE, "file-1"),
@@ -154,7 +154,7 @@ def test_registry_rejects_unsupported_schema_keywords() -> None:
     definition = _definition(input_schema={"type": "object", "$ref": "https://example.invalid/schema"})
 
     with pytest.raises(ToolSchemaDefinitionError):
-        registry.register(definition, lambda value: value)
+        registry.register(definition, _echo)
 
 
 def test_destructive_and_external_tools_must_require_approval() -> None:
