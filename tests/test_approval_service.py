@@ -131,3 +131,21 @@ def test_approval_rejects_invalid_ttl_and_non_json_payload(db_session) -> None:
 
     with pytest.raises(ValueError):
         service.request(_request(), {"value": object()}, requested_by="runtime-api")
+
+
+
+def test_approved_token_expires_before_it_can_be_consumed(db_session) -> None:
+    now = [datetime(2026, 11, 24, 8, 0, tzinfo=timezone.utc)]
+    service = ApprovalService(
+        ApprovalRepository(db_session),
+        decision_policy=AllowUserApproval(),
+        clock=lambda: now[0],
+    )
+    request = _request()
+    payload = {"action": "unload", "model_id": "qwen:0.5b"}
+    approval = service.request(request, payload, requested_by="runtime-api", ttl_seconds=5)
+    service.approve(approval.approval_id, approver=PermissionSubject(SubjectType.USER, "owner-1"))
+
+    now[0] += timedelta(seconds=5)
+    assert service.consume(approval.approval_id, request, payload) is None
+    assert ApprovalRepository(db_session).get(approval.approval_id).status is ApprovalStatus.EXPIRED
