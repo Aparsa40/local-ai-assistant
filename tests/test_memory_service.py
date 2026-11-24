@@ -175,6 +175,8 @@ def test_retention_expiry_and_explicit_deletion():
         row.expires_at = utcnow_naive() - timedelta(seconds=1)
         db.commit()
 
+        assert service.retrieve(scope, "موقت") == []
+        assert row.status == "candidate"
         assert service.expire_due(scope) == 1
         with pytest.raises(MemoryNotFoundError):
             service.get(scope, expiring.id)
