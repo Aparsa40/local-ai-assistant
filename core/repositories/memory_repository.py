@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from sqlalchemy import or_
+
 from core.database import MemoryRecord, utcnow_naive
 from .base import BaseRepository
 
