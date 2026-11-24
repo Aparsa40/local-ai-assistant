@@ -69,7 +69,7 @@ def test_knowledge_api_requires_exact_persisted_scope_grant(local_client):
             "subject_id": "local-api",
             "resource_type": "knowledge_source",
             "resource_id": "private-notes",
-            "operation": "update",
+            "operation": "create",
             "scope_type": "user",
             "scope_id": "private-notes",
             "owner_id": "local-user",
