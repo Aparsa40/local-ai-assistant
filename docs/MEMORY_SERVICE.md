@@ -59,7 +59,7 @@ Retrieval is deterministic and metadata-first. The baseline score combines:
 - confidence: 15%;
 - freshness: 10%.
 
-Only records with at least one lexical match are returned. Active records are retrieved by default. Results are scoped by owner and scope, and expired records are transitioned before retrieval. No embeddings, vector database, or hosted ranking service is required.
+Only records with at least one lexical match are returned. Active records are retrieved by default. Results are scoped by owner and scope. Retrieval filters expired records without changing their lifecycle state; the explicit expiry operation performs the state transition. No embeddings, vector database, or hosted ranking service is required.
 
 ## 6. Access-control boundary
 
