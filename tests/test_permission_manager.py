@@ -168,3 +168,26 @@ def test_repository_round_trips_grant_with_timezone_information(db_session) -> N
     assert loaded == stored
     assert loaded is not None
     assert loaded.created_at.tzinfo is not None
+
+
+
+def test_matching_grant_can_require_separate_human_approval(db_session) -> None:
+    repository = PermissionRepository(db_session)
+    request = _request()
+    grant = PermissionGrant(
+        grant_id=str(uuid4()),
+        subject=request.subject,
+        resource=request.resource,
+        operation=request.operation,
+        scope=request.scope,
+        issued_by="owner-1",
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        requires_approval=True,
+    )
+    repository.create(grant)
+
+    decision = PermissionManager(repository).authorize(request)
+
+    assert decision.effect.value == "require_approval"
+    assert decision.reason_code == "matching_grant_requires_approval"
+    assert decision.grant_id == grant.grant_id
