@@ -154,7 +154,7 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 
 **Exit:** existing protected operations fail closed when no explicit application policy is configured; all integrated paths have allow/deny tests and no direct repository/session exposure to callers.
 
-**WP-5.6 implementation status:** Added `AccessContext`, `LocalApplicationPolicy`, reusable `require_access` guards, and the Memory PermissionManager adapter. Phase 4 KnowledgeService is now connected through `PermissionManagerKnowledgeAccessPolicy`; source creation, indexing/archive updates, and search require distinct exact-scope `CREATE`, `UPDATE`, and `READ` grants. New local APIs expose Knowledge source registration, extracted-text indexing, and scoped lexical search. Conversation/Profile services, settings, providers, runtime, sessions, and chat remain behind loopback local policy and audit. The fixed `local-api` principal is not authentication. Cross-origin browser requests are rejected by the local API dependency.
+**WP-5.6 implementation status:** Added `AccessContext`, `LocalApplicationPolicy`, reusable `require_access` guards, and the Memory PermissionManager adapter. Phase 4 KnowledgeService is connected through `PermissionManagerKnowledgeAccessPolicy`; source creation, indexing/archive updates, and search require distinct exact-scope `CREATE`, `UPDATE`, and `READ` grants. New local APIs expose Knowledge source registration, extracted-text indexing, and scoped lexical search. Conversation/Profile services, settings, providers, runtime, sessions, and chat remain behind loopback local policy and audit. ContextManager does not infer or automatically attach memory/Knowledge scopes. The fixed `local-api` principal is not authentication. Cross-origin browser requests are rejected by the local API dependency.
 
 ### WP-5.7 — Integration, Security Regression & Documentation
 
@@ -236,7 +236,7 @@ Run focused commands as their work packages land. At phase completion, record ex
 
 ## 10. Branch, commit, and PR protocol
 
-- Use only `feat/phase-5-permission-manager-tool-runtime`, created directly from `main`.
+- Use only `feat/phase-5-operational-authorization`, created directly from `main` after Phase 4 WP-4.7 was merged.
 - Keep all WP-5.1 through WP-5.7 work on this one branch and in one PR.
 - Commit each work package separately with a conventional, descriptive message.
 - Do not create a branch or PR from this feature branch.
@@ -256,7 +256,7 @@ Phase 5 is complete only when:
 6. Every execution is preceded by authorization and correlated with redacted audit events.
 7. Existing conversation and memory services are integrated without leaking persistence internals.
 8. No agent/model can grant itself permissions or bypass the gateway.
-9. Unsupported Knowledge/file/connector domains are explicitly marked unavailable rather than falsely certified.
+9. Knowledge source create/read/update operations use exact PermissionManager grants; generic managed-file upload and connector domains remain unavailable until their dedicated APIs exist.
 10. Full regression, security tests, Python compilation, and frontend syntax checks pass.
 11. README, architecture, roadmap, module contracts, execution plan, and implementation status agree.
 
