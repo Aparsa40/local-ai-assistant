@@ -18,7 +18,7 @@ The repository currently contains a FastAPI backend, lightweight Alpine.js brows
 
 The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
 
-Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Services, Memory Service, and Context Manager) are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15: WP-5.1–WP-5.6 (typed contracts, default-deny PermissionManager, persisted grants, approvals, audit, Tool Registry/Runtime, and local domain/API integration) are implemented and CI-validated; WP-5.7 final acceptance remains. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
+Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Services, Memory Service, and Context Manager) are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 WP-5.1–WP-5.7 is complete and merged to `main` via PR #15 (commit `342a7fcb0ead3ab9586b671994a5427d812cb175`); final GitHub Actions passed 217 tests, Python compilation, and frontend syntax validation. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## Phase 1 — Architecture & Contracts Foundation
 
@@ -114,7 +114,7 @@ Phase 4 WP-4.1–WP-4.6 (Storage Manager, repositories, Conversation/Profile Ser
 
 ## Phase 5 — Tool Runtime & Permission Manager
 
-**Status:** In progress — PR #15; WP-5.1–WP-5.6 implemented and CI-validated; WP-5.7 pending.
+**Status:** Complete — WP-5.1–WP-5.7 implemented and CI-validated; PR #15 merged to `main`.
 
 **Goal:** Mediate every protected data access and tool action through application-owned authorization and execution boundaries.
 
