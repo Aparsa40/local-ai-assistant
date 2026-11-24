@@ -75,7 +75,13 @@ def test_session_can_be_deleted_and_is_removed_from_history(client):
     created = client.post("/api/sessions")
     session_id = created.json()["id"]
 
-    response = client.delete(f"/api/sessions/{session_id}")
+    approval = client.post(f"/api/permissions/approvals/session-delete/{session_id}").json()
+    approved = client.post(f"/api/permissions/approvals/{approval['approval_id']}/approve")
+    assert approved.status_code == 200
+    response = client.delete(
+        f"/api/sessions/{session_id}",
+        params={"approval_id": approval["approval_id"]},
+    )
 
     assert response.status_code == 200
     assert response.json() == {"status": "success", "deleted_session_id": session_id}
@@ -84,6 +90,12 @@ def test_session_can_be_deleted_and_is_removed_from_history(client):
 
 
 def test_session_delete_returns_404_for_unknown_session(client):
-    response = client.delete("/api/sessions/999999")
+    approval = client.post("/api/permissions/approvals/session-delete/999999").json()
+    approved = client.post(f"/api/permissions/approvals/{approval['approval_id']}/approve")
+    assert approved.status_code == 200
+    response = client.delete(
+        "/api/sessions/999999",
+        params={"approval_id": approval["approval_id"]},
+    )
 
     assert response.status_code == 404
