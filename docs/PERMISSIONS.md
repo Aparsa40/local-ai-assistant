@@ -1,6 +1,6 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. Tool Runtime, audit-to-runtime wiring, and API/domain integration remain pending. The explicit Tool Registry and bounded schema validation are implemented.  
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing domain/API integration and full audit wiring across all application routes remain pending WP-5.6.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
@@ -41,15 +41,15 @@ No wildcard, inferred owner, or implicit cross-scope grant is valid.
 
 The current `ToolRegistry` accepts only explicitly registered, versioned definitions. It validates a restricted JSON Schema subset, byte limits, resource type, and operation mapping. It rejects unknown/disabled tools, duplicate registrations, unsupported schema keywords, and unexpected object properties. Destructive and external-side-effect tools must require approval. The registry's public catalog excludes handlers and raw schema internals.
 
-The accepted execution sequence is:
+The implemented ToolRuntime execution sequence is:
 
 1. Treat model-generated tool calls as untrusted proposals.
 2. Resolve a registered tool ID and version.
 3. Validate the complete input schema and resource mapping.
-4. Ask Permission Manager for an application-side decision.
+4. Ask Permission Manager for an application-side decision and persist the decision event.
 5. Obtain and consume a one-time approval when required.
-6. Execute only through the bounded Tool Runtime.
-7. Normalize the result and record a redacted audit event.
+6. Recheck permission immediately before executing through Tool Runtime.
+7. Normalize the result and persist a redacted audit event.
 
 A denied action is terminal. It must not be retried through another tool or provider to evade policy. Tool metadata and caller-supplied capability labels are not authorization.
 
