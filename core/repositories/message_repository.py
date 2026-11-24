@@ -16,6 +16,17 @@ class MessageRepository(BaseRepository):
             .all()
         )
 
+    def list_recent_for_session(self, session_id: int, limit: int) -> list[ChatMessage]:
+        """Return the latest bounded slice in chronological presentation order."""
+        rows = (
+            self.db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.id.desc())
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
+
     def append(
         self,
         session_id: int,

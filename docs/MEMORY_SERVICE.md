@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 — Storage & Memory Services  
 **Work package:** WP-4.5 — Memory Service  
-**Status:** Implemented; local validation pending  
+**Status:** Implemented and locally validated (2026-11-24)  
 **Branch:** `feat/phase-4-memory-service` (stacked on `feat/storage-memory-services`)
 
 ## 1. Responsibility
@@ -82,7 +82,7 @@ python -m compileall -q core main.py
 node --check static/app.js
 ```
 
-GitHub Actions has passed the full suite (131 tests), Python compilation, and frontend syntax check for the current implementation. WP-4.5 is not accepted until the user-local focused and full regression checks also pass and exact results are recorded in the phase execution plan.
+Local validation passed on 2026-11-24: `python -m pytest -q tests/test_memory_service.py tests/test_storage_manager.py` (13 passed), `python -m pytest -q -W default` (131 passed), `python -m compileall -q core main.py`, and `node --check static/app.js`. GitHub Actions also passed 131 tests, Python compilation, and frontend syntax check.
 
 ## 9. Execution directive
 
@@ -90,4 +90,4 @@ GitHub Actions has passed the full suite (131 tests), Python compilation, and fr
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.5 — Memory Service
 
-**Mandatory instruction:** Execute this contract exactly within WP-4.5. Keep memory owner- and scope-isolated, preserve provenance, require explicit candidate activation, and retain default-deny access behavior. Do not implement Context Manager, Knowledge ingestion, vector search, automatic extraction/promotion, or Phase 5 permissions in this work package. This document describes the implementation target and is not evidence that validation has passed.
+**Mandatory instruction:** Execute this contract exactly within WP-4.5. Keep memory owner- and scope-isolated, preserve provenance, require explicit candidate activation, and retain default-deny access behavior. Do not implement Context Manager, Knowledge ingestion, vector search, automatic extraction/promotion, or Phase 5 permissions in this work package. This document records the accepted WP-4.5 implementation and its validation evidence.
