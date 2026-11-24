@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Execution plan approved; implementation not started  
+**Status:** In progress — WP-5.1 contracts and security audit delivered; WP-5.2–WP-5.7 pending  
 **Execution branch:** `feat/phase-5-permission-manager-tool-runtime` (created directly from `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
 **Last reviewed:** 2026-11-24
@@ -27,7 +27,29 @@ Important dependency limitation: the Phase 4 execution plan also defines WP-4.7 
 
 Before implementation, verify the current `main` head, open-PR state, test baseline, database model conventions, and application composition points. Do not reset or mutate the user's local database.
 
-## 3. Security invariants
+## 3. WP-5.1 audit findings (2026-11-24)
+
+The initial code and API audit found the following facts:
+
+- `main.py` creates the FastAPI application without an authentication dependency or request-principal resolver. Profile, settings, provider, runtime, session, and chat routes are currently reachable without an application-level authenticated subject.
+- ConversationService and ProfileService are application services that receive a database session from API composition. They do not implement authorization themselves.
+- MemoryService already uses an injected MemoryAccessPolicy and defaults to DenyAllMemoryAccessPolicy. ContextManager delegates memory retrieval to MemoryService and does not yet call a central PermissionManager.
+- Provider credentials are loaded through ConfigManager. The repository documentation explicitly says current local credential storage is not an encrypted vault.
+- Local Model Runtime exposes explicit model load/unload and runtime shutdown operations. Shutdown is limited to processes owned by the application, but API-level authorization is not yet present.
+- No Tool Registry or Tool Runtime execution gateway exists in the current baseline.
+- StorageManager is the centralized persistence lifecycle. Repositories own ORM queries; application services and API composition are the only appropriate integration points. No session/repository object may cross into a future tool handler or model context.
+
+**Threat implications and implementation constraints:**
+
+1. Until authentication is introduced, a local subject can only represent the trusted local application boundary; it must not be presented as user authentication or safe hosted multi-user authorization.
+2. Deployment must remain loopback/local-only while API authentication is absent. Phase 5 will not silently add a permissive network principal.
+3. Existing routes cannot all be switched to default-deny without first introducing an explicit trusted local application policy and clear composition boundary. Any such policy must be narrow, testable, and documented as local single-user behavior.
+4. Destructive runtime and conversation actions need an approval/risk policy; read-only status/catalog endpoints must not be confused with execution operations.
+5. Provider credential access remains unavailable to tools by default. No credential value may be passed to tool handlers or audit metadata.
+
+The audit did not inspect or mutate the user's local SQLite database and did not run hardware-intensive model operations.
+
+## 4. Security invariants
 
 1. **Default deny:** missing, malformed, expired, revoked, ambiguous, or unsupported authorization means deny.
 2. **No self-grant:** a model, tool, agent definition, agent run, provider, or untrusted input cannot create or widen grants.
@@ -42,7 +64,7 @@ Before implementation, verify the current `main` head, open-PR state, test basel
 11. **No implicit cloud egress:** private local context is never transmitted to a provider/tool as an unannounced fallback.
 12. **No direct infrastructure access:** callers receive typed contracts and explicit capabilities only; no DB/session/repository/engine or arbitrary code execution.
 
-## 4. Domain contracts
+## 5. Domain contracts
 
 The public contracts should be immutable typed values where practical:
 
@@ -60,7 +82,7 @@ The public contracts should be immutable typed values where practical:
 
 Do not use free-form strings as the only authorization boundary. Validate enum-like values and lengths at the service edge.
 
-## 5. Work packages and execution order
+## 6. Work packages and execution order
 
 ### WP-5.1 — Security Audit, Threat Model & Contracts
 
@@ -134,7 +156,7 @@ Do not use free-form strings as the only authorization boundary. Validate enum-l
 
 **Exit:** all security invariants are covered by tests, full suite and syntax checks pass, docs match code, and unsupported future domains remain explicitly unavailable.
 
-## 6. Required package layout (adapt after audit)
+## 7. Required package layout (adapt after audit)
 
 Proposed starting layout; adjust only when existing conventions justify it:
 
@@ -175,7 +197,7 @@ docs/
 
 This is a proposed organization, not a mandate to duplicate existing abstractions. Keep public contracts small and domain ownership clear.
 
-## 7. Explicit non-goals
+## 8. Explicit non-goals
 
 - Agent Runtime, agent lifecycle, autonomous planning, Supervisor, and multi-agent execution (Phases 6–9).
 - General-purpose shell, arbitrary code execution, unrestricted browser/computer control, or unrestricted filesystem/network access.
@@ -186,7 +208,7 @@ This is a proposed organization, not a mandate to duplicate existing abstraction
 - PostgreSQL deployment or completion of the outstanding Phase 4 WP-4.7 migration framework.
 - Replacing StorageManager, repositories, or Phase 4 services.
 
-## 8. Validation commands
+## 9. Validation commands
 
 Run from the project virtual environment:
 
@@ -202,7 +224,7 @@ node --check static/app.js
 
 Run focused commands as their work packages land. At phase completion, record exact counts and actual command results. Do not claim tests were run unless their output is observed. Do not weaken or skip existing tests to obtain a green build.
 
-## 9. Branch, commit, and PR protocol
+## 10. Branch, commit, and PR protocol
 
 - Use only `feat/phase-5-permission-manager-tool-runtime`, created directly from `main`.
 - Keep all WP-5.1 through WP-5.7 work on this one branch and in one PR.
@@ -213,7 +235,7 @@ Run focused commands as their work packages land. At phase completion, record ex
 - Do not merge merely to reduce the number of files; prefer one coherent phase PR.
 - No PR merge is authorized by this execution plan. Merge only after checks pass and the user explicitly approves it.
 
-## 10. Phase-wide acceptance criteria
+## 11. Phase-wide acceptance criteria
 
 Phase 5 is complete only when:
 1. The PermissionManager is the central deterministic authorization decision point for every integrated protected operation.
@@ -228,7 +250,7 @@ Phase 5 is complete only when:
 10. Full regression, security tests, Python compilation, and frontend syntax checks pass.
 11. README, architecture, roadmap, module contracts, execution plan, and implementation status agree.
 
-## 11. Execution directive
+## 12. Execution directive
 
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11 — Tool Runtime & Permission Manager
