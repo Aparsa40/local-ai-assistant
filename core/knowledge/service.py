@@ -207,7 +207,7 @@ class KnowledgeService:
         chunk_size: int = 1200,
         overlap: int = 120,
     ) -> int:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         if not isinstance(extracted_text, str) or not extracted_text.strip():
             raise KnowledgeValidationError("Extracted text must not be empty")
         if len(extracted_text) > self.MAX_TEXT_CHARS:
@@ -297,7 +297,7 @@ class KnowledgeService:
         ]
 
     def archive_source(self, scope: KnowledgeScope, source_id: str) -> KnowledgeSourceRecord:
-        source = self._source(scope, source_id, "write")
+        source = self._source(scope, source_id, "update")
         source.status = "archived"
         source.archived_at = utcnow_naive()
         self.db.commit()
