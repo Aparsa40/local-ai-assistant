@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-4.1 through WP-4.5 validated; WP-4.6 implementation in progress  
+**Status:** Partially complete — WP-4.1 through WP-4.6 implemented and validated; WP-4.7 Knowledge Storage & Migration remains pending  
 **Execution branches:** `feat/storage-memory-services` (WP-4.1–WP-4.4), `feat/phase-4-memory-service` (WP-4.5; stacked PR), and `feat/phase-4-context-manager` (WP-4.6; stacked PR)  
 **Last reviewed:** 2026-11-24
 
@@ -317,7 +317,7 @@ Tasks:
 
 **Exit gate:** a request receives only the context allowed for its scope and budget, with traceable sources.
 
-**WP-4.6 implementation status (2026-11-24):** Initial Context Manager implementation is in progress on `feat/phase-4-context-manager`, stacked on `feat/phase-4-memory-service`. Added typed request/item/package contracts, bounded chronological conversation retrieval, explicit memory-scope retrieval through MemoryService, deterministic cross-source ranking and deduplication, provenance preservation, and a conservative character-based token budget. Knowledge retrieval remains disconnected until WP-4.7; Phase 5 permissions are not implemented here. Focused/full local validation and CI are pending.
+**WP-4.6 implementation status (2026-11-24):** Context Manager implementation is complete on `feat/phase-4-context-manager` and merged to `main` through Phase 4 PR #10. Added typed request/item/package contracts, bounded chronological conversation retrieval, explicit memory-scope retrieval through MemoryService, deterministic cross-source ranking and deduplication, provenance preservation, and a conservative character-based token budget. Knowledge retrieval remains disconnected until WP-4.7; Phase 5 permissions are not implemented here. The final Phase 4 main-branch CI passed 137 tests, Python compilation, and frontend syntax validation; the user also confirmed 23 focused local tests and 137 full-suite tests passed.
 
 ### WP-4.7 — Knowledge Storage & Migration
 
@@ -334,6 +334,8 @@ Tasks:
 8. Test fresh database creation and migration from a copy of a representative existing database.
 9. Verify sessions, messages, profile, catalogs, runtime states, and runtime events are created and usable in a clean database.
 10. Document backup/restore prerequisites for future Phase 11 work.
+
+**Status:** Pending. No Knowledge Storage service, managed file adapter, lexical search foundation, or versioned migration framework is implemented yet.
 
 **Deliverables:** Knowledge Storage metadata foundation, managed file adapter contract, lexical search baseline where accepted, migration history, migration tests, and data-preservation report.
 
