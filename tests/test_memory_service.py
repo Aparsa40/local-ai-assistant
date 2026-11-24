@@ -115,7 +115,7 @@ def test_scope_and_owner_isolation_prevent_cross_scope_reads():
         with pytest.raises(MemoryNotFoundError):
             owner_b.get(scope_b, item.id)
 
-        different_scope = MemoryService(db, access_policy=AllowScopedPolicy("owner-a", "profile-2"))
+        different_scope = MemoryService(db, access_policy=AllowScopedPolicy("owner-a", "profile-1"))
         with pytest.raises(MemoryAccessDeniedError):
             different_scope.get(MemoryScope("user", "profile-2", "owner-a"), item.id)
     finally:
@@ -131,6 +131,8 @@ def test_validation_requires_provenance_and_rejects_secret_material():
             create_candidate(service, scope, provenance={})
         with pytest.raises(MemoryValidationError):
             create_candidate(service, scope, "api_key=sk-abcdefghijklmnop")
+        with pytest.raises(MemoryValidationError):
+            create_candidate(service, scope, provenance={"source": "user", "note": "password=not-safe"})
         with pytest.raises(MemoryValidationError):
             create_candidate(service, scope, confidence=101)
     finally:
