@@ -6,6 +6,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
+from .adapters.base import StorageAdapter
 from .adapters.sqlite import SQLiteAdapter
 from .config import StorageConfig
 from .exceptions import StorageUnavailableError
@@ -20,10 +21,10 @@ class StorageManager:
         config: StorageConfig | None = None,
         *,
         engine: Engine | None = None,
-        adapter: SQLiteAdapter | None = None,
+        adapter: StorageAdapter | None = None,
     ) -> None:
         self.config = config or StorageConfig.from_environment()
-        self.engine = engine or (adapter or SQLiteAdapter()).create_engine(self.config)
+        self.engine = engine if engine is not None else (adapter or SQLiteAdapter()).create_engine(self.config)
         self.session_factory = sessionmaker(
             autocommit=False,
             autoflush=False,
