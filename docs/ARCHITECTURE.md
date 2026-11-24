@@ -22,6 +22,7 @@ The current repository contains:
 - SQLAlchemy/SQLite persistence in `core/database.py`, managed through `core/storage/` and domain repositories in `core/repositories/`.
 - Conversation/Profile Services, scoped MemoryService, bounded ContextManager, and Knowledge Storage in `core/conversations/`, `core/profiles/`, `core/memory/`, `core/context/`, and `core/knowledge/`.
 - A default-deny PermissionManager with exact-scope grants, local-owner grant administration, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`.
+- A bounded Agent Runtime in `core/agents/`: versioned agent definitions, a trusted registry, deterministic lifecycle with optimistic concurrency and checkpoint/restart recovery, budget-bounded execution through ToolRuntime and PermissionManager, one builtin read-only knowledge-analysis agent, and loopback-only lifecycle APIs.
 - A fixed local single-user policy for loopback and same-origin API requests; cross-origin browser calls and non-loopback clients are rejected. This is not authentication or hosted multi-user security.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
@@ -32,7 +33,7 @@ Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemin
 
 Operator-level catalog metadata is maintained locally and separated from exact live model discovery. OpenRouter key usage and observed Groq/Cohere response-header telemetry are exposed where supported; unknown balances remain unknown.
 
-Phase 4 Knowledge Storage uses SQLite FTS5 and four ordered SQLite schema revisions. Phase 5 integrates exact-scope Knowledge permissions and action-bound approval for destructive local API operations. No production tool handlers or model-generated tool-call loop are registered; Agent Runtime will consume ToolRuntime in Phase 6.
+Phase 4 Knowledge Storage uses SQLite FTS5 across ordered schema revisions, and Phase 5 integrates exact-scope Knowledge permissions and action-bound approval for destructive local API operations. Phase 6 adds migration `0005_agent_runtime` with agent definition, task, run, checkpoint, and run-event tables, and registers one production read-only `knowledge_search` tool handler that a bounded execution loop invokes only through ToolRuntime and PermissionManager. No other production tool handlers are registered.
 
 The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not implement user authentication. The loopback-only `local-api` principal is a local single-user boundary, not identity verification. Do not expose the current application through a LAN, reverse proxy, or public network.
 
@@ -88,9 +89,7 @@ The current credential file is local and ignored by Git, but credentials are not
   Backup & Maintenance ---- Snapshot APIs / Cache Policies
 ```
 
-This is a logical architecture. It does not require a separate process or database for every box. Agent Runtime and its agents are accepted target design, not current shipped functionality.
-
-This is a logical architecture. It does not require a separate process or database for every box.
+This is a logical architecture. It does not require a separate process or database for every box. Supervisor, Conversation Processing integration, and multi-agent orchestration are accepted target design, not current shipped functionality.
 
 ## 4. Core module responsibilities
 
@@ -106,9 +105,11 @@ Owns local inference-engine lifecycle operations through a provider-neutral Runt
 
 The software foundation and CI acceptance are complete. Windows smoke validation verified runtime connectivity, inventory, inspection, and process-ownership safety. Live Qwen loading could not be verified on the observed 4 GB RAM machine while Chrome and VS Code were active; the mechanical HDD is not a practical substitute for RAM because sustained paging can make the system unresponsive. This is recorded as an environment-constrained validation gap, not a demonstrated implementation defect. Successful live load/unload on adequately provisioned hardware remains unverified. The current increment does not provide automatic model downloads, automatic eviction, GPU telemetry guarantees, or multi-engine support.
 
-### Agent Runtime (accepted target; not implemented)
+### Agent Runtime (implemented in Phase 6 for one bounded agent)
 
 Hosts goal-oriented agents and manages their task lifecycle, state, bounded execution loops, handoffs, and completion evaluation. The Supervisor is a specialized agent hosted by this runtime, not the runtime itself. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md).
+
+Phase 6 implements versioned and validated agent definitions, a trusted application-side registry, deterministic lifecycle transitions with optimistic concurrency and restart recovery, checkpoint/resume support, budget-bounded execution through ToolRuntime and PermissionManager, one builtin read-only knowledge-analysis agent, and loopback-only lifecycle APIs and UI. Supervisor, Conversation Agent, handoff, and multi-agent orchestration remain accepted target design, not implemented.
 
 ### Model & Provider Updater
 
@@ -124,19 +125,19 @@ It decides whether a request can be answered directly, handled by a deterministi
 
 A specialized coordinating agent hosted by Agent Runtime. It plans complex work, decomposes tasks, selects eligible agent roles and model capabilities, coordinates handoffs, and evaluates combined results.
 
-It is not a separate infrastructure manager and cannot grant permissions or execute tools directly. Deterministic runtime code handles lifecycle transitions, policy checks, iteration limits, and simple workflows without requiring an LLM.
+It is not a separate infrastructure manager and cannot grant permissions or execute tools directly. Deterministic runtime code handles lifecycle transitions, policy checks, iteration limits, and simple workflows without requiring an LLM. No Supervisor is implemented yet.
 
 ### Response Validator & Composer
 
 An independent quality and policy boundary. It checks output structure, completeness, references, tool outcomes, and applicable safety rules, then prepares the response for the UI. It is used for both online and offline results.
 
-It must not be folded into a provider adapter.
+It must not be folded into a provider adapter. It is not implemented yet; Phase 6 outcomes are structured and reported truthfully but are not composed user-facing answers.
 
-### Tool & Permission Manager (Phase 5 implementation in progress)
+### Tool & Permission Manager (Phase 5 implemented; first Phase 6 handler)
 
-The current implementation includes typed authorization contracts, exact-scope persistent grants with expiry/revocation, default-deny PermissionManager decisions, separate default-deny grant administration, action-hash-bound one-time approvals, redacted append-only audit events, an explicit versioned Tool Registry, and an async bounded Tool Runtime. Conversation/Profile Services, ContextManager, provider/runtime/configuration API routes, and the MemoryService adapter use centralized permission checks. The current local policy is loopback-only and single-user; it is not hosted authentication.
+The current implementation includes typed authorization contracts, exact-scope persistent grants with expiry/revocation, default-deny PermissionManager decisions, separate default-deny grant administration with a local-owner administration policy, action-hash-bound one-time approvals, redacted append-only audit events, an explicit versioned Tool Registry, and an async bounded Tool Runtime. Conversation/Profile Services, ContextManager, provider/runtime/configuration API routes, and the MemoryService adapter use centralized permission checks. The current local policy is loopback-only and single-user; it is not hosted authentication.
 
-Knowledge Storage, managed files, connector services, encrypted credential vault, hosted multi-user identity, and production tool handlers are not yet implemented. Models can request tool use, but only application code can register, authorize, and execute it.
+Phase 6 registers the first production tool handler, a read-only `knowledge_search` over one explicitly bound knowledge scope, and issues exact per-run grants for agents. Connector services, an encrypted credential vault, hosted multi-user identity, and further production tool handlers are not yet implemented. Models can request tool use, but only application code can register, authorize, and execute it.
 
 ### Knowledge Access Layer
 
@@ -164,7 +165,7 @@ Agent Runtime selects an execution strategy for agent tasks based on actual task
 - Internet connectivity alone is not a reason to choose the online path.
 - If no LLM is available, deterministic search, retrieval, extraction, and fixed workflows may still run. The system must clearly state when a task requires language-model reasoning that is unavailable.
 
-Both paths converge on Response Validator & Composer before the final answer is presented. Agent Runtime and the two execution strategies are accepted target design, not implemented functionality.
+Both paths converge on Response Validator & Composer before the final answer is presented. The two execution strategies and Response Validator & Composer remain accepted target design; the Phase 6 Agent Runtime invokes models only through InterfaceManager behind an explicit route allowlist and task-level transmission authorization, so no private local context can reach a cloud provider implicitly.
 
 ## 6. Data and ownership boundaries
 
