@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
-CURRENT_SCHEMA_REVISION = "0004_knowledge_fts_trigger_fix"
+CURRENT_SCHEMA_REVISION = "0005_agent_runtime"
 
 
 def _legacy_additive_columns(connection) -> None:
@@ -150,11 +150,95 @@ def _knowledge_fts_trigger_fix(connection) -> None:
     ))
 
 
+
+
+def _agent_runtime(connection) -> None:
+    # Agent Runtime schema is created by this versioned migration, not create_all().
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS agent_definitions ("
+        "agent_id VARCHAR(80) NOT NULL, version VARCHAR(40) NOT NULL, "
+        "goal TEXT NOT NULL, description TEXT NOT NULL, "
+        "input_schema JSON NOT NULL DEFAULT '{}', output_schema JSON NOT NULL DEFAULT '{}', "
+        "completion_kind VARCHAR(60) NOT NULL, completion_description TEXT NOT NULL, "
+        "completion_min_results INTEGER NOT NULL DEFAULT 1, "
+        "budget_max_iterations INTEGER NOT NULL DEFAULT 12, "
+        "budget_deadline_seconds INTEGER NOT NULL DEFAULT 300, "
+        "budget_max_tool_calls INTEGER NOT NULL DEFAULT 20, "
+        "budget_max_model_tokens INTEGER NOT NULL DEFAULT 20000, "
+        "budget_max_input_bytes INTEGER NOT NULL DEFAULT 65536, "
+        "budget_max_output_bytes INTEGER NOT NULL DEFAULT 262144, "
+        "allowed_tools JSON NOT NULL DEFAULT '[]', allowed_models JSON NOT NULL DEFAULT '[]', "
+        "data_scopes JSON NOT NULL DEFAULT '[]', "
+        "approval_policy VARCHAR(40) NOT NULL DEFAULT 'explicit', "
+        "enabled BOOLEAN NOT NULL DEFAULT 1, registered_at DATETIME NOT NULL, "
+        "updated_at DATETIME NOT NULL, PRIMARY KEY (agent_id, version))"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS agent_tasks ("
+        "task_id VARCHAR(32) PRIMARY KEY, agent_id VARCHAR(80) NOT NULL, "
+        "agent_version VARCHAR(40) NOT NULL, owner_id VARCHAR(160) NOT NULL, "
+        "title VARCHAR(200) NOT NULL, payload JSON NOT NULL DEFAULT '{}', "
+        "data_scopes JSON NOT NULL DEFAULT '[]', "
+        "status VARCHAR(20) NOT NULL DEFAULT 'open', created_at DATETIME NOT NULL, "
+        "updated_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS agent_runs ("
+        "run_id VARCHAR(32) PRIMARY KEY, task_id VARCHAR(32) NOT NULL, "
+        "agent_id VARCHAR(80) NOT NULL, agent_version VARCHAR(40) NOT NULL, "
+        "owner_id VARCHAR(160) NOT NULL, trace_id VARCHAR(80) NOT NULL, "
+        "status VARCHAR(20) NOT NULL DEFAULT 'pending', "
+        "scope_type VARCHAR(40) NOT NULL, scope_id VARCHAR(160) NOT NULL, "
+        "version INTEGER NOT NULL DEFAULT 1, attempt INTEGER NOT NULL DEFAULT 1, "
+        "iteration INTEGER NOT NULL DEFAULT 0, tool_calls INTEGER NOT NULL DEFAULT 0, "
+        "model_tokens INTEGER NOT NULL DEFAULT 0, "
+        "last_checkpoint_sequence INTEGER NOT NULL DEFAULT 0, "
+        "pending_approval_id VARCHAR(80), stop_reason VARCHAR(40), "
+        "error_code VARCHAR(80), error_message TEXT, outcome JSON, "
+        "created_at DATETIME NOT NULL, started_at DATETIME, updated_at DATETIME, "
+        "finished_at DATETIME)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS agent_run_events ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, event_id VARCHAR(32) NOT NULL UNIQUE, "
+        "run_id VARCHAR(32) NOT NULL REFERENCES agent_runs(run_id) ON DELETE CASCADE, "
+        "ordinal INTEGER NOT NULL, event_type VARCHAR(80) NOT NULL, "
+        "outcome VARCHAR(40) NOT NULL, metadata_json JSON NOT NULL DEFAULT '{}', "
+        "created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS agent_checkpoints ("
+        "checkpoint_id VARCHAR(32) PRIMARY KEY, "
+        "run_id VARCHAR(32) NOT NULL REFERENCES agent_runs(run_id) ON DELETE CASCADE, "
+        "sequence INTEGER NOT NULL, schema_version INTEGER NOT NULL DEFAULT 1, "
+        "payload JSON NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL, "
+        "CONSTRAINT uq_agent_checkpoint_run_sequence UNIQUE(run_id, sequence))"
+    ))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_agent_definitions_agent_id ON agent_definitions(agent_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_tasks_agent_id ON agent_tasks(agent_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_tasks_owner_id ON agent_tasks(owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_tasks_status ON agent_tasks(status)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_task_id ON agent_runs(task_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_agent_id ON agent_runs(agent_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_owner_id ON agent_runs(owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_trace_id ON agent_runs(trace_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_status ON agent_runs(status)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_scope_id ON agent_runs(scope_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_runs_task_status ON agent_runs(task_id, status)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_run_events_run_id ON agent_run_events(run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_run_events_event_type ON agent_run_events(event_type)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_run_events_created_at ON agent_run_events(created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_agent_checkpoints_run_id ON agent_checkpoints(run_id)",
+    ):
+        connection.execute(text(statement))
+
 _MIGRATIONS = (
     ("0001_legacy_additive_columns", _legacy_additive_columns),
     ("0002_knowledge_fts", _knowledge_fts),
     ("0003_knowledge_file_versions", _knowledge_file_versions),
     ("0004_knowledge_fts_trigger_fix", _knowledge_fts_trigger_fix),
+    ("0005_agent_runtime", _agent_runtime),
 )
 
 

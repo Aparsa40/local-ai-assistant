@@ -288,3 +288,4 @@ class PermissionAuditEventRecord(Base):
 
 # Register Knowledge ORM tables on every database import before metadata.create_all().
 from .knowledge import models as _knowledge_models  # noqa: E402,F401
+from .agents import models as _agent_models  # noqa: E402,F401
