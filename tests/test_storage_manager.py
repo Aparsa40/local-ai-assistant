@@ -71,7 +71,7 @@ def test_storage_manager_rejects_unimplemented_database_backends():
         StorageManager(StorageConfig(database_url="postgresql://localhost/assistant"))
 
 
-def test_storage_manager_creates_the_current_eighteen_table_schema():
+def test_storage_manager_creates_the_current_orm_schema():
     manager = StorageManager(StorageConfig(database_url="sqlite://"))
     expected_tables = {
         "sessions",
