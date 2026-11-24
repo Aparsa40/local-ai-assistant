@@ -167,10 +167,7 @@ def test_approval_request_decision_and_consumption_are_audited(db_session) -> No
         {"target": "knowledge-1", "operation": "publish"},
     )
 
-    events = ApprovalRepository(db_session)
-    audit_events = __import__(
-        "core.repositories.audit_repository", fromlist=["AuditRepository"]
-    ).AuditRepository(db_session).list_for_request(request.request_id)
+    audit_events = AuditRepository(db_session).list_for_request(request.request_id)
 
     assert [event["event_type"] for event in audit_events] == [
         "approval_requested",
