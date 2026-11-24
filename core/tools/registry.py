@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 from typing import Any, Callable
 
@@ -157,8 +158,8 @@ class ToolRegistry:
     def register(self, definition: ToolDefinition, handler: Callable[..., Any]) -> None:
         if not isinstance(definition, ToolDefinition):
             raise TypeError("definition must be a ToolDefinition")
-        if not callable(handler):
-            raise TypeError("handler must be callable")
+        if not callable(handler) or not inspect.iscoroutinefunction(handler):
+            raise TypeError("tool handlers must be async callables")
         _validate_schema_definition(definition.input_schema)
         if definition.output_schema is not None:
             _validate_schema_definition(definition.output_schema)
@@ -201,6 +202,26 @@ class ToolRegistry:
             raise ToolInputValidationError("Tool input exceeds the registered size limit.")
         _validate_value(request.input_data, definition.input_schema)
         return definition, copy.deepcopy(request.input_data)
+
+    def validate_output(self, definition: ToolDefinition, output: Any) -> Any:
+        """Validate handler output and enforce the registered response byte limit."""
+        if not isinstance(definition, ToolDefinition):
+            raise TypeError("definition must be a ToolDefinition")
+        try:
+            encoded = json.dumps(
+                output,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ToolInputValidationError("Tool output must be JSON-compatible.") from exc
+        if len(encoded) > definition.max_output_bytes:
+            raise ToolInputValidationError("Tool output exceeds the registered size limit.")
+        if definition.output_schema is not None:
+            _validate_value(output, definition.output_schema, path="$output")
+        return copy.deepcopy(output)
 
     def _resolve_handler(self, tool_id: str, version: str) -> Callable[..., Any]:
         """Internal runtime-only lookup; never serialize or expose handlers to models."""
