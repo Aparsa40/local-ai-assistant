@@ -1,13 +1,13 @@
 # Permissions and Tool Safety
 
-**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing domain/API integration and full audit wiring across all application routes remain pending WP-5.6.  
+**Status:** Phase 5 implementation in progress. Typed authorization contracts, exact-scope grant persistence, and the default-deny PermissionManager are implemented. The Tool Registry and Tool Runtime are implemented. Existing conversation/profile, chat context, memory adapter, provider, runtime, and configuration API paths are integrated with the central policy and audit boundary. All API endpoints require loopback access.  
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)
 
 ## 1. Security model
 
 Authorization is application-owned and default-deny. A model, provider, agent definition, agent run, or tool definition cannot grant permissions. Only trusted application policy code acting on an explicitly authorized owner decision may issue or revoke a grant.
 
-The first implementation is a local single-user application boundary, not hosted multi-user authentication or a security boundary for an exposed server.
+The first implementation is a local single-user application boundary, not hosted multi-user authentication or a security boundary for an exposed server. API dependencies reject non-loopback client addresses and issue only the fixed `local-api` principal; this is not proof of an individual user's identity. Do not expose the application through a LAN, reverse proxy, or public network without adding real authentication and a new threat review.
 
 ## 2. Typed authorization contracts
 
