@@ -18,8 +18,8 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 1 — Architecture & Contracts Foundation | [PHASE_01_EXECUTION_PLAN.md](PHASE_01_EXECUTION_PLAN.md) | Completed |
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
-| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | In progress — WP-4.1 to WP-4.5 validated; WP-4.6 implementation in progress |
-| 5 — Tool Runtime & Permission Manager | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
+| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | WP-4.1–WP-4.6 implemented and validated; WP-4.7 Knowledge Storage & Migration remains pending |
+| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | In progress — PR #15; typed authorization contracts delivered, remaining work packages pending |
 | 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
@@ -41,11 +41,12 @@ A dedicated execution plan should be added for each later phase before implement
 | [Conversation & Profile Services](CONVERSATION_PROFILE_SERVICES.md) | Conversation persistence, chat-turn durability, profile validation, and avatar lifecycle |
 | [Memory Service](MEMORY_SERVICE.md) | Scoped memory lifecycle, provenance, deduplication, retention, and deterministic retrieval |
 | [Context Manager](CONTEXT_MANAGER.md) | Request-scoped context assembly, explicit memory scopes, provenance, ranking, and token budgeting |
+| [Permissions](PERMISSIONS.md) | Implemented authorization contracts and Phase 5 default-deny/tool mediation target |
+| [Tool Runtime](TOOL_RUNTIME.md) | Added when WP-5.4/WP-5.5 contracts are implemented |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
 | [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [AI Orchestration](AI_ORCHESTRATION.md) | Conversation Processing, online/offline engines, and Supervisor |
-| [Permissions](PERMISSIONS.md) | Default-deny access control, tool mediation, and approval gates |
 
 ## Supporting references
 
