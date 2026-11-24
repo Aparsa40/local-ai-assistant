@@ -131,6 +131,56 @@ This map is limited to the inspected source files and must be extended after the
 | `core/provider_intelligence.py` | Imports `catalog_storage` and `utcnow_naive`; orchestrates local Ollama process lifecycle and report analysis; uses catalog storage for persisted observations/reports | Provider Intelligence service delegates persistence to catalog storage; complete function-level call graph still pending | Keep runtime process control separate from persistence; route data writes through catalog-owned repository contracts |
 | Interface Manager | No ORM import observed in inspected architecture; catalog service access is indirect | Provider/model control-plane service | Must consume catalog contracts, not SQLAlchemy sessions |
 
+
+## 5.1 Second-pass call-site evidence (2026-11-24)
+
+The following source files were fetched directly from `main` and inspected beyond the initial pass: `core/database.py`, `core/catalog_storage.py`, `core/provider_intelligence.py`, `core/runtime/repository.py`, `core/runtime/factory.py`, `core/runtime/manager.py`, `core/runtime/monitor.py`, `core/interface_manager.py`, `core/orchestrator.py`, `core/providers/base.py`, `core/providers/registry.py`, `core/config_manager.py`, and the relevant storage/runtime/provider tests. The API routes in `main.py` were inspected in full.
+
+### Confirmed database access sites
+
+| File / function | Operation | Domain | Finding / WP-4.1 classification |
+|---|---|---|---|
+| `core/database.py` module scope | `create_engine()`, `sessionmaker()` | Shared database | Only confirmed production engine/session-factory construction site in inspected production modules; move lifecycle ownership behind Storage Manager in WP-4.2 |
+| `core/database.py:init_db()` | `Base.metadata.create_all()`, two `ALTER TABLE` statements | Schema lifecycle | Unversioned schema evolution; preserve current behavior until migration baseline and startup contract are approved |
+| `main.py:get_db()` | Creates and closes `SessionLocal` | Request unit of work | Existing FastAPI session dependency; replace implementation behind a provider/dependency seam, not route-by-route engine access |
+| `main.py:get_or_create_profile()` | ORM query, insert, commit, refresh | Profile | Route-layer persistence; move to Profile Repository/Service |
+| `main.py:update_profile()`, avatar upload/delete | Mutate profile row, commit/refresh | Profile | Route-layer persistence; avatar BLOB remains compatibility-sensitive |
+| `main.py` session CRUD routes | Query/create/delete/rename sessions and read messages | Conversation | Direct ORM access in API layer; move behind Conversation Repository without changing response contracts |
+| `main.py:chat_endpoint()` | Reads session/history, commits title and user message | Conversation | Multiple commits before provider inference; preserve user-message durability if inference fails |
+| `main.py:response_generator()` | Opens separate diagnostic/assistant sessions; records model runtime and assistant message | Conversation + Provider observation | Streaming response uses fresh sessions after response begins; preserve this lifecycle and atomicity semantics |
+| `main.py` provider/catalog/report routes | Calls catalog read/write functions using request session | Catalog / Provider Intelligence | Routes orchestrate workflows but still pass raw SQLAlchemy Session to service functions |
+| `main.py:provider_quota_status()` | Calls quota provider, then persists snapshot | Provider observation | Domain write currently invoked from API route via storage function |
+| `core/provider_intelligence.py:refresh_provider_intelligence()` | Reads snapshots and calls record/sync/report persistence functions | Provider Intelligence / Catalog | Service receives raw Session; persistence is split into multiple commits |
+| `core/provider_intelligence.py:create_offline_intelligence_report()` | Builds report from persisted snapshot and saves report | Provider Intelligence | Service receives raw Session; report save owns commit |
+| `core/catalog_storage.py` | ORM reads/writes for operator, live model, provider runtime, quota, model runtime, sync history, reports | Catalog / Provider observation | Domain storage module owns table access, but write helpers commit internally |
+| `core/runtime/repository.py:record()` | ORM upserts snapshots, appends events, commits/rolls back/closes | Local Runtime | Clear repository seam; repository owns an independent transaction per record |
+| `core/runtime/factory.py:build_runtime_manager()` | Injects session factory into RuntimeRepository | Composition root | Good dependency-injection seam; target should inject repository built from Storage Manager rather than raw global factory |
+
+### Transaction and unit-of-work findings confirmed
+
+- `catalog_storage.seed_operator_catalogs()`, `sync_live_models()`, `record_sync_failure()`, `record_provider_runtime()`, `record_quota_snapshot()`, `record_model_runtime()`, and `save_intelligence_report()` call `commit()` internally on caller-owned sessions.
+- `save_intelligence_report()` calls `flush()` before pruning history and committing, so the insert and history pruning are currently committed together within that helper.
+- `refresh_provider_intelligence()` calls `record_provider_runtime()` before model sync/failure recording and report persistence. Those helpers commit separately. A later report failure therefore does not roll back earlier provider observations or model catalog synchronization. This may be intentional staged durability; the target contract must explicitly decide whether refresh is one atomic unit or a sequence of independently durable observations.
+- `RuntimeRepository.record()` owns its session and transaction, including rollback on any exception and close in `finally`. Keep this explicit isolation or replace it with an equally explicit Unit of Work contract.
+- `main.py:chat_endpoint()` commits the user's message before calling the model. The assistant response is persisted only after successful stream completion, using a new session. This means a provider failure intentionally leaves the user message persisted without an assistant response; preserve unless a product-level decision changes it.
+- `main.py` calls `init_db()` and seeds operator catalogs during module import/application construction. Test isolation and startup ordering must be explicit in the Storage Manager migration.
+- `get_provider_catalog()` contains an `owns_session = not isinstance(db, Session)` fallback even though FastAPI normally injects a real Session through `Depends(get_db)`; verify whether any direct non-request caller depends on this behavior before removing it.
+
+### Test evidence
+
+- `tests/test_catalog_storage.py` uses in-memory SQLite, `StaticPool`, a fresh engine, and `Base.metadata.create_all()`. It covers timestamp normalization, operator seeding/reconciliation, live catalog retention, failed sync behavior, metadata merge, bounded report history, runtime details, and the additive `runtime_details` migration.
+- `tests/test_runtime_manager.py` uses isolated in-memory SQLite and verifies RuntimeRepository snapshot/event persistence, repeated probe event suppression, and preservation of known model state on failed operations.
+- `tests/test_provider_intelligence.py` uses a helper-created in-memory SQLite database and exercises provider/runtime/report workflows.
+- No dedicated `tests/test_database.py`, `tests/test_runtime_repository.py`, or `tests/test_api.py` exists at the guessed paths on `main`; this does not imply absence of other test modules. A full tracked-file inventory remains blocked because repository code search returned no indexed results and the available GitHub connector does not expose a repository tree listing operation in this workflow.
+
+### Additional contract implications
+
+1. Catalog storage functions currently mix repository responsibilities with transaction ownership. WP-4.2 should first introduce a stable Unit of Work/transaction convention and characterization tests; do not simply remove internal commits in a broad mechanical edit.
+2. Conversation and Profile repositories must preserve route-level HTTP behavior, current IDs, ordering, title auto-generation/custom-title rules, and the two-phase user/assistant message persistence.
+3. Runtime snapshots and append-only events are different data products; do not collapse them into one table or treat every poll as an event.
+4. Provider runtime observations, catalog synchronization, quota snapshots, and intelligence reports have different retention and durability semantics. Keep their logical contracts separate even if they remain in the same SQLite file.
+5. `InterfaceManager`, `RuntimeManager`, `RuntimeMonitor`, `Orchestrator`, and provider adapters inspected in this pass do not import SQLAlchemy or directly access the database. Preserve this ORM-free boundary.
+
 ## 6. Provisional logical storage and access matrix
 
 This matrix defines intended ownership and safe access boundaries. It is **not** a grant system and does not claim that Phase 5 authorization is implemented.
@@ -249,11 +299,11 @@ Phase 4 must provide scope/policy hooks and safe default-deny behavior for prote
 ## 10. Remaining WP-4.1 work before exit approval
 
 - [ ] Complete repository-wide inventory of every SQLAlchemy model/table and all references.
-- [ ] Locate every engine/session factory creation and every raw SQL/ORM query, commit, rollback, close, and transaction context.
+- [x] Locate engine/session factory creation and the known ORM/query/commit/rollback/close sites in the principal database, API, catalog, provider-intelligence, and runtime modules. Full tracked-file verification remains open because repository tree enumeration/code search was unavailable.
 - [x] Inspect `core/runtime/factory.py` and the provider-intelligence module at a first-pass level. Remaining storage callers, function-level call graph, and relevant tests still require inspection.
 - [ ] Inspect actual SQLite schema from a disposable copy, including indexes, foreign-key declarations, PRAGMA configuration, and representative row counts; do not inspect or mutate the user's live database without explicit approval.
 - [ ] Confirm catalog/runtime repository contracts and identify every caller that relies on internal commits.
-- [ ] Add a precise module/file dependency map and classify each direct DB access as retain, wrap, migrate, or remove.
+- [x] Add a first-pass module/file dependency map and classify the known direct DB access sites; finalize only after a complete tracked-file inventory.
 - [ ] Review and accept the storage/access matrices and draft contracts with the user.
 - [ ] Update this document from preliminary findings to reviewed/accepted only after all evidence and exit criteria are satisfied.
 
