@@ -161,6 +161,8 @@ class ToolRegistry:
         if not callable(handler) or not inspect.iscoroutinefunction(handler):
             raise TypeError("tool handlers must be async callables")
         _validate_schema_definition(definition.input_schema)
+        if definition.input_schema.get("type") != "object":
+            raise ToolSchemaDefinitionError("Tool input schema root must be an object.")
         if definition.output_schema is not None:
             _validate_schema_definition(definition.output_schema)
         key = (definition.tool_id, definition.version)
@@ -238,6 +240,7 @@ class ToolRegistry:
                 "operation": item.operation.value,
                 "risk_class": item.risk_class.value,
                 "requires_approval": item.requires_approval,
+                "input_schema": copy.deepcopy(item.input_schema),
             }
             for item in sorted(self._definitions.values(), key=lambda value: (value.tool_id, value.version))
             if item.enabled
