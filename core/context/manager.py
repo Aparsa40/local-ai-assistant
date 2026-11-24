@@ -39,9 +39,11 @@ class ContextManager:
         conversations: ConversationService,
         memory: MemoryService | None = None,
         token_budget: TokenBudgetPolicy | None = None,
+        knowledge: KnowledgeService | None = None,
     ) -> None:
         self.conversations = conversations
         self.memory = memory
+        self.knowledge = knowledge
         self.token_budget = token_budget or TokenBudgetPolicy()
 
     @staticmethod
@@ -58,7 +60,9 @@ class ContextManager:
             raise ContextValidationError("شناسه مالک معتبر نیست")
         for value, minimum, maximum, label in (
             (request.history_limit, 1, cls.MAX_HISTORY_LIMIT, "history_limit"),
-            (request.memory_limit, 1, cls.MAX_MEMORY_LIMIT, "memory_limit"),\n            (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
+            (request.memory_limit, 1, cls.MAX_MEMORY_LIMIT, "memory_limit"),
+            (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
+            (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
             (request.max_tokens, 32, cls.MAX_TOKEN_BUDGET, "max_tokens"),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
@@ -189,4 +193,5 @@ class ContextManager:
             estimated_tokens=estimated_tokens,
             token_budget=request.max_tokens,
             omitted_items=omitted,
+            knowledge_status="connected" if request.knowledge_scopes else "not_connected",
         )
