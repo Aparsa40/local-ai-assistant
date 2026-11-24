@@ -64,3 +64,13 @@ A dedicated execution plan should be added for each later phase before implement
 - **Experimental:** exists but is not yet a stable contract.
 
 If a document and current code differ, do not silently assume either is correct. Determine whether the document describes target architecture or current behavior, then update the appropriate status and record unresolved conflicts.
+
+
+## Phase execution plans (Phases 6–11)
+
+- [Phase 6 — Agent Runtime](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md)
+- [Phase 7 — Supervisor & Orchestrator](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md)
+- [Phase 8 — Conversation Agent](PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md)
+- [Phase 9 — Multi-Agent System](PHASE_09_MULTI_AGENT_EXECUTION_PLAN.md)
+- [Phase 10 — AI Librarian](PHASE_10_AI_LIBRARIAN_EXECUTION_PLAN.md)
+- [Phase 11 — Backup, Maintenance & Integrations](PHASE_11_BACKUP_MAINTENANCE_INTEGRATIONS_EXECUTION_PLAN.md)
