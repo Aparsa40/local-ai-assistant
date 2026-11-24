@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Partially complete — WP-4.1 through WP-4.6 implemented and validated; WP-4.7 Knowledge Storage & Migration remains pending  
+**Status:** Completed and merged — WP-4.1 through WP-4.7 implemented; PR #16 merged to `main` as `923ad244d91425cca50a64b4c683f62aa53b7fc0`  
 **Execution branches:** `feat/storage-memory-services` (WP-4.1–WP-4.4), `feat/phase-4-memory-service` (WP-4.5; stacked PR), and `feat/phase-4-context-manager` (WP-4.6; stacked PR)  
 **Last reviewed:** 2026-11-24
 
@@ -335,9 +335,9 @@ Tasks:
 9. Verify sessions, messages, profile, catalogs, runtime states, and runtime events are created and usable in a clean database.
 10. Document backup/restore prerequisites for future Phase 11 work.
 
-**Status:** Pending. No Knowledge Storage service, managed file adapter, lexical search foundation, or versioned migration framework is implemented yet.
+**Implementation status (2026-11-24):** Completed and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`). Added scoped Knowledge source lifecycle, `KnowledgeRepository`, default-deny `KnowledgeService`, managed file storage, file/source version references, extracted-artifact history, chunk metadata, SQLite FTS5 lexical retrieval, and explicit Knowledge retrieval integration in `ContextManager`. Four ordered schema revisions (`0001`–`0004`) cover legacy additive columns, Knowledge/FTS tables, managed-file version metadata, and repair/rebuild of FTS synchronization triggers. GitHub Actions on the merged head passed 228 tests, Python compilation, and frontend syntax validation. CI ran Python 3.11 on Ubuntu; a separate Windows smoke test has not been performed. SQLite is the only active migration backend; PostgreSQL migrations are not implemented. Extraction is an explicit upstream operation; automatic document ingestion, embeddings/vector search, and publication approval remain Phase 10 responsibilities.
 
-**Deliverables:** Knowledge Storage metadata foundation, managed file adapter contract, lexical search baseline where accepted, migration history, migration tests, and data-preservation report.
+**Deliverables:** Knowledge Storage metadata and managed-file implementation, FTS5 lexical search, migration history, migration tests, and ContextManager integration.
 
 **Exit gate:** migrations are repeatable and preserve existing records; source files and derived artifacts remain distinct and traceable.
 
@@ -482,4 +482,6 @@ Phase 4 is complete only when:
 **Project:** Local AI Assistant  
 **Phase:** 4 — Storage & Memory Services
 
-**Mandatory instruction:** This execution plan must be followed precisely for Local AI Assistant, Phase 4, in the order and boundaries defined above. Begin with WP-4.1 (Storage Audit & Contracts); do not start schema refactoring or implementation before the audit and contracts are reviewed. Preserve the behavior of Phases 2 and 3. The current disposable test database may be reset with the user's approval already recorded; do not claim that its rows are migrated. Do not skip work packages, weaken tests, invent successful migration results, or mark this phase complete until every phase-wide acceptance criterion has verifiable evidence.
+**Completion record:** Phase 4 WP-4.7 was implemented and merged by PR #16. The merged CI run passed 228 tests, Python compilation, and frontend JavaScript syntax validation. This records software/CI completion; it does not claim PostgreSQL migration support or a separate Windows smoke test.
+
+**Mandatory instruction:** This execution plan records the actual completed implementation for Local AI Assistant, Phase 4. Preserve the boundaries and limitations above when extending Storage, Memory, Context, or Knowledge. Begin with WP-4.1 (Storage Audit & Contracts); do not start schema refactoring or implementation before the audit and contracts are reviewed. Preserve the behavior of Phases 2 and 3. The current disposable test database may be reset with the user's approval already recorded; do not claim that its rows are migrated. Do not skip work packages, weaken tests, invent successful migration results, or mark this phase complete until every phase-wide acceptance criterion has verifiable evidence.
