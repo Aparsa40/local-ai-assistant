@@ -29,7 +29,7 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
 - **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
 - **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
-- **Permission Manager (Phase 5 implementation complete; PR pending):** default-deny exact-scope authorization, persisted grants, local-owner grant administration, one-time action-bound approvals, redacted audit APIs, and approval gates for session deletion, avatar deletion, and owned-runtime shutdown. The API is loopback/same-origin restricted; the fixed local principal is not authentication.
+- **Permission Manager (Phase 5 implementation complete and merged):** default-deny exact-scope authorization, persisted grants, local-owner grant administration, one-time action-bound approvals, redacted audit APIs, and approval gates for session deletion, avatar deletion, and owned-runtime shutdown. The API is loopback/same-origin restricted; the fixed local principal is not authentication.
 - **Tool Registry & Runtime (Phase 5 infrastructure implemented):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. Production handlers and model-generated tool-call orchestration are intentionally deferred to Agent Runtime (Phase 6).
 - **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
 - **SQLite persistence:** chat sessions, messages, profile data, catalogs, runtime observations, memories, Knowledge sources/files/artifacts/chunks, permission grants, approval requests, and redacted audit events are stored locally. Phase 4 adds ordered SQLite schema migrations `0001`–`0004`; PostgreSQL migrations are not implemented. Permission/approval/audit tables are currently registered through ORM metadata.
@@ -196,3 +196,21 @@ The current chat path still uses manual provider/model selection. Agent Runtime,
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+
+## Phase execution plans (Phases 6–11)
+
+- [Phase 6 — Agent Runtime](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md)
+- [Phase 7 — Supervisor & Orchestrator](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md)
+- [Phase 8 — Conversation Agent](PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md)
+- [Phase 9 — Multi-Agent System](PHASE_09_MULTI_AGENT_EXECUTION_PLAN.md)
+- [Phase 10 — AI Librarian](PHASE_10_AI_LIBRARIAN_EXECUTION_PLAN.md)
+- [Phase 11 — Backup, Maintenance & Integrations](PHASE_11_BACKUP_MAINTENANCE_INTEGRATIONS_EXECUTION_PLAN.md)
+
+
+## Phase 4–5 merge record
+
+- Phase 4 WP-4.7 and Phase 5 operational authorization/Knowledge integration are merged into `main`.
+- Phase 5 completion PR: [#17](https://github.com/Aparsa40/local-ai-assistant/pull/17), squash merge commit `22ac914163afb35778e27f52f774630919d9272d`.
+- CI for the merged implementation passed (235 tests; Python compile and frontend syntax checks). A separate Windows HTTP smoke test remains outstanding.
+- Phases 6–11 have authoritative execution plans; these phases remain **planned**, not implemented.

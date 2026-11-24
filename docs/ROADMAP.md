@@ -249,3 +249,13 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 - External services remain optional and are never the only copy of project knowledge.
 - Every phase requires implementation evidence, tests, documentation, and acceptance review.
 - Do not merge pull requests or alter repository protections without explicit authorization.
+
+
+## Phase execution plans (Phases 6–11)
+
+- [Phase 6 — Agent Runtime](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md)
+- [Phase 7 — Supervisor & Orchestrator](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md)
+- [Phase 8 — Conversation Agent](PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md)
+- [Phase 9 — Multi-Agent System](PHASE_09_MULTI_AGENT_EXECUTION_PLAN.md)
+- [Phase 10 — AI Librarian](PHASE_10_AI_LIBRARIAN_EXECUTION_PLAN.md)
+- [Phase 11 — Backup, Maintenance & Integrations](PHASE_11_BACKUP_MAINTENANCE_INTEGRATIONS_EXECUTION_PLAN.md)
