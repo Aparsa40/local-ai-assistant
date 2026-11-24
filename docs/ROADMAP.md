@@ -18,7 +18,7 @@ The repository currently contains a FastAPI backend, lightweight Alpine.js brows
 
 The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
 
-Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 PR #15 delivered the core foundation; the remaining local-owner grant/approval APIs, Knowledge permission adapter, destructive-action approval, and final security regression are implemented on `feat/phase-5-operational-authorization`; latest CI passed 235 tests and its PR/merge is pending. Hosted authentication, encrypted credential storage, production tool handlers, and PostgreSQL migrations remain unimplemented. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
+Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 PR #15 delivered the core foundation; the remaining local-owner grant/approval APIs, Knowledge permission adapter, destructive-action approval, and final security regression are implemented on `feat/phase-5-operational-authorization`; latest CI passed 235 tests and its PR/merge is pending. Phase 6 is implemented on `feat/phase-6-agent-runtime` (PR/merge pending): one bounded builtin knowledge-analysis agent, deterministic run lifecycle with checkpoint/restart recovery, budget-bounded execution through ToolRuntime and PermissionManager, and loopback-only lifecycle APIs. Hosted authentication, encrypted credential storage, general production tool handler coverage, further autonomous-agent behaviors, and PostgreSQL migrations remain unimplemented. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## Phase 1 — Architecture & Contracts Foundation
 
@@ -81,7 +81,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 **Exit criteria:** lifecycle behavior is provider-neutral, bounded, accurately verified, safely persisted, and regression-tested.
 
-**Completion evidence:** PR #7 merged with commit `d30621e85f7f58096f57cf0e40f7dace23a60b21`; PR CI recorded 109 passing tests. Windows smoke checks verified local connectivity, inventory, inspection, and process ownership. The Qwen 0.5B load attempt was hardware-constrained on the observed 4 GB RAM / mechanical-HDD machine; larger models were deliberately not attempted. This is an environment validation gap, not a demonstrated code defect. Do not repeat resource-intensive tests on that machine.
+**Completion evidence:** PR #7 merged with commit `d30621e85f7f58096f57cf0e40f7dace23a60b21`; PR CI recorded 109 passing tests. Windows smoking checks verified local connectivity, inventory, inspection, and process ownership. The Qwen 0.5B load attempt was hardware-constrained on the observed 4 GB RAM / mechanical-HDD machine; larger models were deliberately not attempted. This is an environment validation gap, not a demonstrated code defect. Do not repeat resource-intensive tests on that machine.
 
 ## Phase 4 — Storage & Memory Services
 
@@ -139,9 +139,12 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 6 — Agent Runtime
 
-**Status:** Planned.
+**Status:** Implementation complete on `feat/phase-6-agent-runtime`; PR/merge pending.
 
 **Goal:** Host bounded goal-oriented agents with deterministic lifecycle and state management.
+
+**Execution plan:** [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md)  
+**Module contract:** [AGENT_RUNTIME.md](AGENT_RUNTIME.md)
 
 **Core deliverables:**
 - Versioned Agent, Task, Run, State, Input, Output, and Completion Criteria contracts.
@@ -152,6 +155,8 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 - One initial specialized agent with no autonomous external side effects.
 
 **Exit criteria:** one agent completes a bounded task, preserves state, stops safely, and passes deterministic lifecycle and permission tests.
+
+**Completion evidence:** the branch implements WP-6.1 through WP-6.8: typed contracts and transition table; migration `0005_agent_runtime` with agent repositories; trusted registry and deterministic lifecycle with executor exclusivity and restart recovery; scoped permission-checked context and exact per-run capability grants; a budget-bounded execution controller using InterfaceManager for models and ToolRuntime for tools; loopback-only lifecycle APIs and a minimal run-status UI; and the builtin deterministic `knowledge-analyzer` agent with regression suites. The authoring environment could not execute Python locally; compile, full pytest, and frontend syntax validation run in CI, and the pull request records this as pending CI evidence. This is one bounded agent, not a general autonomous-agent platform; Supervisor and multi-agent behavior remain Phases 7/9.
 
 ## Phase 7 — Supervisor & Orchestrator
 
