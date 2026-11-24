@@ -82,6 +82,7 @@ Important documents:
 - [Phase 5 execution plan](docs/PHASE_05_EXECUTION_PLAN.md)
 - [Permissions](docs/PERMISSIONS.md)
 - [Tool Runtime](docs/TOOL_RUNTIME.md)
+- [Knowledge Storage](docs/KNOWLEDGE_STORAGE.md)
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
