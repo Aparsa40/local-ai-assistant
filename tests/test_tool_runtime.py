@@ -113,6 +113,7 @@ def _runtime(db_session, definition, handler, *, requires_approval=False, audit=
     audit_service = audit or AuditService(AuditRepository(db_session))
     approvals = ApprovalService(
         ApprovalRepository(db_session),
+        AuditService(AuditRepository(db_session)),
         decision_policy=AllowOwnerApprovalPolicy(),
     )
     runtime = ToolRuntime(registry, manager, audit_service, approval_service=approvals)
