@@ -65,6 +65,20 @@ class ToolRuntime:
             raise RuntimeError("Approval service is unavailable.")
         definition, input_data = self.registry.validate_call(request)
         decision = self.permission_manager.authorize(request.access_request)
+        self.audit_service.record(
+            event_type="permission_decision",
+            request_id=request.access_request.request_id,
+            outcome=decision.effect.value,
+            subject=request.access_request.subject,
+            resource=request.access_request.resource,
+            operation=request.access_request.operation,
+            metadata={
+                "tool_id": definition.tool_id,
+                "reason_code": decision.reason_code,
+                "grant_id": decision.grant_id or "",
+                "decision": decision.effect.value,
+            },
+        )
         if decision.effect is DecisionEffect.DENY:
             raise PermissionError("The tool action is not authorized.")
         if not (definition.requires_approval or decision.effect is DecisionEffect.REQUIRE_APPROVAL):
@@ -257,21 +271,30 @@ class ToolRuntime:
             )
         except asyncio.TimeoutError:
             duration_ms = max(0, int((time.monotonic() - started) * 1000))
-            self.audit_service.record(
-                event_type="tool_execution",
-                request_id=request_id,
-                outcome="timed_out",
-                subject=access.subject,
-                resource=access.resource,
-                operation=access.operation,
-                metadata={
-                    "tool_id": definition.tool_id,
-                    "tool_version": definition.version,
-                    "duration_ms": duration_ms,
-                    "timeout_ms": definition.timeout_seconds * 1000,
-                    "exception_type": "TimeoutError",
-                },
-            )
+            try:
+                self.audit_service.record(
+                    event_type="tool_execution",
+                    request_id=request_id,
+                    outcome="timed_out",
+                    subject=access.subject,
+                    resource=access.resource,
+                    operation=access.operation,
+                    metadata={
+                        "tool_id": definition.tool_id,
+                        "tool_version": definition.version,
+                        "duration_ms": duration_ms,
+                        "timeout_ms": definition.timeout_seconds * 1000,
+                        "exception_type": "TimeoutError",
+                    },
+                )
+            except Exception:
+                return ToolExecutionResult(
+                    False, definition.tool_id, definition.version, request_id,
+                    error_category="audit_persistence_failed",
+                    error_message="The tool timed out and its audit event could not be persisted.",
+                    duration_ms=duration_ms,
+                    side_effect_may_have_occurred=definition.risk_class is not ToolRiskClass.READ_ONLY,
+                )
             return ToolExecutionResult(
                 False, definition.tool_id, definition.version, request_id,
                 error_category="tool_timeout",
@@ -281,20 +304,29 @@ class ToolRuntime:
             )
         except ToolInputValidationError as exc:
             duration_ms = max(0, int((time.monotonic() - started) * 1000))
-            self.audit_service.record(
-                event_type="tool_execution",
-                request_id=request_id,
-                outcome="invalid_output",
-                subject=access.subject,
-                resource=access.resource,
-                operation=access.operation,
-                metadata={
-                    "tool_id": definition.tool_id,
-                    "tool_version": definition.version,
-                    "duration_ms": duration_ms,
-                    "exception_type": type(exc).__name__,
-                },
-            )
+            try:
+                self.audit_service.record(
+                    event_type="tool_execution",
+                    request_id=request_id,
+                    outcome="invalid_output",
+                    subject=access.subject,
+                    resource=access.resource,
+                    operation=access.operation,
+                    metadata={
+                        "tool_id": definition.tool_id,
+                        "tool_version": definition.version,
+                        "duration_ms": duration_ms,
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+            except Exception:
+                return ToolExecutionResult(
+                    False, definition.tool_id, definition.version, request_id,
+                    error_category="audit_persistence_failed",
+                    error_message="The tool output was invalid and its audit event could not be persisted.",
+                    duration_ms=duration_ms,
+                    side_effect_may_have_occurred=definition.risk_class is not ToolRiskClass.READ_ONLY,
+                )
             return ToolExecutionResult(
                 False, definition.tool_id, definition.version, request_id,
                 error_category="tool_output_invalid",
@@ -303,15 +335,18 @@ class ToolRuntime:
                 side_effect_may_have_occurred=definition.risk_class is not ToolRiskClass.READ_ONLY,
             )
         except asyncio.CancelledError:
-            self.audit_service.record(
-                event_type="tool_execution",
-                request_id=request_id,
-                outcome="cancelled",
-                subject=access.subject,
-                resource=access.resource,
-                operation=access.operation,
-                metadata={"tool_id": definition.tool_id, "exception_type": "CancelledError"},
-            )
+            try:
+                self.audit_service.record(
+                    event_type="tool_execution",
+                    request_id=request_id,
+                    outcome="cancelled",
+                    subject=access.subject,
+                    resource=access.resource,
+                    operation=access.operation,
+                    metadata={"tool_id": definition.tool_id, "exception_type": "CancelledError"},
+                )
+            except Exception:
+                pass
             raise
         except Exception as exc:
             duration_ms = max(0, int((time.monotonic() - started) * 1000))
