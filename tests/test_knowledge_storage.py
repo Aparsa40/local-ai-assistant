@@ -19,7 +19,7 @@ from core.migrations import CURRENT_SCHEMA_REVISION, run_migrations
 
 class AllowKnowledgeScope:
     def authorize(self, scope_type: str, scope_id: str, owner_id: str, action: str) -> bool:
-        return scope_type == "user" and scope_id == "profile-1" and owner_id == "owner-a"
+        return scope_type == "user" and scope_id in {"profile-1", "profile-2"} and owner_id == "owner-a"
 
 
 def make_service(tmp_path: Path):
@@ -107,7 +107,7 @@ def test_original_files_are_stored_under_opaque_keys_and_read_only_in_scope(tmp_
         assert record.original_filename == "private.txt"
         assert record.storage_key not in record.original_filename
         assert service.read_original_file(scope, record.id) == b"original bytes"
-        with pytest.raises(Exception):
+        with pytest.raises(KnowledgeAccessDeniedError):
             service.read_original_file(KnowledgeScope("user", "other", "owner-a"), record.id)
     finally:
         session.close()
