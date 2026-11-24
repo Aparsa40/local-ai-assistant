@@ -191,3 +191,30 @@ def test_matching_grant_can_require_separate_human_approval(db_session) -> None:
     assert decision.effect.value == "require_approval"
     assert decision.reason_code == "matching_grant_requires_approval"
     assert decision.grant_id == grant.grant_id
+
+
+
+def test_permission_store_failure_fails_closed() -> None:
+    class BrokenStore:
+        def list_exact(self, *args):
+            raise RuntimeError("database details")
+
+    decision = PermissionManager(BrokenStore()).authorize(_request())
+
+    assert decision.effect.value == "deny"
+    assert decision.reason_code == "policy_store_error"
+
+
+def test_permission_manager_rejects_grant_issuer_identity_mismatch(db_session) -> None:
+    request = _request()
+    grant = _grant(request)
+    manager = PermissionManager(
+        PermissionRepository(db_session),
+        grant_policy=AllowOwnerGrantPolicy(),
+    )
+
+    with pytest.raises(PermissionManagementDeniedError, match="identity does not match"):
+        manager.issue_grant(
+            grant,
+            issuer=PermissionSubject(SubjectType.USER, "different-owner"),
+        )
