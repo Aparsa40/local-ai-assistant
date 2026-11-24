@@ -133,13 +133,32 @@ def test_migrations_are_versioned_idempotent_and_upgrade_legacy_columns(tmp_path
         with engine.begin() as connection:
             connection.execute(text("CREATE TABLE sessions (id INTEGER PRIMARY KEY)"))
             connection.execute(text("CREATE TABLE provider_runtime_status (provider_id VARCHAR(80) PRIMARY KEY)"))
+            connection.execute(text("INSERT INTO sessions(id) VALUES (41)"))
+            connection.execute(text("INSERT INTO provider_runtime_status(provider_id) VALUES ('ollama')"))
             # Migration runner requires Knowledge ORM tables to be present, as init_db creates them.
             Base.metadata.create_all(bind=connection)
         assert run_migrations(engine) == CURRENT_SCHEMA_REVISION
         assert run_migrations(engine) == CURRENT_SCHEMA_REVISION
         assert "title_is_custom" in {c["name"] for c in inspect(engine).get_columns("sessions")}
         assert "runtime_details" in {c["name"] for c in inspect(engine).get_columns("provider_runtime_status")}
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT id FROM sessions")).scalar_one() == 41
+            assert connection.execute(text("SELECT provider_id FROM provider_runtime_status")).scalar_one() == "ollama"
         revisions = engine.connect().execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
         assert revisions == 2
+    finally:
+        engine.dispose()
+
+
+def test_migrations_bootstrap_knowledge_schema_on_a_fresh_database():
+    engine = create_engine("sqlite://")
+    try:
+        assert run_migrations(engine) == CURRENT_SCHEMA_REVISION
+        tables = set(inspect(engine).get_table_names())
+        assert {"schema_migrations", "knowledge_sources", "knowledge_files", "knowledge_chunks", "knowledge_artifacts"} <= tables
+        with engine.connect() as connection:
+            revisions = connection.execute(text("SELECT revision FROM schema_migrations ORDER BY revision")).scalars().all()
+            assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts"]
+            assert connection.execute(text("SELECT COUNT(*) FROM knowledge_chunks_fts")).scalar_one() == 0
     finally:
         engine.dispose()
