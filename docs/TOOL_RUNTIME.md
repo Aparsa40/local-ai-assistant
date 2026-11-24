@@ -1,0 +1,62 @@
+# Tool Runtime
+
+**Project:** Local AI Assistant  
+**Phase:** 5 of 11 — Tool Runtime & Permission Manager  
+**Status:** Tool Registry implemented; Tool Gateway/Runtime execution is pending WP-5.5.
+
+## 1. Security boundary
+
+A model-generated tool call is an untrusted proposal, not an authorization. Only application code may register a tool handler. Tool definitions do not grant access. Every invocation must eventually pass through Tool Runtime, which validates the request, asks PermissionManager for an exact-scope decision, consumes a required approval, executes within limits, normalizes the result, and records audit events.
+
+No shell, arbitrary Python, unrestricted filesystem, browser/computer-control, or unrestricted network handlers are registered by this phase baseline.
+
+## 2. Implemented registry contracts
+
+- `ToolDefinition`: stable tool ID, semantic version, JSON input/output schemas, resource type, operation, risk class, timeout, input/output byte limits, approval requirement, and enabled state.
+- `ToolCallRequest`: tool ID/version, typed AccessRequest, JSON input object, and optional approval ID.
+- `ToolRiskClass`: `read_only`, `mutating`, `destructive`, and `external_side_effect`.
+- `ToolRegistry`: explicit registration, duplicate rejection, enabled-state check, request validation, and a public metadata catalog.
+
+A handler is registered by trusted application code and stored separately from its public tool metadata. The public catalog does not expose handlers or raw schema internals.
+
+## 3. Input schema policy
+
+The registry supports a deliberately restricted JSON Schema subset:
+
+- Types: object, array, string, integer, number, boolean, null.
+- Object: properties, required, and explicit additionalProperties behavior.
+- Array: item schema and minimum/maximum item count.
+- String: minimum/maximum length.
+- Number/integer: minimum/maximum values.
+- Enum: bounded allowed values.
+
+Unsupported keywords (including remote/local references and arbitrary schema extensions) are rejected. Nested schema depth, property count, schema size, input size, and tool execution bounds are limited. Unknown object properties are rejected by default.
+
+## 4. Risk and approval rules
+
+- Read-only tools must declare the read operation.
+- Mutating tools are limited to create/update operations.
+- Destructive tools must declare delete and require explicit approval.
+- External side-effect tools must declare publish/transmit and require explicit approval.
+- Tool definitions cannot disable the central permission decision or issue grants.
+
+## 5. Runtime sequence (WP-5.5 target)
+
+1. Resolve exact tool ID and version from the trusted registry.
+2. Validate the typed AccessRequest and complete input schema.
+3. Verify resource type and operation match the registered definition.
+4. Evaluate PermissionManager; deny on any missing, invalid, expired, revoked, or unsupported grant.
+5. If required, consume the one-time approval bound to the same request and canonical action hash.
+6. Invoke the registered handler within its timeout and input/output limits.
+7. Validate/normalize the result; do not expose raw exceptions or credentials.
+8. Persist correlated redacted audit events.
+
+The runtime must not retry a denied action through another tool. If required audit persistence fails before a side effect, execution must stop. Cancellation and timeout behavior must not falsely report success.
+
+## 6. Current limitations
+
+- Tool Registry exists, but no production tool handlers are registered by this work package.
+- Tool Runtime/Gateway execution is not implemented until WP-5.5.
+- Tool schemas and registration are not a sandbox. Handler code remains trusted application code and must use narrow injected capabilities.
+- No general-purpose shell, arbitrary code execution, unrestricted file access, or external connector is provided.
+- Hosted authentication and a credential vault are not implemented.
