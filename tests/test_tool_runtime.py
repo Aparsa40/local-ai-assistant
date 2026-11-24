@@ -13,6 +13,8 @@ from core.permissions.audit import AuditPersistenceError, AuditService
 from core.permissions.manager import PermissionManager
 from core.permissions.types import (
     AccessRequest,
+    DecisionEffect,
+    PermissionDecision,
     PermissionGrant,
     PermissionOperation,
     PermissionResource,
@@ -264,3 +266,27 @@ def test_runtime_reports_post_execution_audit_failure_without_claiming_no_side_e
 
     assert result.error_category == "audit_persistence_failed"
     assert result.side_effect_may_have_occurred is True
+
+
+
+def test_runtime_rechecks_permission_before_invoking_handler(db_session) -> None:
+    definition = _definition()
+    called = []
+    async def handler(data):
+        called.append(True)
+        return {"result": "must-not-run"}
+    runtime, request, _approvals, _audit = _runtime(db_session, definition, handler)
+
+    class RevokedBetweenChecks:
+        calls = 0
+        def authorize(self, access_request):
+            self.calls += 1
+            effect = DecisionEffect.ALLOW if self.calls == 1 else DecisionEffect.DENY
+            reason = "matching_active_grant" if self.calls == 1 else "grant_revoked"
+            return PermissionDecision(effect, reason, access_request.request_id)
+
+    runtime.permission_manager = RevokedBetweenChecks()
+    result = asyncio.run(runtime.execute(request))
+
+    assert result.error_category == "permission_denied"
+    assert called == []
