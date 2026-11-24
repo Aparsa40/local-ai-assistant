@@ -29,10 +29,10 @@ The long-term direction is a provider-agnostic assistant with controlled knowled
 - **Storage Manager & Repository Services:** centralized SQLite lifecycle, explicit transaction boundaries, and domain repositories for catalog, runtime, profile, sessions, messages, and memories.
 - **Conversation & Profile Services:** application-owned conversation/message persistence and profile/avatar validation, now guarded by explicit permission contexts.
 - **Memory & Context Services:** scoped candidate/active memory lifecycle, provenance, retention, deterministic retrieval, bounded conversation history, and token-budgeted context assembly. Memory access remains default-deny unless an explicit policy is injected.
-- **Permission Manager (Phase 5 in progress):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
-- **Tool Registry & Runtime (Phase 5 in progress):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
+- **Permission Manager (Phase 5 foundation merged; final integration/acceptance in progress):** typed subjects/resources/operations/scopes, exact-scope persisted grants, expiry/revocation, default-deny decisions, one-time action-bound approvals, and redacted append-only audit events.
+- **Tool Registry & Runtime (Phase 5 foundation merged; production tool registration and orchestration integration are future work):** explicit versioned tool registration, restricted JSON-schema validation, risk classification, approval gates, async bounded execution, output limits, and normalized errors. No arbitrary shell/Python or unrestricted file/network tools are registered.
 - **Local API boundary:** settings, provider, runtime, profile, session, and chat APIs require loopback clients and a fixed local single-user principal. This is not user authentication; do not expose the application through a LAN, reverse proxy, or public network.
-- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, intelligence reports, permission grants, approval requests, and redacted audit events are stored locally. Phase 5 tables are additive through SQLAlchemy metadata initialization; versioned migrations remain pending in Phase 4 WP-4.7.
+- **SQLite persistence:** chat sessions, messages, profile data, operator manifests, curated model profiles, live model catalogs and model metadata, provider/model runtime status, quota snapshots, catalog sync history, intelligence reports, permission grants, approval requests, and redacted audit events are stored locally. Phase 4 now includes ordered SQLite schema migrations (`0001`–`0004`) for Knowledge and legacy schema evolution; PostgreSQL migrations are not implemented.
 
 ## Project structure
 
@@ -85,7 +85,7 @@ Important documents:
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.6 are implemented and validated; WP-4.7 Knowledge Storage & versioned Migration remains pending. Phase 5 is in progress in PR #15; WP-5.1–WP-5.6 are implemented and CI-validated, while WP-5.7 final security regression and documentation acceptance remains. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 PR #15 is merged, but the phase is not yet declared complete: grant/approval administration surfaces, Knowledge authorization integration, destructive-action approval coverage, and final security regression/documentation acceptance remain. Read the relevant module contract before changing that area.
 
 ## Requirements
 
@@ -182,10 +182,12 @@ The following target capabilities are **not yet implemented as complete systems*
 - Automatic task-based routing and LLM Supervisor.
 - Unified Conversation Processing with explicit online/offline engines.
 - Response Validator & Composer.
-- Permission Manager and permissioned Tool Runtime.
+- Production tool handlers and model/agent tool-call orchestration; the registry/runtime infrastructure exists, but Phase 6 must supply the agent execution integration.
+- Operational grant administration and approval review endpoints/UI, and complete approval mediation for direct destructive API operations (Phase 5 remaining work).
+- Central Permission Manager adapter integration for Knowledge reads/writes (Phase 5 remaining work).
 - External connector framework and Discord synchronization.
-- Document ingestion, AI Librarian, approved shared knowledge, and model-private memory lifecycle.
-- Full repository/migration architecture for SQLite and PostgreSQL.
+- Automated document ingestion, AI Librarian, approved shared knowledge publication, and model-private memory lifecycle.
+- PostgreSQL migration adapter; current versioned migration implementation targets SQLite only.
 - Authentication and hosted multi-user security.
 
 The current chat path still uses manual provider/model selection. Agent Runtime, automatic task routing, and Multi-Agent execution are not implemented yet. The application does not implement user authentication. Do not expose the current development server to an untrusted network.
