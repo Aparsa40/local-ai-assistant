@@ -57,7 +57,7 @@ class KnowledgeService:
 
     SOURCE_TYPES = {"file", "url", "text", "manual"}
     MAX_TEXT_CHARS = 5_000_000
-    SECRET_PATTERN = re.compile(r"(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)\s*[:=]")
+    SECRET_PATTERN = re.compile(r"""(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)["']?\s*[:=]""")
 
     def __init__(
         self,
@@ -75,9 +75,9 @@ class KnowledgeService:
     def _validate_scope(scope: KnowledgeScope) -> None:
         if not isinstance(scope, KnowledgeScope):
             raise KnowledgeValidationError("An explicit KnowledgeScope is required")
-        if scope.scope_type not in {"user", "conversation", "task", "global"}:
+        if not isinstance(scope.scope_type, str) or scope.scope_type not in {"user", "conversation", "task", "global"}:
             raise KnowledgeValidationError("Unsupported Knowledge scope type")
-        if not scope.scope_id.strip() or not scope.owner_id.strip():
+        if not isinstance(scope.scope_id, str) or not isinstance(scope.owner_id, str) or not scope.scope_id.strip() or not scope.owner_id.strip():
             raise KnowledgeValidationError("Knowledge scope and owner identifiers are required")
 
     def _authorize(self, scope: KnowledgeScope, action: str) -> None:
@@ -116,7 +116,7 @@ class KnowledgeService:
             metadata_text = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
         except (TypeError, ValueError) as exc:
             raise KnowledgeValidationError("Source metadata must be JSON-serializable") from exc
-        if self.SECRET_PATTERN.search(metadata_text) or (uri and self.SECRET_PATTERN.search(uri)):
+        if self.SECRET_PATTERN.search(metadata_text) or (uri and (self.SECRET_PATTERN.search(uri) or re.search(r"://[^/@:]+:[^/@]+@", uri))):
             raise KnowledgeValidationError("Credential-like material cannot be stored in Knowledge metadata")
         source = KnowledgeSourceRecord(
             id=uuid4().hex,
