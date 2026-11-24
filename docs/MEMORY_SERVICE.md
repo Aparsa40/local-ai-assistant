@@ -82,7 +82,7 @@ python -m compileall -q core main.py
 node --check static/app.js
 ```
 
-WP-4.5 is accepted only after focused and full regression checks pass and exact results are recorded in the phase execution plan.
+GitHub Actions has passed the full suite (131 tests), Python compilation, and frontend syntax check for the current implementation. WP-4.5 is not accepted until the user-local focused and full regression checks also pass and exact results are recorded in the phase execution plan.
 
 ## 9. Execution directive
 
