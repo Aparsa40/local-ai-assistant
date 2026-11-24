@@ -79,12 +79,12 @@ class CatalogRepository(BaseRepository):
         return len(manifests)
 
     def sync_live_models(
-    self,
-    provider_id: str,
-    model_ids: list[str],
-    source: str = "provider_api",
-    model_metadata: dict[str, dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+        self,
+        provider_id: str,
+        model_ids: list[str],
+        source: str = "provider_api",
+        model_metadata: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """Persist a successful model discovery without erasing historical records."""
         now = utcnow_naive()
         normalized_ids = list(dict.fromkeys(str(item).strip() for item in model_ids if str(item).strip()))
@@ -206,13 +206,13 @@ class CatalogRepository(BaseRepository):
         self.db.commit()
 
     def record_model_runtime(
-    self,
-    provider_id: str,
-    model_id: str,
-    availability: str,
-    error: dict[str, Any] | None = None,
-    observed_limits: dict[str, Any] | None = None,
-) -> None:
+        self,
+        provider_id: str,
+        model_id: str,
+        availability: str,
+        error: dict[str, Any] | None = None,
+        observed_limits: dict[str, Any] | None = None,
+    ) -> None:
         row = self.db.get(ModelRuntimeStatus, (provider_id, model_id))
         if row is None:
             row = ModelRuntimeStatus(provider_id=provider_id, model_id=model_id)
