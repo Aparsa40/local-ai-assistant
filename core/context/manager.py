@@ -5,6 +5,7 @@ from __future__ import annotations
 from core.conversations.service import ConversationService
 from core.memory.service import MemoryService
 from core.memory.types import MemoryScope
+from core.knowledge.service import KnowledgeScope, KnowledgeService
 
 from .ranking import conversation_recency_score, presentation_key, selection_key
 from .schemas import ContextItem, ContextPackage, ContextRequest
@@ -30,6 +31,7 @@ class ContextManager:
     MAX_HISTORY_LIMIT = 100
     MAX_MEMORY_LIMIT = 50
     MAX_MEMORY_SCOPES = 10
+    MAX_KNOWLEDGE_SCOPES = 10
     MAX_TOKEN_BUDGET = 32000
 
     def __init__(
@@ -56,7 +58,7 @@ class ContextManager:
             raise ContextValidationError("شناسه مالک معتبر نیست")
         for value, minimum, maximum, label in (
             (request.history_limit, 1, cls.MAX_HISTORY_LIMIT, "history_limit"),
-            (request.memory_limit, 1, cls.MAX_MEMORY_LIMIT, "memory_limit"),
+            (request.memory_limit, 1, cls.MAX_MEMORY_LIMIT, "memory_limit"),\n            (request.knowledge_limit, 1, cls.MAX_MEMORY_LIMIT, "knowledge_limit"),
             (request.max_tokens, 32, cls.MAX_TOKEN_BUDGET, "max_tokens"),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
@@ -65,7 +67,7 @@ class ContextManager:
             raise ContextValidationError("include_candidates باید مقدار بولی داشته باشد")
         if not isinstance(request.memory_scopes, tuple) or len(request.memory_scopes) > cls.MAX_MEMORY_SCOPES:
             raise ContextValidationError("memory_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")
-        seen: set[tuple[str, str, str]] = set()
+        if not isinstance(request.knowledge_scopes, tuple) or len(request.knowledge_scopes) > cls.MAX_KNOWLEDGE_SCOPES:\n            raise ContextValidationError("knowledge_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")\n        seen_knowledge: set[tuple[str, str, str]] = set()\n        for scope in request.knowledge_scopes:\n            if not isinstance(scope, KnowledgeScope):\n                raise ContextValidationError("هر محدوده دانش باید از نوع KnowledgeScope باشد")\n            if scope.owner_id != request.owner_id:\n                raise ContextValidationError("مالک محدوده دانش با مالک درخواست یکسان نیست")\n            key = (scope.scope_type, scope.scope_id, scope.owner_id)\n            if key in seen_knowledge:\n                raise ContextValidationError("محدوده دانش تکراری است")\n            seen_knowledge.add(key)\n        seen: set[tuple[str, str, str]] = set()
         for scope in request.memory_scopes:
             if not isinstance(scope, MemoryScope):
                 raise ContextValidationError("هر محدوده حافظه باید از نوع MemoryScope باشد")
@@ -120,7 +122,7 @@ class ContextManager:
         if request.memory_scopes and self.memory is None:
             raise ContextConfigurationError("Memory Service برای محدوده‌های درخواستی پیکربندی نشده است")
 
-        memory_items: list[ContextItem] = []
+        if request.knowledge_scopes and self.knowledge is None:\n            raise ContextConfigurationError("Knowledge Storage برای محدوده‌های درخواستی پیکربندی نشده است")\n\n        memory_items: list[ContextItem] = []
         if self.memory is not None:
             for scope in request.memory_scopes:
                 results = self.memory.retrieve(
@@ -153,7 +155,7 @@ class ContextManager:
                         )
                     )
 
-        # Apply one aggregate memory limit across all explicitly supplied scopes.
+        knowledge_items: list[ContextItem] = []\n        if self.knowledge is not None:\n            for scope in request.knowledge_scopes:\n                for result in self.knowledge.search(scope, query, limit=request.knowledge_limit):\n                    knowledge_items.append(\n                        ContextItem(\n                            source_type="knowledge",\n                            source_ref=f"knowledge:{result.source_id}:chunk:{result.chunk_id}",\n                            content=result.content,\n                            relevance_score=1.0 / (1.0 + abs(result.rank)),\n                            trust_status="source_unreviewed",\n                            provenance={\n                                "source": "knowledge_storage",\n                                "source_id": result.source_id,\n                                "source_title": result.title,\n                                "source_type": result.source_type,\n                                "source_uri": result.uri,\n                                "chunk_id": result.chunk_id,\n                            },\n                        )\n                    )\n\n        knowledge_items.sort(key=selection_key)\n        omitted += max(0, len(knowledge_items) - request.knowledge_limit)\n        knowledge_items = knowledge_items[:request.knowledge_limit]\n\n        # Apply one aggregate memory limit across all explicitly supplied scopes.
         memory_items.sort(key=selection_key)
         omitted = max(0, len(memory_items) - request.memory_limit)
         memory_items = memory_items[:request.memory_limit]
@@ -161,7 +163,7 @@ class ContextManager:
         # Prefer memory provenance for exact duplicates rather than shadowing it with chat.
         deduplicated: list[ContextItem] = []
         seen_content: set[str] = set()
-        for item in memory_items + candidates:
+        for item in memory_items + knowledge_items + candidates:
             normalized = self._normalize(item.content)
             if normalized in seen_content:
                 continue
