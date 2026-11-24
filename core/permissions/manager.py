@@ -16,6 +16,10 @@ from .types import (
 )
 
 
+class PermissionPolicy(Protocol):
+    def evaluate(self, request: AccessRequest) -> PermissionDecision | None: ...
+
+
 class PermissionGrantStore(Protocol):
     def create(self, grant: PermissionGrant) -> PermissionGrant: ...
     def get(self, grant_id: str) -> PermissionGrant | None: ...
@@ -40,16 +44,32 @@ class PermissionManager:
         repository: PermissionGrantStore | PermissionRepository | None = None,
         *,
         grant_policy: GrantAdministrationPolicy | None = None,
+        policies: tuple[PermissionPolicy, ...] = (),
         clock=None,
     ) -> None:
         self.repository = repository
         self.grant_policy = grant_policy or DenyAllGrantAdministrationPolicy()
+        self.policies = tuple(policies)
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
     def authorize(self, request: AccessRequest) -> PermissionDecision:
         """Evaluate one immutable request; unexpected storage failures fail closed."""
         if not isinstance(request, AccessRequest):
             raise TypeError("request must be an AccessRequest")
+
+        for policy in self.policies:
+            try:
+                decision = policy.evaluate(request)
+            except Exception:
+                return PermissionDecision(
+                    DecisionEffect.DENY, "policy_evaluation_error", request.request_id
+                )
+            if decision is not None:
+                if not isinstance(decision, PermissionDecision) or decision.request_id != request.request_id:
+                    return PermissionDecision(
+                        DecisionEffect.DENY, "invalid_policy_decision", request.request_id
+                    )
+                return decision
 
         if self.repository is None:
             return PermissionDecision(
