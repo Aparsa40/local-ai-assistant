@@ -57,7 +57,7 @@ class KnowledgeService:
 
     SOURCE_TYPES = {"file", "url", "text", "manual"}
     MAX_TEXT_CHARS = 5_000_000
-    SECRET_PATTERN = re.compile(r"(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)\\s*[:=]")
+    SECRET_PATTERN = re.compile(r"(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)\s*[:=]")
 
     def __init__(
         self,
