@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11 — Storage & Memory Services  
 **Work package:** WP-4.1 — Storage Audit & Contracts  
-**Status:** WP-4.1 complete — working contracts accepted; WP-4.3 implementation in progress  
+**Status:** WP-4.1 baseline accepted; WP-4.2–WP-4.4 validated; WP-4.5 implementation in progress  
 **Branch:** `feat/storage-memory-services`  
 **Baseline:** `main` after PR #9  
 **Last reviewed:** 2026-11-24
@@ -411,3 +411,26 @@ The repository layer has been introduced without changing the current table sche
 - Added service-level regression tests; existing profile/session API regression tests remain part of the validation suite.
 
 **Pending acceptance evidence:** run focused service/API tests, the complete pytest suite, Python compilation, and frontend syntax check on the local branch. Do not mark WP-4.4 complete until those results are recorded.
+
+
+## WP-4.5 — Memory Service implementation snapshot (2026-11-24)
+
+**Status:** Implemented on the stacked branch `feat/phase-4-memory-service`; local validation pending.
+
+The original WP-4.1 inventory contained 14 ORM tables. WP-4.5 introduces the first approved memory-owned table, `memories`, bringing the current ORM model count to 15. This is an intentional schema addition owned by the Memory Service, not a speculative Knowledge/Context table.
+
+- `MemoryRecord` stores type, content, deduplication key, owner, scope, source type/reference, provenance JSON, confidence, importance, lifecycle status, reviewer, retention, expiry, supersession link, and UTC timestamps.
+- `MemoryRepository` owns ORM access and filters every read/write lookup by both scope and owner.
+- `MemoryService` exposes candidate creation, explicit activation, update with revision provenance, supersession, expiry, scoped retrieval/ranking, and deletion.
+- Logical types: short-term, long-term, episodic, semantic. Short-term defaults to seven days; other types have no implicit expiry.
+- Candidate is the only creation status. Activation requires an explicit reviewer identifier. Assistant-originated content is never automatically promoted.
+- Retrieval defaults to active records only; candidate inclusion must be explicitly requested.
+- Deduplication is exact normalized-content matching within the same owner/scope/type. A conflicting explicit deduplication key is rejected.
+- Ranking is deterministic and metadata-first: lexical overlap, importance, confidence, and freshness. No embedding model or external vector store is used.
+- The access-policy contract receives owner, scope, and action. Its default implementation denies all operations. This is an integration seam only; Phase 5 Permission Manager remains out of scope.
+- Content and provenance are screened for common credential/token patterns. Original secrets must not be placed in memory.
+- Deletion is physical at the repository layer; expiration and supersession remain traceable lifecycle states.
+- The table is currently created by the existing SQLAlchemy metadata initialization on a clean/current database. Versioned Alembic migration history remains WP-4.7 and is not claimed complete.
+- No memory HTTP API or automatic memory extraction from conversation output is enabled in this work package.
+
+**Validation evidence:** GitHub Actions on the latest WP-4.5 commit passed the full suite (131 tests), Python compilation, and frontend syntax check. The user's local focused/full validation remains pending. Do not mark WP-4.5 complete before local results are recorded.

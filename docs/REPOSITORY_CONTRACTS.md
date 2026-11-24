@@ -55,3 +55,13 @@ python -m compileall -q core main.py
 The repository contract tests verify last-known-good catalog behavior, profile persistence, session CRUD/custom titles, deterministic message ordering, and runtime import compatibility.
 
 WP-4.3 remains open until these focused tests and the full regression suite pass.
+
+
+## MemoryRepository — WP-4.5
+
+- Owns ORM access to `MemoryRecord` and explicit commit boundaries for create, update, expiry, and delete.
+- Every lookup and list operation is constrained by `scope_type`, `scope_id`, and `owner_id`; services must never retrieve memory by ID alone.
+- Exposes domain-oriented operations for scoped reads, exact duplicate lookup, deduplication-key lookup, lifecycle expiry, and persistence.
+- Does not make activation, ranking, retention, or authorization decisions; those belong to MemoryService and its policy contracts.
+- Physical deletion is explicit and commits the deletion. Expiration and supersession are lifecycle states, not hard deletion.
+- No arbitrary SQL interface or repository/session object is exposed to agents.

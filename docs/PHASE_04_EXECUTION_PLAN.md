@@ -3,8 +3,8 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** In progress — WP-4.1, WP-4.2, and WP-4.3 validated; WP-4.4 implementation in progress  
-**Execution branch (planned):** `feat/storage-memory-services`  
+**Status:** In progress — WP-4.1 through WP-4.5 validated; WP-4.6 implementation in progress  
+**Execution branches:** `feat/storage-memory-services` (WP-4.1–WP-4.4), `feat/phase-4-memory-service` (WP-4.5; stacked PR), and `feat/phase-4-context-manager` (WP-4.6; stacked PR)  
 **Last reviewed:** 2026-11-24
 
 ## 1. Purpose
@@ -275,7 +275,7 @@ Tasks:
 
 **Exit gate:** existing conversations remain readable and current chat behavior is unchanged.
 
-**WP-4.4 implementation status (2026-11-24):** Initial service integration is implemented on `feat/storage-memory-services`. Added `core/conversations/ConversationService` with typed chat preparation contracts and `core/profiles/ProfileService`. Session, message, profile, and avatar endpoints now delegate domain operations to these services; route handlers retain HTTP translation and response transport only. Chat still commits the user turn before provider inference and persists the assistant turn only after a successful stream. Avatar normalization and existing validation limits remain in the profile service. No schema or table changes were made. Focused service tests and existing API regression tests are present; validation is pending on the user's local environment.
+**WP-4.4 implementation status (2026-11-24):** ConversationService and ProfileService are implemented on `feat/storage-memory-services`. Session, message, profile, and avatar endpoints delegate domain operations to these services; route handlers retain HTTP translation and response transport only. Chat still commits the user turn before provider inference and persists the assistant turn only after a successful stream. Avatar normalization and existing validation limits remain in ProfileService. No schema or table changes were made. User-local validation passed: 13 focused service/API tests, 124 total tests, Python compilation, and frontend JavaScript syntax check.
 
 ### WP-4.5 — Memory Service
 
@@ -296,6 +296,8 @@ Tasks:
 
 **Exit gate:** memory records are traceable, scoped, lifecycle-managed, and cannot grant permissions or silently promote unverified content.
 
+**WP-4.5 implementation status (2026-11-24):** Memory Service is implemented on `feat/phase-4-memory-service`, stacked on `feat/storage-memory-services`. It adds the `memories` ORM table, owner- and scope-filtered `MemoryRepository`, typed contracts, default-deny access policy, deterministic retention/scoring, and lifecycle/retrieval operations. Candidate records require explicit reviewer activation; AI-generated records remain candidates. User-local validation passed: 13 focused Memory/Storage tests, 131 total tests, Python compilation, and frontend JavaScript syntax check. GitHub Actions also passed 131 tests and both syntax/compile checks. No vector/embedding service, API endpoint, Phase 5 permission system, or migration framework is included.
+
 ### WP-4.6 — Context Manager
 
 **Goal:** assemble bounded and permission-aware request context.
@@ -314,6 +316,8 @@ Tasks:
 **Deliverables:** Context Manager, assembler, ranking, budget policy, typed context package, and tests.
 
 **Exit gate:** a request receives only the context allowed for its scope and budget, with traceable sources.
+
+**WP-4.6 implementation status (2026-11-24):** Initial Context Manager implementation is in progress on `feat/phase-4-context-manager`, stacked on `feat/phase-4-memory-service`. Added typed request/item/package contracts, bounded chronological conversation retrieval, explicit memory-scope retrieval through MemoryService, deterministic cross-source ranking and deduplication, provenance preservation, and a conservative character-based token budget. Knowledge retrieval remains disconnected until WP-4.7; Phase 5 permissions are not implemented here. Focused/full local validation and CI are pending.
 
 ### WP-4.7 — Knowledge Storage & Migration
 
