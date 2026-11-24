@@ -20,9 +20,9 @@ The current repository contains:
 - Provider contracts and adapters in `core/providers/`.
 - Configuration handling in `core/config_manager.py`.
 - SQLAlchemy/SQLite persistence in `core/database.py`, managed through `core/storage/` and domain repositories in `core/repositories/`.
-- Conversation/Profile Services, scoped MemoryService, and bounded ContextManager in `core/conversations/`, `core/profiles/`, `core/memory/`, and `core/context/`.
-- A default-deny PermissionManager with exact-scope grants, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`.
-- A fixed local single-user policy for loopback API requests; protected API endpoints reject non-loopback clients and route through centralized permission checks.
+- Conversation/Profile Services, scoped MemoryService, bounded ContextManager, and Knowledge Storage in `core/conversations/`, `core/profiles/`, `core/memory/`, `core/context/`, and `core/knowledge/`.
+- A default-deny PermissionManager with exact-scope grants, local-owner grant administration, action-bound approvals, redacted audit, and a bounded Tool Registry/Runtime in `core/permissions/` and `core/tools/`.
+- A fixed local single-user policy for loopback and same-origin API requests; cross-origin browser calls and non-loopback clients are rejected. This is not authentication or hosted multi-user security.
 - A current chat orchestrator in `core/orchestrator.py`.
 - A provider-neutral Interface Manager service in `core/interface_manager.py`, used by provider APIs and chat streaming.
 - An initial Local Model Runtime control plane in `core/runtime/`, with an Ollama lifecycle adapter, persistence, and explicit runtime API operations, including a combined read-only health/inventory snapshot.
@@ -31,6 +31,8 @@ The current repository contains:
 Current provider integrations include Ollama, OpenRouter, Google AI Studio/Gemini, Cloudflare Workers AI, Groq, and Cohere. The current user-facing flow still selects a provider and model explicitly. Interface Manager now provides a first service boundary for provider listing, local operator catalogs, capability access, bounded model discovery, catalog-reachability diagnostics, quota visibility, and chat streaming. The connection diagnostic probes model-catalog access only; it is not an end-to-end inference health check. A persistent Model Manager, scheduled Updater, full normalized request/response contract, and automatic routing are not implemented.
 
 Operator-level catalog metadata is maintained locally and separated from exact live model discovery. OpenRouter key usage and observed Groq/Cohere response-header telemetry are exposed where supported; unknown balances remain unknown.
+
+Phase 4 Knowledge Storage uses SQLite FTS5 and four ordered SQLite schema revisions. Phase 5 integrates exact-scope Knowledge permissions and action-bound approval for destructive local API operations. No production tool handlers or model-generated tool-call loop are registered; Agent Runtime will consume ToolRuntime in Phase 6.
 
 The current credential file is local and ignored by Git, but credentials are not yet protected by a dedicated encrypted credential vault. The application does not implement user authentication. The loopback-only `local-api` principal is a local single-user boundary, not identity verification. Do not expose the current application through a LAN, reverse proxy, or public network.
 
