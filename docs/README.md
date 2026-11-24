@@ -18,16 +18,16 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 1 — Architecture & Contracts Foundation | [PHASE_01_EXECUTION_PLAN.md](PHASE_01_EXECUTION_PLAN.md) | Completed |
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
-| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | WP-4.1–WP-4.6 implemented and validated; WP-4.7 Knowledge Storage & Migration remains pending |
-| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | In progress — PR #15; WP-5.1 through WP-5.6 implemented and CI-validated |
-| 6 — Agent Runtime | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
-| 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
-| 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
-| 9 — Multi-Agent System and Specialized Agents | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
-| 10 — AI Librarian | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
-| 11 — Backup, Maintenance & Integrations | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
+| 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | Completed and merged via PR #16; 228 CI tests passed |
+| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | Foundation merged via PR #15; final operational integrations and WP-5.7 remain |
+| 6 — Agent Runtime | [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md) | Planned — execution plan defined |
+| 7 — Supervisor & Orchestrator | [PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md) | Planned — execution plan defined |
+| 8 — Conversation Agent | [PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md](PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md) | Planned — execution plan defined |
+| 9 — Multi-Agent System and Specialized Agents | [PHASE_09_MULTI_AGENT_EXECUTION_PLAN.md](PHASE_09_MULTI_AGENT_EXECUTION_PLAN.md) | Planned — execution plan defined |
+| 10 — AI Librarian | [PHASE_10_AI_LIBRARIAN_EXECUTION_PLAN.md](PHASE_10_AI_LIBRARIAN_EXECUTION_PLAN.md) | Planned — execution plan defined |
+| 11 — Backup, Maintenance & Integrations | [PHASE_11_BACKUP_MAINTENANCE_INTEGRATIONS_EXECUTION_PLAN.md](PHASE_11_BACKUP_MAINTENANCE_INTEGRATIONS_EXECUTION_PLAN.md) | Planned — execution plan defined |
 
-A dedicated execution plan should be added for each later phase before implementation of that phase begins.
+The Phase 6–11 execution plans are implementation contracts, not claims that those phases have started or shipped. Re-audit the current code and update the relevant plan before each phase begins.
 
 ## Module specifications
 
@@ -42,11 +42,13 @@ A dedicated execution plan should be added for each later phase before implement
 | [Memory Service](MEMORY_SERVICE.md) | Scoped memory lifecycle, provenance, deduplication, retention, and deterministic retrieval |
 | [Context Manager](CONTEXT_MANAGER.md) | Request-scoped context assembly, explicit memory scopes, provenance, ranking, and token budgeting |
 | [Permissions](PERMISSIONS.md) | Implemented authorization contracts, exact-scope grants, approvals, and audit service |
-| [Tool Runtime](TOOL_RUNTIME.md) | Tool Registry contracts, schema validation, risk classes, and bounded execution target |
+| [Tool Runtime](TOOL_RUNTIME.md) | Implemented Tool Registry/Runtime infrastructure, execution boundary, and current integration limits |
 | [Provider System](PROVIDER_SYSTEM.md) | Provider adapters, discovery, errors, credentials, and quotas |
 | [Model Manager](MODEL_MANAGER.md) | Model catalog records, capability evidence, lifecycle, and safe updates |
 | [Agent Runtime](AGENT_RUNTIME.md) | Agent contracts, lifecycle, execution loop, online/offline operation, and multi-agent boundary |
 | [AI Orchestration](AI_ORCHESTRATION.md) | Conversation Processing, online/offline engines, and Supervisor |
+
+| [Knowledge Storage](KNOWLEDGE_STORAGE.md) | Source metadata, managed files, extraction artifacts, lexical search, and SQLite migration boundary |
 
 ## Supporting references
 
