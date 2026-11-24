@@ -55,7 +55,10 @@ class LocalApplicationPolicy:
 
         reason = "local_policy_denied"
         allowed_operations = self._OPERATIONS.get(request.resource.resource_type)
-        if allowed_operations is None or request.operation not in allowed_operations:
+        if allowed_operations is None:
+            # Unknown domains may be authorized only by a separate exact persisted grant.
+            return None
+        if request.operation not in allowed_operations:
             return PermissionDecision(DecisionEffect.DENY, reason, request.request_id)
 
         if request.scope.owner_id != self.OWNER_ID:
