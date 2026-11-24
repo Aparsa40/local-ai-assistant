@@ -9,6 +9,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from core.repositories.approval_repository import ApprovalRepository
+from core.permissions.audit import AuditService
 from .policies import ApprovalDecisionPolicy, DenyAllApprovalDecisionPolicy
 from .types import (
     AccessRequest,
@@ -44,11 +45,15 @@ class ApprovalService:
     def __init__(
         self,
         repository: ApprovalRepository,
+        audit_service: AuditService,
         *,
         decision_policy: ApprovalDecisionPolicy | None = None,
         clock=None,
     ) -> None:
+        if not isinstance(audit_service, AuditService):
+            raise TypeError("audit_service must be an AuditService")
         self.repository = repository
+        self.audit_service = audit_service
         self.decision_policy = decision_policy or DenyAllApprovalDecisionPolicy()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
 
@@ -100,7 +105,17 @@ class ApprovalService:
             created_at=now,
             expires_at=now + timedelta(seconds=ttl_seconds),
         )
-        return self.repository.create(approval)
+        stored = self.repository.create(approval)
+        self.audit_service.record(
+            event_type="approval_requested",
+            request_id=stored.request_id,
+            outcome="pending",
+            subject=stored.subject,
+            resource=stored.resource,
+            operation=stored.operation,
+            metadata={"approval_id": stored.approval_id},
+        )
+        return stored
 
     def _decide(
         self,
@@ -122,7 +137,17 @@ class ApprovalService:
 
         now = self._clock()
         if now >= approval.expires_at:
-            self.repository.expire(approval_id, expired_at=now)
+            expired = self.repository.expire(approval_id, expired_at=now)
+            if expired is not None:
+                self.audit_service.record(
+                    event_type="approval_expired",
+                    request_id=expired.request_id,
+                    outcome="expired",
+                    subject=expired.subject,
+                    resource=expired.resource,
+                    operation=expired.operation,
+                    metadata={"approval_id": expired.approval_id},
+                )
             raise ApprovalTransitionError("Approval request has expired.")
 
         updated = self.repository.decide(
@@ -137,6 +162,15 @@ class ApprovalService:
             raise ApprovalTransitionError("Approval request has expired.")
         if updated.status is not status:
             raise ApprovalTransitionError("Approval request was already decided.")
+        self.audit_service.record(
+            event_type="approval_decision",
+            request_id=updated.request_id,
+            outcome=updated.status.value,
+            subject=updated.subject,
+            resource=updated.resource,
+            operation=updated.operation,
+            metadata={"approval_id": updated.approval_id, "status": updated.status.value},
+        )
         return updated
 
     def approve(self, approval_id: str, *, approver: PermissionSubject) -> ApprovalRequest:
@@ -174,11 +208,32 @@ class ApprovalService:
 
         now = self._clock()
         if now >= approval.expires_at:
-            self.repository.expire(approval_id, expired_at=now)
+            expired = self.repository.expire(approval_id, expired_at=now)
+            if expired is not None:
+                self.audit_service.record(
+                    event_type="approval_expired",
+                    request_id=expired.request_id,
+                    outcome="expired",
+                    subject=expired.subject,
+                    resource=expired.resource,
+                    operation=expired.operation,
+                    metadata={"approval_id": expired.approval_id},
+                )
             return None
-        return self.repository.consume(
+        consumed = self.repository.consume(
             approval_id,
             expected=approval,
             action_hash=action_hash,
             consumed_at=now,
         )
+        if consumed is not None:
+            self.audit_service.record(
+                event_type="approval_consumed",
+                request_id=consumed.request_id,
+                outcome="consumed",
+                subject=consumed.subject,
+                resource=consumed.resource,
+                operation=consumed.operation,
+                metadata={"approval_id": consumed.approval_id},
+            )
+        return consumed
