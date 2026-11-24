@@ -41,7 +41,7 @@ def _knowledge_fts(connection) -> None:
     connection.execute(text(
         "CREATE TABLE IF NOT EXISTS knowledge_files ("
         "id VARCHAR(32) PRIMARY KEY, source_id VARCHAR(32) NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE, "
-        "storage_key VARCHAR(64) NOT NULL UNIQUE, original_filename VARCHAR(255) NOT NULL, "
+        "source_version INTEGER NOT NULL, storage_key VARCHAR(64) NOT NULL UNIQUE, original_filename VARCHAR(255) NOT NULL, "
         "mime_type VARCHAR(160), size_bytes INTEGER NOT NULL, sha256 VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
     ))
     connection.execute(text(
