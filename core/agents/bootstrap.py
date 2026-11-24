@@ -22,7 +22,7 @@ from core.permissions.audit import AuditService
 from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessPolicy
 from core.permissions.local_policy import LocalApplicationPolicy
 from core.permissions.manager import PermissionManager
-from core.permissions.owner_policies import LocalOwnerApprovalDecisionPolicy
+from core.permissions.owner_policies import LocalOwnerApprovalDecisionPolicy, LocalOwnerGrantAdministrationPolicy
 from core.permissions.types import (
     PermissionOperation,
     PermissionSubject,
@@ -188,8 +188,11 @@ class AgentRuntimeContainer:
 
     def build_services(self, db) -> AgentServices:
         audit = AuditService(AuditRepository(db))
+        # The trusted local owner issues the exact per-run capability grants;
+        # all other grant administration stays denied by default.
         permission_manager = PermissionManager(
             PermissionRepository(db),
+            grant_policy=LocalOwnerGrantAdministrationPolicy(),
             policies=(LocalApplicationPolicy(),),
         )
         approval_service = ApprovalService(
