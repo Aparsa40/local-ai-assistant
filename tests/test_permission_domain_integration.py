@@ -168,3 +168,31 @@ def test_context_manager_uses_authorized_conversation_and_explicit_memory_scope(
     finally:
         db.close()
         engine.dispose()
+
+
+
+def test_local_policy_covers_provider_runtime_and_configuration_actions():
+    manager = local_manager()
+    context = local_context()
+
+    require_access(
+        manager,
+        context,
+        ResourceType.PROVIDER,
+        "openrouter",
+        PermissionOperation.EXECUTE,
+    )
+    require_access(
+        manager,
+        context,
+        ResourceType.RUNTIME,
+        "ollama",
+        PermissionOperation.ADMINISTER,
+    )
+    require_access(
+        manager,
+        context,
+        ResourceType.CONFIGURATION,
+        "application-settings",
+        PermissionOperation.UPDATE,
+    )
