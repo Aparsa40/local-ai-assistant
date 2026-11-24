@@ -291,3 +291,21 @@ def test_runtime_rechecks_permission_before_invoking_handler(db_session) -> None
 
     assert result.error_category == "permission_denied"
     assert called == []
+
+
+
+def test_runtime_rejects_handler_output_that_violates_output_schema(db_session) -> None:
+    definition = _definition(output_schema={
+        "type": "object",
+        "properties": {"result": {"type": "string"}},
+        "required": ["result"],
+        "additionalProperties": False,
+    })
+    async def invalid_handler(data):
+        return {"unexpected": "field"}
+    runtime, request, _approvals, _audit = _runtime(db_session, definition, invalid_handler)
+
+    result = asyncio.run(runtime.execute(request))
+
+    assert result.error_category == "tool_output_invalid"
+    assert result.side_effect_may_have_occurred is False
