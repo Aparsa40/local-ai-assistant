@@ -6,6 +6,10 @@ from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.repositories import ProfileRepository
+from core.permissions.audit import AuditService
+from core.permissions.guards import require_access
+from core.permissions.manager import PermissionManager
+from core.permissions.types import AccessContext, PermissionOperation, ResourceType
 
 
 class ProfileServiceError(ValueError):
@@ -19,13 +23,33 @@ class ProfileServiceError(ValueError):
 class ProfileService:
     """Owns profile validation, serialization, and avatar normalization."""
 
-    def __init__(self, db) -> None:
+    def __init__(
+        self,
+        db,
+        permission_manager: PermissionManager | None = None,
+        access_context: AccessContext | None = None,
+        audit_service: AuditService | None = None,
+    ) -> None:
         self.repository = ProfileRepository(db)
+        self.permission_manager = permission_manager
+        self.access_context = access_context
+        self.audit_service = audit_service
+
+    def _authorize(self, operation: PermissionOperation) -> None:
+        require_access(
+            self.permission_manager,
+            self.access_context,
+            ResourceType.PROFILE,
+            "local-user",
+            operation,
+            audit_service=self.audit_service,
+        )
 
     def _profile(self):
         return self.repository.get_or_create()
 
     def serialize(self) -> dict[str, object]:
+        self._authorize(PermissionOperation.READ)
         profile = self._profile()
         configured = bool(profile.avatar_data)
         return {
@@ -37,6 +61,7 @@ class ProfileService:
         }
 
     def update(self, display_name: str, username: str, email: str) -> dict[str, object]:
+        self._authorize(PermissionOperation.UPDATE)
         display_name = display_name.strip()
         username = username.strip()
         email = email.strip()
@@ -52,6 +77,7 @@ class ProfileService:
         return self.serialize()
 
     def set_avatar(self, image_bytes: bytes) -> dict[str, object]:
+        self._authorize(PermissionOperation.UPDATE)
         if not image_bytes:
             raise ProfileServiceError("فایلی دریافت نشد", 400)
         if len(image_bytes) > 2 * 1024 * 1024:
@@ -78,12 +104,14 @@ class ProfileService:
         return self.serialize()
 
     def get_avatar(self) -> tuple[bytes, str]:
+        self._authorize(PermissionOperation.READ)
         profile = self._profile()
         if not profile.avatar_data:
             raise ProfileServiceError("تصویر پروفایل ثبت نشده است", 404)
         return profile.avatar_data, profile.avatar_mime or "image/webp"
 
     def delete_avatar(self) -> dict[str, object]:
+        self._authorize(PermissionOperation.DELETE)
         profile = self._profile()
         profile.avatar_data = None
         profile.avatar_mime = None
