@@ -70,7 +70,19 @@ class ContextManager:
             raise ContextValidationError("include_candidates باید مقدار بولی داشته باشد")
         if not isinstance(request.memory_scopes, tuple) or len(request.memory_scopes) > cls.MAX_MEMORY_SCOPES:
             raise ContextValidationError("memory_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")
-        if not isinstance(request.knowledge_scopes, tuple) or len(request.knowledge_scopes) > cls.MAX_KNOWLEDGE_SCOPES:\n            raise ContextValidationError("knowledge_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")\n        seen_knowledge: set[tuple[str, str, str]] = set()\n        for scope in request.knowledge_scopes:\n            if not isinstance(scope, KnowledgeScope):\n                raise ContextValidationError("هر محدوده دانش باید از نوع KnowledgeScope باشد")\n            if scope.owner_id != request.owner_id:\n                raise ContextValidationError("مالک محدوده دانش با مالک درخواست یکسان نیست")\n            key = (scope.scope_type, scope.scope_id, scope.owner_id)\n            if key in seen_knowledge:\n                raise ContextValidationError("محدوده دانش تکراری است")\n            seen_knowledge.add(key)\n        seen: set[tuple[str, str, str]] = set()
+        if not isinstance(request.knowledge_scopes, tuple) or len(request.knowledge_scopes) > cls.MAX_KNOWLEDGE_SCOPES:
+            raise ContextValidationError("knowledge_scopes باید یک tuple صریح با حداکثر ۱۰ محدوده باشد")
+        seen_knowledge: set[tuple[str, str, str]] = set()
+        for scope in request.knowledge_scopes:
+            if not isinstance(scope, KnowledgeScope):
+                raise ContextValidationError("هر محدوده دانش باید از نوع KnowledgeScope باشد")
+            if scope.owner_id != request.owner_id:
+                raise ContextValidationError("مالک محدوده دانش با مالک درخواست یکسان نیست")
+            key = (scope.scope_type, scope.scope_id, scope.owner_id)
+            if key in seen_knowledge:
+                raise ContextValidationError("محدوده دانش تکراری است")
+            seen_knowledge.add(key)
+        seen: set[tuple[str, str, str]] = set()
         for scope in request.memory_scopes:
             if not isinstance(scope, MemoryScope):
                 raise ContextValidationError("هر محدوده حافظه باید از نوع MemoryScope باشد")
@@ -125,7 +137,10 @@ class ContextManager:
         if request.memory_scopes and self.memory is None:
             raise ContextConfigurationError("Memory Service برای محدوده‌های درخواستی پیکربندی نشده است")
 
-        if request.knowledge_scopes and self.knowledge is None:\n            raise ContextConfigurationError("Knowledge Storage برای محدوده‌های درخواستی پیکربندی نشده است")\n\n        memory_items: list[ContextItem] = []
+        if request.knowledge_scopes and self.knowledge is None:
+            raise ContextConfigurationError("Knowledge Storage برای محدوده‌های درخواستی پیکربندی نشده است")
+
+        memory_items: list[ContextItem] = []
         if self.memory is not None:
             for scope in request.memory_scopes:
                 results = self.memory.retrieve(
@@ -158,10 +173,37 @@ class ContextManager:
                         )
                     )
 
-        knowledge_items: list[ContextItem] = []\n        if self.knowledge is not None:\n            for scope in request.knowledge_scopes:\n                for result in self.knowledge.search(scope, query, limit=request.knowledge_limit):\n                    knowledge_items.append(\n                        ContextItem(\n                            source_type="knowledge",\n                            source_ref=f"knowledge:{result.source_id}:chunk:{result.chunk_id}",\n                            content=result.content,\n                            relevance_score=1.0 / (1.0 + abs(result.rank)),\n                            trust_status="source_unreviewed",\n                            provenance={\n                                "source": "knowledge_storage",\n                                "source_id": result.source_id,\n                                "source_title": result.title,\n                                "source_type": result.source_type,\n                                "source_uri": result.uri,\n                                "chunk_id": result.chunk_id,\n                            },\n                        )\n                    )\n\n        knowledge_items.sort(key=selection_key)\n        omitted += max(0, len(knowledge_items) - request.knowledge_limit)\n        knowledge_items = knowledge_items[:request.knowledge_limit]\n\n        # Apply one aggregate memory limit across all explicitly supplied scopes.
+        knowledge_items: list[ContextItem] = []
+        if self.knowledge is not None:
+            for scope in request.knowledge_scopes:
+                for result in self.knowledge.search(scope, query, limit=request.knowledge_limit):
+                    knowledge_items.append(
+                        ContextItem(
+                            source_type="knowledge",
+                            source_ref=f"knowledge:{result.source_id}:chunk:{result.chunk_id}",
+                            content=result.content,
+                            relevance_score=1.0 / (1.0 + abs(result.rank)),
+                            trust_status="source_unreviewed",
+                            provenance={
+                                "source": "knowledge_storage",
+                                "source_id": result.source_id,
+                                "source_title": result.title,
+                                "source_type": result.source_type,
+                                "source_uri": result.uri,
+                                "chunk_id": result.chunk_id,
+                            },
+                        )
+                    )
+
+        knowledge_items.sort(key=selection_key)
+        knowledge_omitted = max(0, len(knowledge_items) - request.knowledge_limit)
+        knowledge_items = knowledge_items[:request.knowledge_limit]
+
+        # Apply one aggregate limit across each explicitly supplied source family.
         memory_items.sort(key=selection_key)
-        omitted = max(0, len(memory_items) - request.memory_limit)
+        memory_omitted = max(0, len(memory_items) - request.memory_limit)
         memory_items = memory_items[:request.memory_limit]
+        omitted = knowledge_omitted + memory_omitted
 
         # Prefer memory provenance for exact duplicates rather than shadowing it with chat.
         deduplicated: list[ContextItem] = []
