@@ -17,7 +17,7 @@ No shell, arbitrary Python, unrestricted filesystem, browser/computer-control, o
 - `ToolRiskClass`: `read_only`, `mutating`, `destructive`, and `external_side_effect`.
 - `ToolRegistry`: explicit registration, duplicate rejection, enabled-state check, request validation, and a public metadata catalog.
 
-A handler is registered by trusted application code and stored separately from its public tool metadata. The public catalog does not expose handlers or raw schema internals.
+A handler is registered by trusted application code and stored separately from its public tool metadata. The public catalog exposes the validated input schema needed to form a proposal, but never exposes the registered handler. A visible schema is not an authorization grant; the runtime validates it again before execution.
 
 ## 3. Input schema policy
 
