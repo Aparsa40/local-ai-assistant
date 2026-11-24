@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 4 — Storage & Memory Services  
 **Work package:** WP-4.2 — Storage Manager  
-**Status:** Initial implementation; validation pending
+**Status:** WP-4.2 complete — focused tests, full test suite, and compile check passed
 
 ## Purpose
 
@@ -91,4 +91,4 @@ python -m pytest -q tests/test_storage_manager.py
 python -m pytest -q
 ```
 
-Do not mark WP-4.2 complete until the focused test, full test suite, and application startup smoke test pass.
+**Validation recorded (2026-11-24):** `python -m pytest -q tests/test_storage_manager.py` — 6 passed; `python -m pytest -q -W default` — 115 passed; `python -m compileall -q core main.py` — passed. The user confirmed all checks completed successfully. A separate live HTTP startup smoke test is not recorded here.
