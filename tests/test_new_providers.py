@@ -11,6 +11,7 @@ from core.providers.cloudflare_provider import CloudflareWorkersAIProvider
 from core.providers.cohere_provider import CohereProvider
 from core.providers.groq_provider import GroqProvider
 from core.providers.capabilities import get_provider_capabilities
+from core.permissions.types import AccessContext, PermissionScope, PermissionSubject, ScopeType, SubjectType
 
 
 def test_gemini_interactions_text_delta_and_free_models():
@@ -72,8 +73,12 @@ def test_capability_and_operator_catalog_endpoints_do_not_trigger_remote_discove
         raise AssertionError("Local metadata endpoints must not call remote model discovery")
 
     monkeypatch.setattr(main.interface_manager, "list_models", unexpected_discovery)
-    capabilities = asyncio.run(main.provider_capabilities("groq"))
-    operator_catalog = asyncio.run(main.provider_catalog("groq"))
+    access = AccessContext(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
+    )
+    capabilities = asyncio.run(main.provider_capabilities("groq", access))
+    operator_catalog = asyncio.run(main.provider_catalog("groq", db=None, access=access))
 
     assert "openai/gpt-oss-20b" in capabilities["models"]
     assert capabilities["quota"]["runtime"]["status"] == "unknown"
@@ -113,6 +118,10 @@ def test_offline_intelligence_report_api_reads_and_persists_sqlite_snapshot():
             pass
 
     main.app.dependency_overrides[main.get_db] = override_get_db
+    main.app.dependency_overrides[main.get_local_access_context] = lambda: AccessContext(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        scope=PermissionScope(ScopeType.LOCAL, "local-machine", "local-user"),
+    )
     try:
         client = TestClient(main.app)
         response = client.post("/api/intelligence/reports/offline?provider_id=groq")
@@ -124,5 +133,6 @@ def test_offline_intelligence_report_api_reads_and_persists_sqlite_snapshot():
         assert latest.json()["provider_id"] == "groq"
     finally:
         main.app.dependency_overrides.pop(main.get_db, None)
+        main.app.dependency_overrides.pop(main.get_local_access_context, None)
         db.close()
         engine.dispose()
