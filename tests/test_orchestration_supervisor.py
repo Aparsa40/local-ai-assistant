@@ -591,8 +591,6 @@ def test_assignment_requires_one_candidate_to_cover_all_capabilities(tmp_path):
 
 def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
     """A resumed child run is reconciled once, then pending work may continue."""
-    from core.agents.contracts import StopReason
-
     env = make_agent_env(tmp_path)
     try:
         orch = make_orch(env)
@@ -633,8 +631,10 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
             attempts=1,
         )
 
+        with pytest.raises(OrchestrationServiceError, match="owner"):
+            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id="another-owner"))
         with pytest.raises(OrchestrationSchedulerError, match="explicitly resumed"):
-            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
 
         # Model the existing authorized approval-resume flow: the approval
         # decision has already happened before this lifecycle transition.
