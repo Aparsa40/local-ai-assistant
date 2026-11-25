@@ -343,3 +343,80 @@ def test_delegated_approval_callback_is_published_as_sse_event():
     assert approval["data"]["plan_id"] == "plan-chat-1"
     assert parsed[-1]["type"] == "final"
     assert parsed[-1]["data"]["content"] == "Approved delegated result."
+
+
+def test_context_approval_is_streamed_then_context_assembly_retries_after_approval():
+    from core.conversation_agent.context_approvals import ContextApprovalRequired
+    from core.permissions.types import (
+        AccessRequest,
+        ApprovalStatus,
+        PermissionOperation,
+        PermissionResource,
+        PermissionScope,
+        PermissionSubject,
+        ResourceType,
+        ScopeType,
+        SubjectType,
+    )
+
+    access_request = AccessRequest(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        resource=PermissionResource(ResourceType.MEMORY_SCOPE, "profile-1"),
+        operation=PermissionOperation.READ,
+        scope=PermissionScope(ScopeType.USER, "profile-1", "local-user"),
+        request_id="context-request-1",
+    )
+    pending = ContextApprovalRequired(
+        access_request,
+        {
+            "domain": "memory",
+            "action": "read",
+            "scope_type": "user",
+            "scope_id": "profile-1",
+            "owner_id": "local-user",
+        },
+        "memory",
+    )
+
+    class ApprovedContextCoordinator:
+        def __init__(self):
+            self.accepted = []
+
+        def request(self, request):
+            assert request is pending
+            return SimpleNamespace(approval_id="approval-context-1")
+
+        def status(self, approval_id):
+            assert approval_id == "approval-context-1"
+            return SimpleNamespace(status=ApprovalStatus.APPROVED)
+
+        def accept(self, request, approval_id):
+            self.accepted.append((request, approval_id))
+
+    class ApprovalAwareContext:
+        def __init__(self):
+            self.approval_coordinator = ApprovedContextCoordinator()
+            self.calls = 0
+
+        def assemble(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise pending
+            return SimpleNamespace(items=(context_item("memory", "memory:1", "approved memory"),))
+
+    context = ApprovalAwareContext()
+    service, conversation, im, _ = build_service()
+    service._context_builder = lambda conv, db, access: context
+    parsed = _parse(run(_collect(service, _payload(
+        authorize_private_context_egress=True,
+    ))))
+
+    approval = next(event for event in parsed if event["type"] == "approval_required")
+    assert approval["data"]["kind"] == "context"
+    assert approval["data"]["approval_id"] == "approval-context-1"
+    assert approval["data"]["resource_type"] == "memory_scope"
+    assert context.calls == 2
+    assert len(context.approval_coordinator.accepted) == 1
+    assert parsed[-1]["type"] == "final"
+    assert parsed[-1]["data"]["status"] == "completed"
+    assert len(conversation.assistant) == 1
