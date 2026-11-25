@@ -40,6 +40,11 @@ function chatApp() {
         agentsLoading: false,
         agentsError: '',
         agentTaskForm: { title: '', query: '', scope_type: 'user', scope_id: '' },
+        orchestrationPlans: [],
+        orchestrationPlanDetail: null,
+        orchestrationError: '',
+        orchestrationLoading: false,
+        orchestrationGoalForm: { description: '', success_criteria: '', scope_id: 'local-user' },
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -245,6 +250,114 @@ function chatApp() {
                 await this.loadAgentRuns();
             } catch (error) {
                 this.agentsError = 'لغو ناموفق بود: ' + error.message;
+            }
+        },
+
+        async loadOrchestrationPlans() {
+            this.orchestrationLoading = true;
+            this.orchestrationError = '';
+            try {
+                const response = await fetch('/api/orchestration/plans');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                this.orchestrationPlans = data.plans || [];
+            } catch (error) {
+                this.orchestrationError = 'بارگذاری برنامه‌های سازمان‌دهی ناموفق بود: ' + error.message;
+            } finally {
+                this.orchestrationLoading = false;
+            }
+        },
+
+        async createOrchestrationGoalAndPlan() {
+            this.orchestrationError = '';
+            try {
+                const goalResponse = await fetch('/api/orchestration/goals', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        description: this.orchestrationGoalForm.description,
+                        success_criteria: this.orchestrationGoalForm.success_criteria || this.orchestrationGoalForm.description,
+                        data_scopes: [{
+                            domain: 'knowledge',
+                            scope_type: 'user',
+                            scope_id: this.orchestrationGoalForm.scope_id || 'local-user',
+                            owner_id: 'local-user',
+                        }],
+                        tool_scopes: ['knowledge_search'],
+                    })
+                });
+                if (!goalResponse.ok) {
+                    const detail = await goalResponse.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + goalResponse.status));
+                }
+                const goal = await goalResponse.json();
+                const planResponse = await fetch('/api/orchestration/plans', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ goal_id: goal.goal_id, strategy: 'deterministic_template' })
+                });
+                if (!planResponse.ok) {
+                    const detail = await planResponse.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + planResponse.status));
+                }
+                this.orchestrationGoalForm.description = '';
+                await this.loadOrchestrationPlans();
+            } catch (error) {
+                this.orchestrationError = 'ایجاد هدف/برنامه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async executeOrchestrationPlan(planId) {
+            this.orchestrationError = '';
+            try {
+                const response = await fetch('/api/orchestration/plans/' + encodeURIComponent(planId) + '/execute', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadOrchestrationPlans();
+                await this.loadOrchestrationPlanDetail(planId);
+            } catch (error) {
+                this.orchestrationError = 'اجرای برنامه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async cancelOrchestrationPlan(planId) {
+            this.orchestrationError = '';
+            try {
+                const response = await fetch('/api/orchestration/plans/' + encodeURIComponent(planId) + '/cancel', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadOrchestrationPlans();
+            } catch (error) {
+                this.orchestrationError = 'لغو برنامه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async reconcileOrchestrationPlan(planId) {
+            this.orchestrationError = '';
+            try {
+                const response = await fetch('/api/orchestration/plans/' + encodeURIComponent(planId) + '/reconcile', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadOrchestrationPlans();
+            } catch (error) {
+                this.orchestrationError = 'بازیابی برنامه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async loadOrchestrationPlanDetail(planId) {
+            this.orchestrationError = '';
+            try {
+                const response = await fetch('/api/orchestration/plans/' + encodeURIComponent(planId));
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                this.orchestrationPlanDetail = await response.json();
+            } catch (error) {
+                this.orchestrationError = 'بارگذاری جزئیات برنامه ناموفق بود: ' + error.message;
             }
         },
 

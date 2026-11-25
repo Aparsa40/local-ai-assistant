@@ -1,6 +1,6 @@
 # Agent Runtime
 
-**Status:** Implemented in Phase 6 for exactly one bounded agent. Supervisor, Conversation Agent, and multi-agent orchestration remain accepted target design (Phases 7-9).
+**Status:** Implemented in Phase 6 for exactly one bounded agent plus restart recovery; Phase 7 adds the Supervisor agent and orchestration layer on the same runtime. Conversation Agent and multi-agent orchestration remain accepted target design (Phases 8-9).
 
 ## 1. Purpose
 
@@ -152,3 +152,104 @@ Validation status: GitHub Actions successfully ran Python compilation, frontend 
 Known limitations: one bounded builtin agent; no Supervisor, Conversation Agent, multi-agent, autonomous publishing, credential access, or unrestricted execution; capability bindings are read-only by design for this phase; cloud/model routing and response composition remain future work.
 
 Related: AI_ORCHESTRATION.md, INTERFACE_MANAGER.md, PERMISSIONS.md, ARCHITECTURE.md.
+
+## 12. Phase 7 implementation record (Supervisor and Orchestrator)
+
+Phase 7 adds a bounded Supervisor and orchestration layer as a specialized
+registered agent hosted by the existing Phase 6 Agent Runtime. It introduces
+no second run lifecycle, no parallel execution engine, no provider router, and
+no separate permission system.
+
+Implemented components (branch `feat/phase-7-supervisor-orchestrator`):
+
+- `core/orchestration/contracts.py` (WP-7.1): typed, versioned contracts for
+  `Goal`, `Plan`, `TaskNode`, `Dependency`, `Assignment`, `Handoff`, `Evidence`,
+  and `AggregateResult`, with stable 32-character identifiers, parent run
+  references, explicit data/tool scopes, bounded budgets, and acceptance
+  criteria. Legal node and dependency states use explicit transition tables;
+  anything else is rejected. Untrusted input cannot inject identifiers,
+  wildcards, control characters, or oversized payloads.
+- `core/orchestration/graph.py`: deterministic graph validator and topological
+  ordering. Cycles, duplicate or dangling references, node budget violations,
+  cross-plan references, and scope expansion beyond the parent goal are all
+  rejected before any plan is persisted or scheduled.
+- `core/orchestration/models.py` and migration `0006_orchestration` (WP-7.2):
+  goal, plan, node, dependency, assignment, handoff, and event records. Plans
+  and nodes carry an optimistic-concurrency `version`; assignments, handoffs,
+  and events are append-only.
+- `core/repositories/orchestration_repository.py` (WP-7.2): persistence
+  adapters with atomic plan/node/dependency creation, `transition(expected_version)`
+  optimistic updates for plans and nodes, and append-only assignment, handoff,
+  and event repositories.
+- `core/orchestration/scheduler.py` (WP-7.2): deterministic sequential
+  scheduler. It schedules only PENDING nodes whose prerequisites are COMPLETED,
+  prevents duplicate node execution, enforces plan wall-clock budgets, retry
+  limits, and explicit failure/cancellation propagation, persists every
+  scheduling decision, and supports restart recovery via
+  `reconcile_plan()` (a SCHEDULED node without a child run returns to PENDING;
+  a child run that already finished maps its truthful terminal outcome without
+  re-execution). Child tasks and runs are created exclusively through
+  `AgentLifecycleManager` and executed exclusively through the existing
+  `ExecutionController`; no direct tool or provider call exists anywhere in
+  the scheduler.
+- `core/orchestration/assignment.py` (WP-7.3): deterministic, explainable
+  capability matching over registered agent candidates only. Tool evidence
+  comes from the trusted `ToolRegistry` catalog; model evidence comes only
+  through `InterfaceManager.list_providers()`. Unknown capabilities stay
+  unknown, capabilities are never inferred from model names, requested scopes
+  beyond the parent goal are denied, and every decision records bounded
+  reasons and evidence.
+- `core/orchestration/handoffs.py` (WP-7.5): versioned `orchestration.handoff/1`
+  handoff envelopes with size validation and bounded degradation.
+- `core/orchestration/aggregator.py` (WP-7.5): deterministic aggregation into
+  `completed`, `partial`, `failed`, or `cancelled` aggregates that surface
+  conflicts and missing evidence instead of resolving them silently.
+- `core/orchestration/planner.py` (WP-7.4): `PlanningService` supporting
+  deterministic template plans (one bounded node per goal data scope) and
+  bounded, schema-validated LLM proposals (`orchestration.proposal/1`).
+  Proposals are byte-limited, reject nested plan fields (recursive
+  decomposition), are revalidated end to end, and revisions are bounded
+  (`max_plan_revisions = 2`). Model requests go exclusively through the
+  InterfaceManager.
+- `core/orchestration/supervisor.py` (WP-7.4): the `supervisor` agent
+  1.0.0 with zero model tokens, zero tool calls, and a deterministic
+  `decide()` that reports the accepted plan's bounds truthfully, plus the
+  trusted `OrchestrationService` composition root (`create_goal`, `plan_goal`,
+  `execute_plan`, `cancel_plan`, `reconcile`, read-only `plan_view`).
+  Planning always happens beneath a real hosted supervisor run so plan
+  references are traceable.
+- `core/agents/bootstrap.py`: idempotent supervisor definition and behavior
+  registration, trusted capability-candidate registration, and
+  `build_orchestration(db)`.
+- `main.py` (WP-7.7): loopback- and same-origin-protected read/write-bound
+  orchestration endpoints `POST /api/orchestration/goals`,
+  `POST /api/orchestration/plans`, `POST /api/orchestration/plans/{plan_id}/execute`,
+  `POST /api/orchestration/plans/{plan_id}/cancel`,
+  `POST /api/orchestration/plans/{plan_id}/reconcile`,
+  `GET /api/orchestration/plans`, and `GET /api/orchestration/plans/{plan_id}`.
+- `static/`: a minimal orchestration panel inside the agents tab (goal/plan
+  creation, execution, cancellation, reconciliation, and a read-only plan
+  detail view with assignments).
+
+Security boundaries preserved: the Supervisor issues no grants or approvals;
+it never reaches the PermissionManager, the ToolRuntime, or a provider
+directly. Model calls flow through the InterfaceManager only; tool calls flow
+through ToolRuntime with PermissionManager authorization; persisted state
+uses the existing repository and migration infrastructure.
+
+Tests: `tests/test_orchestration_supervisor.py` covers planning templates and
+proposal validation (schema, cycles, dangling references, nested plan fields,
+revision cap, wrong owner), scheduler execution through the real Agent
+Runtime, dependency ordering without early or duplicate execution, assignment
+denial (no candidates, unknown capability, scope expansion, missing provider
+evidence for model-dependent candidates), failure injection with bounded
+retries and dependent skipping, wall-clock budget failure, cancellation
+propagation, and restart recovery without duplicated side effects.
+
+Known limitations: scheduling is strictly sequential in Phase 7
+(`max_active_tasks` is honored as one concurrent execution); the
+coordination loop is trusted application code while the supervisor agent run
+documents the accepted plan; a paused child run keeps its node RUNNING until
+an explicit resume/reconcile, it is not auto-resumed; only the `all_success`
+dependency policy is supported; and every model call must still pass the
+task-level transmission authorization from Phase 6.

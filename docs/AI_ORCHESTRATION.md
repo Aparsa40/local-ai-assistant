@@ -1,6 +1,6 @@
 # AI Orchestration and Conversation Processing
 
-**Status:** Accepted target design; current chat orchestration remains manual-provider oriented.
+**Status:** Accepted target design; current chat orchestration remains manual-provider oriented. The Supervisor planning/coordination layer (Phase 7) is implemented as a bounded orchestration service over the Agent Runtime; Conversation Processing and full multi-agent execution remain future phases.
 
 ## 1. Purpose and boundaries
 

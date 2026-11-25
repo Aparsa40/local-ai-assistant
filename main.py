@@ -25,7 +25,7 @@ from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessP
 from core.permissions.owner_policies import LocalOwnerApprovalDecisionPolicy, LocalOwnerGrantAdministrationPolicy
 from core.permissions.guards import AccessDeniedError, require_access
 from core.permissions.local_policy import LocalApplicationPolicy
-from core.permissions.manager import PermissionManager
+from core.permissions.manager import PermissionManager, PermissionManagementDeniedError
 from core.permissions.types import (AccessContext, ApprovalStatus, PermissionGrant, PermissionOperation, PermissionResource, PermissionScope, PermissionSubject, ResourceType, ScopeType, SubjectType)
 from core.repositories.audit_repository import AuditRepository
 from core.repositories.approval_repository import ApprovalRepository
@@ -52,6 +52,9 @@ from core.agents.controller import AgentControllerError
 from core.agents.context import AgentScopeDeniedError
 from core.agents.lifecycle import RunNotFoundError, TaskNotFoundError
 from core.agents.registry import AgentDefinitionError
+from core.orchestration.contracts import OrchestrationError, PlanValidationError, OrchestrationBudgets
+from core.orchestration.scheduler import OrchestrationSchedulerError
+from core.orchestration.supervisor import OrchestrationServiceError
 from core.repositories.agent_repository import AgentDefinitionRepository
 from core.repositories.run_repository import AgentRunEventRepository, AgentRunRepository
 
@@ -199,6 +202,38 @@ class AgentTaskCreateRequest(BaseModel):
     query: str = Field(default="", max_length=2000)
     scope_type: str = Field(default="user", min_length=1, max_length=40)
     scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+
+
+class OrchestrationScopeRequest(BaseModel):
+    domain: str = Field(pattern="^(conversation|knowledge|memory)$")
+    scope_type: str = Field(min_length=1, max_length=40)
+    scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+
+
+class OrchestrationBudgetsRequest(BaseModel):
+    max_nodes: int = Field(default=8, ge=1, le=32)
+    max_wall_clock_seconds: int = Field(default=1800, ge=1, le=3600)
+    per_task_deadline_seconds: int = Field(default=300, ge=1, le=3600)
+    max_retries_per_task: int = Field(default=1, ge=0, le=3)
+    max_active_tasks: int = Field(default=1, ge=1, le=8)
+
+
+class OrchestrationGoalCreateRequest(BaseModel):
+    description: str = Field(min_length=1, max_length=2000)
+    success_criteria: str = Field(min_length=1, max_length=500)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
+    data_scopes: list[OrchestrationScopeRequest] = Field(default_factory=list, max_length=10)
+    tool_scopes: list[str] = Field(default_factory=list, max_length=20)
+    budgets: OrchestrationBudgetsRequest | None = None
+
+
+class OrchestrationPlanCreateRequest(BaseModel):
+    goal_id: str = Field(min_length=32, max_length=32, pattern="^[0-9a-f]{32}$")
+    strategy: str = Field(default="deterministic_template", pattern="^(deterministic_template|validated_model_proposal)$")
+    proposal_text: str | None = Field(default=None, max_length=131072)
+    revision: int = Field(default=1, ge=1, le=8)
     owner_id: str = Field(default="local-user", min_length=1, max_length=160)
 
 
@@ -769,6 +804,139 @@ async def cancel_agent_run(run_id: str, db: Session = Depends(get_db), access: A
     except (AgentTransitionError, AgentConcurrencyError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"run": serialize_agent_run(run)}
+
+
+def build_orchestration_service(db: Session):
+    return agent_container.build_orchestration(db)
+
+
+@app.post("/api/orchestration/goals")
+async def create_orchestration_goal(data: OrchestrationGoalCreateRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Create one bounded owner-owned orchestration goal; no permissions are granted."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        scopes = tuple(
+            DataScope(domain=item.domain, scope_type=item.scope_type, scope_id=item.scope_id, owner_id=item.owner_id)
+            for item in data.data_scopes
+        )
+        goal = build_orchestration_service(db).create_goal(
+            owner_id=data.owner_id,
+            description=data.description,
+            success_criteria=data.success_criteria,
+            data_scopes=scopes,
+            tool_scopes=tuple(data.tool_scopes),
+            budgets=OrchestrationBudgets(**data.budgets.model_dump()) if data.budgets else None,
+        )
+    except (OrchestrationServiceError, PlanValidationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "goal_id": goal.goal_id,
+        "owner_id": goal.owner_id,
+        "description": goal.description,
+        "success_criteria": goal.success_criteria,
+        "data_scopes": [item.scope_id for item in goal.data_scopes],
+        "tool_scopes": list(goal.tool_scopes),
+        "created_at": goal.created_at.isoformat(),
+    }
+
+
+@app.post("/api/orchestration/plans")
+async def create_orchestration_plan(data: OrchestrationPlanCreateRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Plan one goal beneath a hosted supervisor run; the plan is validated and accepted."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        result = await build_orchestration_service(db).plan_goal(
+            data.goal_id,
+            owner_id=data.owner_id,
+            strategy=data.strategy,
+            proposal_text=data.proposal_text,
+            revision=data.revision,
+        )
+    except (OrchestrationServiceError, PlanValidationError) as exc:
+        status_code = 404 if "was not found" in str(exc) else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except (OrchestrationSchedulerError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
+
+
+@app.post("/api/orchestration/plans/{plan_id}/execute")
+async def execute_orchestration_plan(plan_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Run one accepted plan to a terminal aggregate through the scheduler."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        plan = await build_orchestration_service(db).execute_plan(plan_id)
+    except OrchestrationSchedulerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OrchestrationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Orchestration plan not found.")
+    return {"plan_id": plan.plan_id, "status": plan.status.value}
+
+
+@app.post("/api/orchestration/plans/{plan_id}/cancel")
+async def cancel_orchestration_plan(plan_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        plan = await build_orchestration_service(db).cancel_plan(plan_id)
+    except (OrchestrationSchedulerError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OrchestrationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Orchestration plan not found.")
+    return {"plan_id": plan.plan_id, "status": plan.status.value}
+
+
+@app.post("/api/orchestration/plans/{plan_id}/reconcile")
+async def reconcile_orchestration_plan(plan_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    try:
+        plan = build_orchestration_service(db).reconcile(plan_id)
+    except (OrchestrationSchedulerError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (OrchestrationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if plan is None:
+        raise HTTPException(status_code=404, detail="Orchestration plan not found.")
+    return {"plan_id": plan.plan_id, "status": plan.status.value}
+
+
+@app.get("/api/orchestration/plans")
+async def list_orchestration_plans(limit: int = 50, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Read-only listing of recent orchestration plans."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    if not 1 <= limit <= 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200.")
+    service = build_orchestration_service(db)
+    plans = service.plans.list_recent(limit=limit)
+    return {
+        "plans": [
+            {
+                "plan_id": item.plan_id,
+                "goal_id": item.goal_id,
+                "status": item.status.value,
+                "revision": item.revision,
+                "node_count": len(item.nodes),
+            }
+            for item in plans
+        ]
+    }
+
+
+@app.get("/api/orchestration/plans/{plan_id}")
+async def get_orchestration_plan(plan_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Read-only, redacted view of one plan with assignments, handoffs, and events."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    view = build_orchestration_service(db).plan_view(plan_id)
+    if view is None:
+        raise HTTPException(status_code=404, detail="Orchestration plan not found.")
+    return view
 
 
 @app.get("/")

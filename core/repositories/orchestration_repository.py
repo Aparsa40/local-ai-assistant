@@ -603,3 +603,49 @@ class OrchestrationEventRepository(BaseRepository):
             }
             for record in records
         )
+
+
+class OrchestrationGoalRepository(BaseRepository):
+    """Persistence adapter for orchestration goals."""
+
+    @staticmethod
+    def _to_contract(record: OrchestrationGoalRecord):
+        from core.orchestration.contracts import Goal, OrchestrationBudgets
+
+        budgets = _budgets_from_json(record.budgets)
+        return Goal(
+            goal_id=record.goal_id,
+            owner_id=record.owner_id,
+            description=record.description,
+            success_criteria=record.success_criteria,
+            data_scopes=_scopes_from_json(record.data_scopes, record.owner_id),
+            tool_scopes=tuple(record.tool_scopes or ()),
+            budgets=budgets if isinstance(budgets, OrchestrationBudgets) else OrchestrationBudgets(),
+            created_at=_aware(record.created_at),
+        )
+
+    def create(self, goal) -> object:
+        from core.orchestration.contracts import Goal
+
+        if not isinstance(goal, Goal):
+            raise OrchestrationError("goal must be a Goal")
+        record = OrchestrationGoalRecord(
+            goal_id=goal.goal_id,
+            owner_id=goal.owner_id,
+            description=goal.description,
+            success_criteria=goal.success_criteria,
+            data_scopes=_scopes_to_json(goal.data_scopes),
+            tool_scopes=list(goal.tool_scopes),
+            budgets=_budgets_to_json(goal.budgets),
+            status="open",
+            created_at=to_utc_naive(goal.created_at),
+        )
+        self.db.add(record)
+        self.db.commit()
+        return self.get(goal.goal_id)
+
+    def get(self, goal_id: str):
+        record = self.db.query(OrchestrationGoalRecord).filter(
+            OrchestrationGoalRecord.goal_id == goal_id
+        ).first()
+        return self._to_contract(record) if record else None

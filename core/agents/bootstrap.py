@@ -17,6 +17,13 @@ from core.agents.events import AgentRunEventRecorder
 from core.agents.lifecycle import AgentLifecycleManager
 from core.agents.registry import AgentRegistry
 from core.knowledge import KnowledgeScope, KnowledgeService
+from core.orchestration.assignment import CapabilityAssignmentResolver, CapabilityCandidate
+from core.orchestration.supervisor import (
+    SUPERVISOR_AGENT_ID,
+    SUPERVISOR_AGENT_VERSION,
+    OrchestrationService,
+    SupervisorAgent,
+)
 from core.permissions.approvals import ApprovalService
 from core.permissions.audit import AuditService
 from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessPolicy
@@ -213,6 +220,45 @@ class AgentRuntimeContainer:
             if repository.get(AGENT_ID, AGENT_VERSION) is None:
                 raise
         self.behaviors[(AGENT_ID, AGENT_VERSION)] = KnowledgeAnalysisAgent()
+        # Phase 7: the supervisor is a specialized registered agent hosted by
+        # the same runtime; registration is idempotent like the builtin agent.
+        try:
+            repository.register(SupervisorAgent.definition())
+        except Exception:
+            db.rollback()
+            if repository.get(SUPERVISOR_AGENT_ID, SUPERVISOR_AGENT_VERSION) is None:
+                raise
+        self.behaviors[(SUPERVISOR_AGENT_ID, SUPERVISOR_AGENT_VERSION)] = SupervisorAgent()
+
+    def register_capability_candidates(self, resolver: CapabilityAssignmentResolver) -> None:
+        """Register candidates from trusted definitions only (WP-7.3).
+
+        Capabilities come from the persisted, reviewed agent definitions; model
+        availability is resolved later through the InterfaceManager, never here.
+        """
+        knowledge = KnowledgeAnalysisAgent.definition()
+        resolver.register_candidate(CapabilityCandidate(
+            knowledge.agent_id,
+            knowledge.version,
+            capabilities=tuple(knowledge.allowed_tools),
+            tool_scopes=tuple(knowledge.allowed_tools),
+            allowed_models=tuple(knowledge.allowed_models),
+        ))
+        supervisor = SupervisorAgent.definition()
+        resolver.register_candidate(CapabilityCandidate(
+            supervisor.agent_id,
+            supervisor.version,
+            capabilities=(),
+            tool_scopes=(),
+            allowed_models=(),
+        ))
+
+    def build_orchestration(self, db, services: AgentServices | None = None) -> OrchestrationService:
+        """Compose the trusted orchestration service over the Agent Runtime."""
+        resolved = services if services is not None else self.build_services(db)
+        service = OrchestrationService(resolved, container=self, db=db)
+        self.register_capability_candidates(service.resolver)
+        return service
 
     def build_services(self, db) -> AgentServices:
         audit = AuditService(AuditRepository(db))
