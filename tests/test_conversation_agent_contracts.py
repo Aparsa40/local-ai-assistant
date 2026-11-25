@@ -50,6 +50,8 @@ def test_missing_request_id_is_minted():
     _payload(request_id="short"),
     _payload(schema_version=99),
     _payload(provider_id="OpenRouter"),
+    _payload(authorize_private_context_egress="false"),
+    _payload(force_delegation="false"),
     _payload(history_limit=0),
     _payload(memory_scopes=[{"domain": "other", "scope_type": "user", "scope_id": "1", "owner_id": "local-user"}]),
 ])
