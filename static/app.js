@@ -781,14 +781,17 @@ function chatApp() {
             this.isLoading = true;
             this.streamingSessionId = this.currentSessionId;
             this.messages.push({ role: 'user', content: userText });
-            const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: 'در حال انتخاب مدل...' }) - 1;
+            const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: '' }) - 1;
             this.scrollToBottom();
+            // Stable idempotency key: a retry of the same turn reconciles on the
+            // server instead of duplicating messages or side effects.
+            const request_id = 'req_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: this.currentSessionId, message: userText })
+                    body: JSON.stringify({ session_id: this.currentSessionId, message: userText, request_id })
                 });
                 if (!response.ok) {
                     const error = await response.json();
@@ -807,18 +810,37 @@ function chatApp() {
                         const line = event.split('\n').find(part => part.startsWith('data:'));
                         if (!line) continue;
                         const data = JSON.parse(line.slice(5).trim());
+                        // Legacy protocol events and versioned Phase 8 events share one parser.
                         if (data.type === 'meta') this.messages[aiMsgIndex].model = data.model;
                         else if (data.type === 'chunk') {
                             this.messages[aiMsgIndex].content += data.content;
                             this.scrollToBottom();
+                        } else if (data.type === 'accepted' || data.type === 'progress') {
+                            if (!this.messages[aiMsgIndex].content) this.messages[aiMsgIndex].model = 'در حال پردازش...';
+                        } else if (data.type === 'status') {
+                            const detail = data.data || {};
+                            if (detail.provider_id && detail.model) {
+                                this.messages[aiMsgIndex].model = detail.provider_id + ' / ' + detail.model;
+                            }
+                        } else if (data.type === 'validation') {
+                            const state = (data.data || {}).state;
+                            if (state === 'partial') this.messages[aiMsgIndex].model = 'پاسخ بخشی تأیید شد';
+                        } else if (data.type === 'final') {
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].content = detail.content !== undefined ? detail.content : this.messages[aiMsgIndex].content;
+                            if (detail.provenance && detail.provenance.provider_id) {
+                                this.messages[aiMsgIndex].model = detail.provenance.provider_id + ' / ' + (detail.provenance.model_used || '');
+                            }
+                            if (detail.status && detail.status !== 'completed') {
+                                this.messages[aiMsgIndex].content += '\n\n⚠️ وضعیت اجرا: ' + detail.status;
+                            }
+                        } else if (data.type === 'cancelled') {
+                            this.messages[aiMsgIndex].content += '\n\n⏹ اجرا لغو شد.';
                         } else if (data.type === 'error') {
-                            this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].content += '\n\n❌ خطا: ' + (detail.message || detail.content || 'نامشخص');
                         }
                     }
-                }
-                if (buffer.trim().startsWith('data:')) {
-                    const data = JSON.parse(buffer.trim().slice(5).trim());
-                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
                 }
                 await this.loadSessions();
                 // This endpoint serves local metadata only; it does not call provider model catalogs.
