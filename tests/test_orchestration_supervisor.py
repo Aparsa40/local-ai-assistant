@@ -662,7 +662,7 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
             },
         )
 
-        finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+        finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
         assert finished.status is PlanStatus.COMPLETED
         assert finished.nodes[0].status is NodeStatus.COMPLETED
         assert finished.nodes[0].run_id == run.run_id
@@ -670,7 +670,7 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
         assert len(orch.assignments.list_for_plan(plan_id)) == 0
 
         # A duplicate reconciliation must not remap the node or create work.
-        again = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+        again = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
         assert again.status is PlanStatus.COMPLETED
         assert again.nodes[0].run_id == run.run_id
         assert again.nodes[0].attempts == 1
