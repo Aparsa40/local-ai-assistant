@@ -126,3 +126,20 @@ def test_data_scope_ref_domain():
     DataScopeRef("knowledge", "user", "1", "local-user").validate()
     with pytest.raises(ContractValidationError):
         DataScopeRef("filesystem", "user", "1", "local-user").validate()
+
+
+def test_redact_payload_preserves_only_safe_approval_handoff_identifiers():
+    redacted = redact_payload({
+        "status": "approval_required",
+        "approval_id": "approval-123",
+        "run_id": "run-123",
+        "node_id": "node-123",
+        "plan_id": "plan-123",
+        "action_payload": {"secret": "must-not-leak"},
+    })
+    assert redacted == {
+        "status": "approval_required",
+        "approval_id": "approval-123",
+        "run_id": "run-123",
+        "node_id": "node-123",
+    }
