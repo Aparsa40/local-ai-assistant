@@ -1,6 +1,7 @@
 """Local strategy: require evidenced local readiness before inference."""
 from __future__ import annotations
 
+import inspect
 from typing import Callable, Optional
 
 from core.interface_manager import InterfaceManager
@@ -18,7 +19,10 @@ class OfflineStrategy:
 
     async def execute(self, request: ExecutionRequest, *, abort_check: Optional[Callable[[], bool]] = None) -> ExecutionResult:
         try:
-            ready = bool(await self._readiness_probe(request.provider_id, request.model))
+            readiness = self._readiness_probe(request.provider_id, request.model)
+            if inspect.isawaitable(readiness):
+                readiness = await readiness
+            ready = bool(readiness)
         except Exception:
             ready = False
         if not ready:
@@ -30,7 +34,12 @@ class OfflineStrategy:
             )
         chunks: list[str] = []
         if abort_check is not None and abort_check():
-            raise ExecutionAborted()
+            return ExecutionResult(
+                status=ExecutionStatus.CANCELLED,
+                provider_id=request.provider_id,
+                model_used=request.model,
+                error_code="cancelled",
+            )
         try:
             async for chunk in self._interface_manager.stream_chat(
                 request.provider_id,
