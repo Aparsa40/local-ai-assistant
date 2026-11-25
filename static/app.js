@@ -948,6 +948,15 @@ function chatApp() {
                     }
                 }
 
+                if (approval.kind === 'context') {
+                    message.content += approve
+                        ? '\\n\\n✅ تأیید دسترسی ثبت شد؛ بازیابی مجاز زمینه ادامه می‌یابد.'
+                        : '\\n\\n⛔ درخواست دسترسی رد شد؛ داده‌ای از آن محدوده بازیابی نشد.';
+                    message.approval = null;
+                    this.scrollToBottom();
+                    return;
+                }
+
                 const resume = await fetch(
                     '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/resume',
                     { method: 'POST' }
