@@ -12,6 +12,7 @@ from core.context import ContextManager
 from core.conversation_agent.operations import OperationRegistry
 from core.conversation_agent.service import ConversationAgentService
 from core.database import Base
+from core.migrations.runner import run_migrations
 from core.permissions.types import (
     AccessContext,
     PermissionScope,
@@ -44,6 +45,7 @@ def chat_client(monkeypatch):
         poolclass=StaticPool,
     )
     testing_session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    run_migrations(engine)
     Base.metadata.create_all(bind=engine)
 
     def override_db():
@@ -71,7 +73,7 @@ def chat_client(monkeypatch):
         ),
         context_builder=lambda conversation_service, db, access: ContextManager(conversation_service),
         session_factory=session_scope,
-        registry=OperationRegistry(),
+        registry=OperationRegistry(session_factory=session_scope),
         readiness_probe=lambda provider_id, model: True,
     )
     monkeypatch.setattr(main, "conversation_agent_service", service)
