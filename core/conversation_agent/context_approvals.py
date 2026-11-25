@@ -9,13 +9,14 @@ from core.permissions.approvals import ApprovalService
 from core.permissions.types import AccessRequest, ApprovalRequest, ApprovalStatus
 
 
-@dataclass(frozen=True, slots=True)
 class ContextApprovalRequired(Exception):
     """A memory/knowledge read is allowed only after a one-time user decision."""
 
-    access_request: AccessRequest
-    action_payload: dict
-    domain: str
+    def __init__(self, access_request: AccessRequest, action_payload: dict, domain: str) -> None:
+        super().__init__("Context access requires an explicit user approval.")
+        self.access_request = access_request
+        self.action_payload = dict(action_payload)
+        self.domain = domain
 
 
 class ConversationContextApprovalCoordinator:
