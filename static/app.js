@@ -6,6 +6,7 @@ function chatApp() {
         inputMessage: '',
         isLoading: false,
         streamingSessionId: null,
+        activeRequestId: null,
         showSettings: false,
         activeTab: 'persona',
         sidebarCollapsed: localStorage.getItem('wiz-sidebar-collapsed') === 'true',
@@ -786,6 +787,7 @@ function chatApp() {
             // Stable idempotency key: a retry of the same turn reconciles on the
             // server instead of duplicating messages or side effects.
             const request_id = 'req_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2));
+            this.activeRequestId = request_id;
 
             try {
                 const response = await fetch('/api/chat', {
@@ -850,6 +852,30 @@ function chatApp() {
             } finally {
                 this.isLoading = false;
                 this.streamingSessionId = null;
+                this.activeRequestId = null;
+            }
+        },
+
+        async cancelMessage() {
+            if (!this.streamingSessionId || !this.activeRequestId) return;
+            try {
+                const response = await fetch('/api/chat/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: this.streamingSessionId,
+                        request_id: this.activeRequestId
+                    })
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.detail || 'لغو درخواست ناموفق بود.');
+                }
+            } catch (error) {
+                const active = this.messages[this.messages.length - 1];
+                if (active && active.role === 'assistant') {
+                    active.content += '\\n\\n⚠️ ' + error.message;
+                }
             }
         }
     };
