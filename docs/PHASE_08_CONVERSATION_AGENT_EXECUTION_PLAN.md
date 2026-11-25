@@ -3,25 +3,26 @@
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
 **Document type:** Authoritative execution and acceptance contract  
-**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The current revision passes 462 Python tests, Python compilation, JavaScript syntax validation, and a TestClient HTTP chat smoke test. Phase 8 is **not yet complete**: operation/idempotency state is still process-local and is lost on server restart; the chat path does not yet emit an `approval_required` handoff; the deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. Do not merge or mark the phase complete until the restart/recovery and approval gaps are implemented or explicitly accepted as deferred.  
+**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The current revision passes 465 Python tests, Python compilation, JavaScript syntax validation, and a TestClient HTTP chat smoke test. Durable request identity/event replay and interrupted-operation recovery are implemented through migration `0007_conversation_operations`; delegated Phase 7 cancellation propagation is also implemented. Phase 8 is **not yet complete**: the chat path does not yet bridge permission decisions requiring human approval into an `approval_required` streaming handoff; the deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. A real local loopback-server smoke run is still outstanding. Do not merge or mark the phase complete until the approval handoff is implemented or explicitly accepted as deferred.  
 **Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
 **Last reviewed:** 2026-11-25
 
 ## Current implementation verification (2026-11-25)
 
-Latest verified branch head: `0d2af17243578e1c2e7297871223d350164c5338`.
+Latest verified branch head: `75864b7e611b2b53b86a83414ed8a8355fe84743`.
 
 - GitHub Actions: successful.
-- Python suite: 462 passed.
+- Python suite: 465 passed in 26.19s.
 - `python -m compileall -q core main.py`: successful in CI.
 - `node --check static/app.js`: successful in CI.
-- FastAPI TestClient smoke test: direct chat SSE lifecycle and assistant-message persistence verified.
-- Focused regression coverage added for immediate SSE disconnect/retry, request-ID/message mismatch, trusted scope ownership, boolean authorization flags, classifier failure, offline readiness and cancellation.
+- FastAPI TestClient smoke test: direct chat SSE lifecycle, durable operation registry, and assistant-message persistence verified.
+- Durable operation migration `0007_conversation_operations` persists request hashes, safe lifecycle events and terminal outcomes; interrupted in-flight work is marked uncertain and is never automatically replayed.
+- Focused regression coverage includes immediate SSE disconnect/retry, same-key conflict, restart replay/recovery, trusted scope ownership, boolean authorization flags, classifier failure, offline readiness, UI cancellation/retry and Phase 7 cancellation propagation.
 
 Outstanding acceptance gaps:
-1. Durable operation/event/idempotency persistence and safe restart recovery.
-2. Explicit approval handoff for operations whose permission decision requires human approval.
-3. End-to-end cancellation propagation to delegated Phase 7 plans where supported.
+1. Explicit `approval_required` handoff from permission/approval decisions into the streaming conversation lifecycle.
+2. The deterministic workflow registry is empty; such routes remain denied safely until owning services register workflows.
+3. Model-assisted classification remains optional and disabled by default.
 4. A real loopback server smoke run in the target local environment; CI currently uses FastAPI TestClient rather than launching the user's local server.
 
 ## 1. Purpose
