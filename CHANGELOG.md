@@ -15,7 +15,7 @@ All notable changes are documented here. The project follows Semantic Versioning
 - POST /api/chat migrated to the new lifecycle with a backward-compatible request schema (extended with optional idempotency and scope fields). Memory and Knowledge context services are wired through the existing PermissionManager adapters, scope ownership comes from trusted AccessContext, and the Alpine.js UI supports explicit cancellation and same-request retry.
 
 ### Phase 8 acceptance status
-- Latest verified approval-handoff revision: 468 Python tests passed in 29.45s; compileall and JavaScript syntax validation passed in CI run `45698639009` (commit `743ea9dd`).
+- Latest verified approval-handoff revision: 471 Python tests passed in 23.59s; compileall and JavaScript syntax validation passed in CI run `45700583734` (commit `53aa03cc`).
 - Delegated Agent Runtime tool approvals now flow through `approval_required` SSE events and actionable chat UI controls; approval decisions resume the same child run and reconcile the existing plan without re-execution.
 - Remaining before phase acceptance: permission-driven memory/knowledge context approvals still need a request-bound continuation path. Deterministic workflow routes remain fail-closed until an owning service registers a workflow; model-assisted classification remains optional/off by default; real local loopback smoke remains outstanding.
 
