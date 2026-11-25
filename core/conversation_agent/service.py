@@ -52,10 +52,14 @@ class TurnOutcome:
     context_refs: frozenset
 
 
-def _owner_id(request: ConversationRequest) -> str:
-    owner = (request.client_metadata or {}).get("owner_id")
+def _owner_id(access) -> str:
+    """Resolve the data owner from the trusted application access context."""
+    scope = getattr(access, "scope", None)
+    owner = getattr(scope, "owner_id", None)
     if isinstance(owner, str) and 0 < len(owner) <= 160:
         return owner
+    # Compatibility for isolated unit fixtures; production requests always
+    # receive AccessContext from the local API boundary.
     return "local-user"
 
 
@@ -157,6 +161,11 @@ class ConversationAgentService:
             conversation_service._authorize(request.session_id, PermissionOperation.UPDATE)
         except LookupError:
             yield self._reject(payload, "session_not_found", "The conversation session was not found.")
+            return
+
+        trusted_owner = _owner_id(access)
+        if any(scope.owner_id != trusted_owner for scope in request.memory_scopes + request.knowledge_scopes):
+            yield self._reject(payload, "scope_owner_mismatch", "A requested data scope does not belong to the authenticated local owner.")
             return
 
         operation, created = self._registry.start(request.session_id, request.request_id, request.message)
@@ -265,7 +274,7 @@ class ConversationAgentService:
         try:
             outcome = await asyncio.wait_for(
                 self._produce_candidate(
-                    operation, request, decision, conversation_service, context_manager
+                    operation, request, decision, conversation_service, context_manager, access
                 ),
                 timeout=request.budget.wall_clock_seconds,
             )
@@ -344,10 +353,11 @@ class ConversationAgentService:
         decision: DispatchDecision,
         conversation_service,
         context_manager,
+        access,
     ) -> Optional[TurnOutcome]:
         if decision.route is Route.AGENT_DELEGATION:
             return await self._delegate(operation, request, decision)
-        return await self._respond(operation, request, decision, context_manager)
+        return await self._respond(operation, request, decision, context_manager, access)
 
     async def _respond(
         self,
@@ -355,6 +365,7 @@ class ConversationAgentService:
         request: ConversationRequest,
         decision: DispatchDecision,
         context_manager,
+        access,
     ) -> Optional[TurnOutcome]:
         from core.knowledge import KnowledgeScope
         from core.memory.types import MemoryScope
@@ -374,7 +385,7 @@ class ConversationAgentService:
                 ContextRequest(
                     conversation_id=request.session_id,
                     query=request.message,
-                    owner_id=_owner_id(request),
+                    owner_id=_owner_id(access),
                     history_limit=request.history_limit,
                     memory_scopes=memory_scopes,
                     knowledge_scopes=knowledge_scopes,
