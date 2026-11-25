@@ -601,3 +601,46 @@ def test_model_unavailability_is_reported_as_an_incomplete_observation(tmp_path)
         assert model_steps and model_steps[0]["outcome"] == "failed"
     finally:
         env.dispose()
+
+
+def test_unexpected_tool_runtime_crashes_fail_the_run_and_release_claims(tmp_path):
+    env = make_agent_env(tmp_path)
+    try:
+        definition = make_definition(allowed_tools=(KNOWLEDGE_SEARCH_TOOL_ID,))
+        task = scripted_task(
+            env, definition, data_scopes=(env.data_scope(),),
+            payload={"query": "durable storage"},
+        )
+        set_behavior(env, definition, make_looping_behavior(env, env.knowledge_scope()))
+
+        class CrashingToolRuntime:
+            async def execute(self, request):
+                raise RuntimeError("handler crash")
+
+        from core.agents.controller import ExecutionController
+
+        controller = ExecutionController(
+            env.services.lifecycle,
+            env.services.registry,
+            env.services.runs,
+            env.services.checkpoints,
+            env.services.events,
+            CrashingToolRuntime(),
+            env.services.controller.capability_resolver,
+            env.services.controller.context_builder,
+            env.services.controller.evaluator,
+            interface_manager=env.interface_manager,
+            behaviors=env.services.controller.behaviors,
+            managed_permission_manager=env.services.permission_manager,
+            audit_service=env.services.audit_service,
+        )
+        run = env.services.lifecycle.create_run(task.task_id)
+        with pytest.raises(RuntimeError, match="handler crash"):
+            asyncio.run(controller.execute(run.run_id))
+        live = env.services.lifecycle.get_run(run.run_id)
+        # No failure path may leave a run RUNNING or an executor claim leaked.
+        assert live.status is AgentRunStatus.FAILED
+        assert live.error_code == "execution_error"
+        assert env.services.lifecycle.has_executor(run.run_id) is False
+    finally:
+        env.dispose()
