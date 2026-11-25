@@ -113,7 +113,9 @@ class OperationRegistry:
                     await operation.condition.wait()
                 batch = list(operation.events[index:])
                 index = len(operation.events)
-                for event in batch:
-                    yield event
-                    if event.type in {"final", "error", "cancelled"}:
-                        return
+            # Never hold the condition lock while yielding to a network client;
+            # a slow/disconnected subscriber must not block the lifecycle leader.
+            for event in batch:
+                yield event
+                if event.type in {"final", "error", "cancelled"}:
+                    return
