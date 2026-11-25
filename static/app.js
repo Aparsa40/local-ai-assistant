@@ -942,8 +942,8 @@ function chatApp() {
                     const listResponse = await fetch('/api/permissions/approvals?limit=100');
                     const listBody = await listResponse.json().catch(() => ({}));
                     const recorded = (listBody.approvals || []).find(item => item.approval_id === approval.approval_id);
-                    const expectedStatus = approve ? 'approved' : 'rejected';
-                    if (recorded?.status !== expectedStatus) {
+                    const expectedStatuses = approve ? ['approved', 'consumed'] : ['rejected'];
+                    if (!expectedStatuses.includes(recorded?.status)) {
                         throw new Error(decisionBody.detail || 'ثبت تصمیم تأیید ناموفق بود.');
                     }
                 }
