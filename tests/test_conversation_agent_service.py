@@ -268,7 +268,7 @@ def test_offline_not_ready_cloud_fallback_is_disclosed_as_partial():
     service = ConversationAgentService(
         interface_manager=SwitchingIM(),
         conversation_builder=lambda db, access, pm: conversation,
-        context_builder=lambda conv, db: FakeContextManager(items),
+        context_builder=lambda conv, db, access: FakeContextManager(items),
         session_factory=lambda: contextlib.nullcontext(None),
         registry=OperationRegistry(),
         readiness_probe=probe,
