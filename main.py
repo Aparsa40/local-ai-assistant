@@ -37,6 +37,7 @@ from core.conversation_agent.contracts import DataScopeRef
 from core.conversation_agent.dispatcher import DeterministicDispatcher
 from core.conversation_agent.operations import OperationRegistry
 from core.conversation_agent.orchestration_gateway import OrchestrationGateway
+from core.conversation_agent.context_approvals import ConversationContextApprovalCoordinator
 from core.conversation_agent.service import ConversationAgentService
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
@@ -109,18 +110,32 @@ def build_conversation_agent_service() -> ConversationAgentService:
     def context(conversation_service, db, access_ref):
         scoped_manager = build_permission_manager(db)
         audit_service = build_audit_service(db)
+        context_approvals = ConversationContextApprovalCoordinator(
+            build_approval_service(db),
+            request_id=access_ref.request_id,
+            owner_id=access_ref.scope.owner_id,
+        )
         memory_policy = PermissionManagerMemoryAccessPolicy(
             scoped_manager,
             access_ref.subject,
             audit_service=audit_service,
+            approval_handler=context_approvals.authorize,
+            request_id=access_ref.request_id,
         )
         memory_service = MemoryService(db, access_policy=memory_policy)
-        knowledge_service = build_knowledge_service(db, access_ref)
-        return ContextManager(
+        knowledge_service = build_knowledge_service(
+            db,
+            access_ref,
+            approval_handler=context_approvals.authorize,
+            request_id=access_ref.request_id,
+        )
+        context_manager = ContextManager(
             conversation_service,
             memory=memory_service,
             knowledge=knowledge_service,
         )
+        context_manager.approval_coordinator = context_approvals
+        return context_manager
 
     # Resolved lazily: the orchestration factory is defined later in this module,
     # after the eagerly-built composition root below.
@@ -333,7 +348,13 @@ def build_approval_service(db: Session) -> ApprovalService:
     )
 
 
-def build_knowledge_service(db: Session, access: AccessContext) -> KnowledgeService:
+def build_knowledge_service(
+    db: Session,
+    access: AccessContext,
+    *,
+    approval_handler=None,
+    request_id: str | None = None,
+) -> KnowledgeService:
     manager = PermissionManager(
         PermissionRepository(db),
         policies=(LocalApplicationPolicy(),),
@@ -342,6 +363,8 @@ def build_knowledge_service(db: Session, access: AccessContext) -> KnowledgeServ
         manager,
         access.subject,
         audit_service=build_audit_service(db),
+        approval_handler=approval_handler,
+        request_id=request_id,
     )
     return KnowledgeService(db, access_policy=policy)
 
