@@ -257,9 +257,10 @@ def test_runs_without_declared_tools_fail_scoped_context_assembly(tmp_path):
         with pytest.raises(AgentScopeDeniedError):
             env.execute(run.run_id)
         live = env.services.lifecycle.get_run(run.run_id)
-        # Fail closed: the run must not silently continue.
-        assert live.status is AgentRunStatus.RUNNING
-        cleanup_orphan_run(env, run.run_id)
+        # Fail closed: the run must end truthfully instead of continuing.
+        assert live.status is AgentRunStatus.FAILED
+        assert live.error_code == "context_or_capability_error"
+        assert env.services.lifecycle.has_executor(run.run_id) is False
     finally:
         env.dispose()
 
@@ -288,8 +289,9 @@ def test_mutating_tool_bindings_are_rejected_for_this_phase(tmp_path):
         with pytest.raises(AgentScopeDeniedError, match="read-only"):
             env.execute(run.run_id)
         live = env.services.lifecycle.get_run(run.run_id)
-        assert live.status is AgentRunStatus.RUNNING
-        cleanup_orphan_run(env, run.run_id)
+        assert live.status is AgentRunStatus.FAILED
+        assert live.error_code == "context_or_capability_error"
+        assert env.services.lifecycle.has_executor(run.run_id) is False
     finally:
         env.dispose()
 
