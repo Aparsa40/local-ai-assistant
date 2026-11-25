@@ -19,15 +19,15 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 2 — Interface Manager | [PHASE_02_EXECUTION_PLAN.md](PHASE_02_EXECUTION_PLAN.md) | Completed — PR #6 merged |
 | 3 — Local Model Runtime | [PHASE_03_EXECUTION_PLAN.md](PHASE_03_EXECUTION_PLAN.md) | Software complete — hardware load validation deferred |
 | 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | Completed and merged via PR #16; 228 CI tests passed |
-| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | Implementation complete on feature branch; 235 CI tests passed; PR/merge pending |
-| 6 — Agent Runtime | [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md) | Implementation complete on `feat/phase-6-agent-runtime`; PR/merge pending |
-| 7 — Supervisor & Orchestrator | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
+| 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | Completed and merged via PR #17; CI passed (235 tests reported) |
+| 6 — Agent Runtime | [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md) | Completed and merged via PR #19; final push and PR CI checks passed on head `bdf4e01` |
+| 7 — Supervisor & Orchestrator | [PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md) | Execution plan ready; Phase 6 dependency merged; ready to begin |
 | 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 9 — Multi-Agent System and Specialized Agents | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 10 — AI Librarian | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 11 — Backup, Maintenance & Integrations | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 
-A dedicated execution plan should be added for each later phase before implementation of that phase begins.
+Dedicated execution plans for Phases 7–11 are now present; use the relevant phase plan as the authoritative implementation contract.
 
 ## Module specifications
 
