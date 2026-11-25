@@ -89,7 +89,7 @@ The current credential file is local and ignored by Git, but credentials are not
   Backup & Maintenance ---- Snapshot APIs / Cache Policies
 ```
 
-This is a logical architecture. It does not require a separate process or database for every box. Supervisor, Conversation Processing integration, and multi-agent orchestration are accepted target design, not current shipped functionality.
+This is a logical architecture. It does not require a separate process or database for every box. Phase 7 Supervisor/Orchestrator is implemented and merged via PR #21. Phase 8 Conversation Processing integration and Phase 9 broader multi-agent orchestration remain planned work.
 
 ## 4. Core module responsibilities
 
@@ -109,7 +109,7 @@ The software foundation and CI acceptance are complete. Windows smoke validation
 
 Hosts goal-oriented agents and manages their task lifecycle, state, bounded execution loops, handoffs, and completion evaluation. The Supervisor is a specialized agent hosted by this runtime, not the runtime itself. See [AGENT_RUNTIME.md](AGENT_RUNTIME.md).
 
-Phase 6 implements versioned and validated agent definitions, a trusted application-side registry, deterministic lifecycle transitions with optimistic concurrency and restart recovery, checkpoint/resume support, budget-bounded execution through ToolRuntime and PermissionManager, one builtin read-only knowledge-analysis agent, and loopback-only lifecycle APIs and UI. Supervisor, Conversation Agent, handoff, and multi-agent orchestration remain accepted target design, not implemented.
+Phase 6 implements versioned and validated agent definitions, a trusted application-side registry, deterministic lifecycle transitions with optimistic concurrency and restart recovery, checkpoint/resume support, budget-bounded execution through ToolRuntime and PermissionManager, one builtin read-only knowledge-analysis agent, and loopback-only lifecycle APIs and UI. The Phase 7 Supervisor/Orchestrator is implemented and merged via PR #21. Conversation Agent is Phase 8 planned work; broader multi-agent orchestration is Phase 9 planned work.
 
 ### Model & Provider Updater
 
@@ -125,7 +125,7 @@ It decides whether a request can be answered directly, handled by a deterministi
 
 A specialized coordinating agent hosted by Agent Runtime. It plans complex work, decomposes tasks, selects eligible agent roles and model capabilities, coordinates handoffs, and evaluates combined results.
 
-It is not a separate infrastructure manager and cannot grant permissions or execute tools directly. Deterministic runtime code handles lifecycle transitions, policy checks, iteration limits, and simple workflows without requiring an LLM. No Supervisor is implemented yet.
+It is not a separate infrastructure manager and cannot grant permissions or execute tools directly. Deterministic runtime code handles lifecycle transitions, policy checks, iteration limits, and simple workflows without requiring an LLM. The Supervisor/Orchestrator baseline is implemented and merged via PR #21; see the Phase 7 execution plan for delivered scope and limitations.
 
 ### Response Validator & Composer
 
