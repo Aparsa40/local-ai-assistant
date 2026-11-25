@@ -337,7 +337,10 @@ def _register_failing_agent(env, session, orch):
     AgentDefinitionRepository(session).register(make_definition(
         agent_id="failing-agent",
         goal="A deterministic failing agent used for failure injection.",
-        allowed_tools=(),
+        # The definition binds the read capability so the trusted local owner
+        # can issue the exact per-run knowledge-read grant for the node scope;
+        # a tool-free definition would be denied before the loop even runs.
+        allowed_tools=("knowledge_search",),
         allowed_models=(),
         data_scopes=("knowledge",),
     ))
