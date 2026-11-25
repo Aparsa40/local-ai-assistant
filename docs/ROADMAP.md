@@ -1,7 +1,7 @@
 # Local AI Assistant — 11-Phase Project Roadmap
 
 **Status:** Canonical top-level roadmap  
-**Last reviewed:** 2026-11-24  
+**Last reviewed:** 2026-11-25  
 **Project:** Local AI Assistant
 
 This document is the single source of truth for the project's top-level phase numbering. Technical work packages, implementation increments, and module contracts belong inside these 11 phases; they must not create a competing top-level phase sequence.
@@ -16,9 +16,9 @@ The local application and its managed data are the system of record. Cloud infer
 
 The repository currently contains a FastAPI backend, lightweight Alpine.js browser UI, SQLAlchemy/SQLite persistence, provider adapters, settings/configuration handling, chat streaming, a provider-neutral Interface Manager foundation, and a provider-neutral Local Model Runtime foundation with Ollama as its first adapter.
 
-The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, and local runtime lifecycle state/events.
+The current database persists chat sessions/messages, user profile, provider/operator catalogs, live model catalog records, provider/model runtime observations, quota snapshots, catalog sync history, intelligence reports, local runtime lifecycle state/events, permission grants/approvals/audit events, and agent definitions/tasks/runs/checkpoints/events (schema revisions `0001`–`0005`).
 
-Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 PR #15 delivered the core foundation; the remaining local-owner grant/approval APIs, Knowledge permission adapter, destructive-action approval, and final security regression are implemented on `feat/phase-5-operational-authorization`; latest CI passed 235 tests and its PR/merge is pending. Phase 6 is implemented on `feat/phase-6-agent-runtime` (PR/merge pending): one bounded builtin knowledge-analysis agent, deterministic run lifecycle with checkpoint/restart recovery, budget-bounded execution through ToolRuntime and PermissionManager, and loopback-only lifecycle APIs. Hosted authentication, encrypted credential storage, general production tool handler coverage, further autonomous-agent behaviors, and PostgreSQL migrations remain unimplemented. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
+Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 operational authorization and Knowledge integration are completed and merged via PR #17 (`22ac914163afb35778e27f52f774630919d9272d`); its implementation completed on `feat/phase-5-operational-authorization` and CI reported 235 passing tests. Phase 6 Agent Runtime is completed and merged via PR #19 (merge commit `4d6128af3935a09c984719a20e23f446d8c95eab`); the final head `bdf4e01dd593a860d9efb245f533c019c857ef17` passed both push and pull-request CI checks. Hosted authentication, encrypted credential storage, general production tool handler coverage, further autonomous-agent behaviors, and PostgreSQL migrations remain unimplemented. Authentication and an encrypted credential vault are not implemented. API access is loopback-only with a fixed local principal, not user authentication. Do not expose the current application through a LAN, reverse proxy, or public network.
 
 ## Phase 1 — Architecture & Contracts Foundation
 
@@ -115,7 +115,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 5 — Tool Runtime & Permission Manager
 
-**Status:** Implementation complete on `feat/phase-5-operational-authorization`; PR/merge pending. Latest CI passed 235 tests.
+**Status:** Completed and merged via PR #17; CI reported 235 passing tests.
 
 **Goal:** Mediate every protected data access and tool action through application-owned authorization and execution boundaries.
 
@@ -139,7 +139,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 6 — Agent Runtime
 
-**Status:** Implementation complete on `feat/phase-6-agent-runtime`; PR/merge pending.
+**Status:** Completed and merged via PR #19; final push and pull-request CI checks passed on head `bdf4e01`.
 
 **Goal:** Host bounded goal-oriented agents with deterministic lifecycle and state management.
 
@@ -156,7 +156,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 **Exit criteria:** one agent completes a bounded task, preserves state, stops safely, and passes deterministic lifecycle and permission tests.
 
-**Completion evidence:** the branch implements WP-6.1 through WP-6.8: typed contracts and transition table; migration `0005_agent_runtime` with agent repositories; trusted registry and deterministic lifecycle with executor exclusivity and restart recovery; scoped permission-checked context and exact per-run capability grants; a budget-bounded execution controller using InterfaceManager for models and ToolRuntime for tools; loopback-only lifecycle APIs and a minimal run-status UI; and the builtin deterministic `knowledge-analyzer` agent with regression suites. The authoring environment could not execute Python locally; compile, full pytest, and frontend syntax validation run in CI, and the pull request records this as pending CI evidence. This is one bounded agent, not a general autonomous-agent platform; Supervisor and multi-agent behavior remain Phases 7/9.
+**Completion evidence:** the branch implements WP-6.1 through WP-6.8: typed contracts and transition table; migration `0005_agent_runtime` with agent repositories; trusted registry and deterministic lifecycle with executor exclusivity and restart recovery; scoped permission-checked context and exact per-run capability grants; a budget-bounded execution controller using InterfaceManager for models and ToolRuntime for tools; loopback-only lifecycle APIs and a minimal run-status UI; and the builtin deterministic `knowledge-analyzer` agent with regression suites. The authoring environment could not execute Python locally; compile, full pytest, and frontend syntax validation were executed by CI. The final push and pull-request runs both passed on the merged head. This is one bounded agent, not a general autonomous-agent platform; Supervisor and multi-agent behavior remain Phases 7/9.
 
 ## Phase 7 — Supervisor & Orchestrator
 
