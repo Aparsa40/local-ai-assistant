@@ -90,7 +90,7 @@ Important documents:
 - [AI orchestration](docs/AI_ORCHESTRATION.md)
 - [Agent Runtime](docs/AGENT_RUNTIME.md)
 
-The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 foundation PR #15 is merged; final local-owner grant/approval APIs, Knowledge authorization, destructive-action approval, and security regression are implemented on `feat/phase-5-operational-authorization`. Latest CI passed 235 tests; its PR/merge is pending. Phase 6 Agent Runtime is implemented and merged via PR #19 (`4d6128af3935a09c984719a20e23f446d8c95eab`); final push and pull-request CI checks passed on head `bdf4e01dd593a860d9efb245f533c019c857ef17`. The local owner identity is not authentication. Read the relevant module contract before changing that area.
+The documents distinguish **Implemented**, **Accepted**, and **Planned** capabilities. Phase 4 WP-4.1–WP-4.7 is implemented and merged through PR #16 (`923ad244d91425cca50a64b4c683f62aa53b7fc0`); CI passed 228 tests. Phase 5 operational authorization and Knowledge integration are completed and merged via PR #17 (`22ac914163afb35778e27f52f774630919d9272d`); CI reported 235 passing tests. Phase 6 Agent Runtime is implemented and merged via PR #19 (`4d6128af3935a09c984719a20e23f446d8c95eab`); final push and pull-request CI checks passed on head `bdf4e01dd593a860d9efb245f533c019c857ef17`. The local owner identity is not authentication. Read the relevant module contract before changing that area.
 
 ## Requirements
 
