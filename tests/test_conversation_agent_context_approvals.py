@@ -14,9 +14,7 @@ from core.conversation_agent.context_approvals import (
 from core.permissions.approvals import ApprovalService
 from core.permissions.audit import AuditService
 from core.permissions.knowledge_adapter import PermissionManagerKnowledgeAccessPolicy
-from core.permissions.local_policy import LocalApplicationPolicy
 from core.permissions.memory_adapter import PermissionManagerMemoryAccessPolicy
-from core.permissions.manager import PermissionManager
 from core.permissions.owner_policies import LocalOwnerApprovalDecisionPolicy
 from core.permissions.types import (
     AccessRequest,
