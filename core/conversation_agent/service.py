@@ -172,8 +172,11 @@ class ConversationAgentService:
             return
 
         operation, created = self._registry.start(request.session_id, request.request_id, request.message)
-        yield self._accepted_event(operation).to_sse()
         if not created:
+            if operation.user_message != request.message:
+                yield self._reject(payload, "idempotency_conflict", "This request ID is already bound to a different message.")
+                return
+            yield self._accepted_event(operation).to_sse()
             # Duplicate submission: replay the recorded lifecycle; either the
             # terminal event or the live follow-on stream. No side effects run.
             async for event in self._registry.follow(operation, from_index=0):
@@ -182,11 +185,15 @@ class ConversationAgentService:
                 yield event.to_sse()
             return
 
+        # Start the leader before yielding the first SSE event. If the browser
+        # disconnects immediately after acceptance, execution still proceeds
+        # and a retry with the same key can reconcile the operation.
         await operation.publish(self._accepted_event(operation))
         leader = asyncio.ensure_future(
             self._run_lifecycle(operation, request, access, permission_manager)
         )
         operation.leader_task = leader
+        yield self._accepted_event(operation).to_sse()
         seen_accepted = False
         async for event in self._registry.follow(operation, from_index=0):
             if not seen_accepted and event.type == "accepted":
