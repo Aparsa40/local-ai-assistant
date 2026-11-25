@@ -173,7 +173,7 @@ class ConversationAgentService:
 
         operation, created = self._registry.start(request.session_id, request.request_id, request.message)
         if not created:
-            if operation.user_message != request.message:
+            if not operation.matches_message(request.message):
                 yield self._reject(payload, "idempotency_conflict", "This request ID is already bound to a different message.")
                 return
             yield self._accepted_event(operation).to_sse()
