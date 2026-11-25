@@ -148,7 +148,7 @@ def test_migrations_are_versioned_idempotent_and_upgrade_legacy_columns(tmp_path
             assert connection.execute(text("SELECT id FROM sessions")).scalar_one() == 41
             assert connection.execute(text("SELECT provider_id FROM provider_runtime_status")).scalar_one() == "ollama"
         revisions = engine.connect().execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
-        assert revisions == 6
+        assert revisions == 7
     finally:
         engine.dispose()
 
@@ -161,7 +161,7 @@ def test_migrations_bootstrap_knowledge_schema_on_a_fresh_database():
         assert {"schema_migrations", "knowledge_sources", "knowledge_files", "knowledge_chunks", "knowledge_artifacts"} <= tables
         with engine.connect() as connection:
             revisions = connection.execute(text("SELECT revision FROM schema_migrations ORDER BY revision")).scalars().all()
-            assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts", "0003_knowledge_file_versions", "0004_knowledge_fts_trigger_fix", "0005_agent_runtime", "0006_orchestration"]
+            assert revisions == ["0001_legacy_additive_columns", "0002_knowledge_fts", "0003_knowledge_file_versions", "0004_knowledge_fts_trigger_fix", "0005_agent_runtime", "0006_orchestration", "0007_conversation_operations"]
             assert connection.execute(text("SELECT COUNT(*) FROM knowledge_chunks_fts")).scalar_one() == 0
     finally:
         engine.dispose()
