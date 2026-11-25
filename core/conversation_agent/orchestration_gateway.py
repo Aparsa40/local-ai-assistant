@@ -124,7 +124,7 @@ class OrchestrationGateway:
                     approval_callback=approval_callback,
                     timeout_seconds=request.budget.wall_clock_seconds - (
                         asyncio.get_running_loop().time() - started_at
-                    ),
+                    ) - 1.0,
                 )
                 if view is None:
                     view = service.plan_view(plan_id) or {}
@@ -174,7 +174,9 @@ class OrchestrationGateway:
     ) -> dict | None:
         """Wait for a user decision, execute the same child run, then resume its plan."""
         if timeout_seconds <= 0:
-            return None
+            await service.cancel_plan(plan_id, reason="approval_timeout")
+            self._refresh_session(db)
+            return service.plan_view(plan_id) or {}
         deadline = asyncio.get_running_loop().time() + float(timeout_seconds)
         pending = self._pending_approval(view)
         while pending is not None:
@@ -219,7 +221,9 @@ class OrchestrationGateway:
                         return view
                     break
                 if asyncio.get_running_loop().time() >= deadline:
-                    return None
+                    await service.cancel_plan(plan_id, reason="approval_timeout")
+                    self._refresh_session(db)
+                    return service.plan_view(plan_id) or {}
                 await asyncio.sleep(0.1)
         return view
 
