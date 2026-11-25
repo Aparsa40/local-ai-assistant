@@ -636,6 +636,11 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
             attempts=1,
         )
 
+        plan_view = orch.plan_view(plan_id)
+        approval_node = plan_view["nodes"][0]
+        assert approval_node["run_status"] == "paused"
+        assert approval_node["pending_approval_id"] == "approval-test"
+
         with pytest.raises(OrchestrationServiceError, match="owner"):
             asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id="another-owner"))
         with pytest.raises(OrchestrationSchedulerError, match="explicitly resumed"):
