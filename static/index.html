@@ -160,7 +160,7 @@
                         </div>
                         <div class="prose prose-invert text-sm leading-relaxed" x-html="renderMarkdown(msg.content)"></div>
                         <div x-show="msg.approval" class="mt-4 rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-sm">
-                            <p class="mb-2 text-amber-200">این اجرای واگذارشده برای ادامه به تأیید نیاز دارد.</p>
+                            <p class="mb-2 text-amber-200" x-text="msg.approval.kind === 'context' ? 'دسترسی به این محدوده برای بازیابی زمینه نیازمند تأیید است.' : 'این اجرای واگذارشده برای ادامه به تأیید نیاز دارد.'"></p>
                             <p x-show="msg.approvalSummary" class="mb-3 text-xs text-slate-300" x-text="msg.approvalSummary"></p>
                             <div x-show="msg.approvalError" class="mb-2 text-rose-300" x-text="msg.approvalError"></div>
                             <div x-show="msg.approvalBusy" class="mb-2 text-slate-300">در حال ثبت تصمیم و ادامهٔ اجرا...</div>
