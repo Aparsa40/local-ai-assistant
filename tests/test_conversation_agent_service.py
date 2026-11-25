@@ -211,6 +211,22 @@ async def _resolved(value):
     return value
 
 
+def test_scope_owner_mismatch_is_rejected_before_side_effects():
+    service, conversation, im, _ = build_service(items=[context_item("memory", "memory:1", "PRIVATE")])
+    payload = _payload(memory_scopes=[{
+        "domain": "memory",
+        "scope_type": "user",
+        "scope_id": "1",
+        "owner_id": "attacker",
+    }])
+    parsed = _parse(run(_collect(service, payload)))
+    assert len(parsed) == 1
+    assert parsed[0]["type"] == "error"
+    assert parsed[0]["data"]["error_code"] == "scope_owner_mismatch"
+    assert conversation.prepared == []
+    assert im.received == []
+
+
 def test_invalid_payload_single_error_event_no_side_effects():
     service, conversation, im, _ = build_service()
     parsed = _parse(run(_collect(service, {"session_id": 1, "message": "x" * 999999, "request_id": "req_" + "a" * 24})))
