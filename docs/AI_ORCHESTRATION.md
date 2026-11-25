@@ -1,6 +1,6 @@
 # AI Orchestration and Conversation Processing
 
-**Status:** Accepted target design; current chat orchestration remains manual-provider oriented. Phase 7 must provide catalog-routed compound-task decomposition and baseline multi-agent fan-out over the Agent Runtime. Conversation Processing and advanced multi-agent collaboration are delivered by their existing later phases; multi-agent task routing is not deferred to a new manager layer.
+**Status:** Target architecture aligned with merged Phase 7 baseline; Conversation Agent implementation is Phase 8 planned work. Phase 9 owns broader multi-agent collaboration beyond the delivered sequential orchestration baseline.
 
 ## 1. Purpose and boundaries
 
@@ -84,7 +84,7 @@ A model-generated tool call is only a proposal. Permission Manager checks the ac
 
 ## 7. Multi-Agent execution
 
-Baseline multi-agent delegation is part of Phase 7 and is task-driven. It is not enabled merely because multiple models are configured: the InterfaceManager task catalog must provide evidence-backed task IDs and explicit primary/fallback routes.
+The Phase 7 implementation merged in PR #21 is the current bounded orchestration baseline. Phase 8 must not assume unimplemented task-catalog routing, parallel fan-out or advanced collaboration. Phase 9 owns broader multi-agent expansion.
 
 When multiple agents are used:
 - decompose compound goals into atomic task nodes, each with one canonical task ID, scope, dependency set, and acceptance criterion;
@@ -96,7 +96,7 @@ When multiple agents are used:
 - expose unresolved disagreement and missing task outcomes;
 - prevent agents from inheriting permissions implicitly.
 
-Phase 9 extends this baseline with advanced collaboration patterns, specialized agent teams, and richer coordination. It does not introduce multi-agent execution for the first time.
+Phase 9 owns broader multi-agent collaboration, specialized agent teams and richer coordination beyond the sequential Phase 7 baseline.
 
 ## 8. Failure and fallback
 
@@ -111,3 +111,8 @@ Phase 9 extends this baseline with advanced collaboration patterns, specialized 
 All online/offline candidate responses converge on Response Validator & Composer. Provider adapters normalize transport behavior; they do not validate factual truth. The validator checks structure, completeness, references, policy, and tool outcomes before final composition.
 
 Related: ARCHITECTURE.md, AGENT_RUNTIME.md, INTERFACE_MANAGER.md, PERMISSIONS.md.
+
+
+## Phase boundary for Conversation Agent
+
+Phase 8 integrates the existing OrchestrationService through its composition root, with bounded goals, child scopes contained by the authorized request scope, correlation IDs and truthful handling of partial/failed runs. It must not call the application's own HTTP endpoints internally, replace the scheduler, or implement Phase 9 features. Context retrieval and cloud egress are separate authorization decisions; private local context must never be sent to a cloud provider without explicit destination authorization.

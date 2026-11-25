@@ -21,13 +21,13 @@ These are the authoritative step-by-step plans. Follow the active phase document
 | 4 — Storage & Memory Services | [PHASE_04_EXECUTION_PLAN.md](PHASE_04_EXECUTION_PLAN.md) | Completed and merged via PR #16; 228 CI tests passed |
 | 5 — Tool Runtime & Permission Manager | [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md) | Completed and merged via PR #17; CI passed (235 tests reported) |
 | 6 — Agent Runtime | [PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md](PHASE_06_AGENT_RUNTIME_EXECUTION_PLAN.md) | Completed and merged via PR #19; final push and PR CI checks passed on head `bdf4e01` |
-| 7 — Supervisor & Orchestrator | [PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md) | Execution plan ready; Phase 6 dependency merged; ready to begin |
-| 8 — Conversation Agent | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
+| 7 — Supervisor & Orchestrator | [PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md](PHASE_07_SUPERVISOR_ORCHESTRATOR_EXECUTION_PLAN.md) | Implemented and merged via PR #21; limitations documented |
+| 8 — Conversation Agent | [PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md](PHASE_08_CONVERSATION_AGENT_EXECUTION_PLAN.md) | Execution contract ready; implementation not started |
 | 9 — Multi-Agent System and Specialized Agents | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 10 — AI Librarian | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 | 11 — Backup, Maintenance & Integrations | Defined in [ROADMAP.md](ROADMAP.md) | Planned |
 
-Dedicated execution plans for Phases 7–11 are now present; use the relevant phase plan as the authoritative implementation contract.
+Dedicated execution plans for Phases 7–11 are present; use the relevant phase plan as the authoritative implementation contract. Phase 8 consumes the merged Phase 7 baseline and must not absorb Phase 9 enhancements.
 
 ## Module specifications
 

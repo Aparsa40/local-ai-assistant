@@ -2,87 +2,202 @@
 
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
-**Document type:** Authoritative execution plan  
-**Status:** Planned — execution contract prepared; current chat remains manual-provider oriented  
-**Dependencies:** Phases 4–6; Phase 7 integration for complex task delegation  
-**Last reviewed:** 2026-11-24
+**Document type:** Authoritative execution and acceptance contract  
+**Status:** Execution-ready plan; implementation not started  
+**Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
+**Last reviewed:** 2026-11-25
 
-## 1. Purpose and boundary
+## 1. Purpose
 
-Replace the current manual-provider-oriented chat workflow with a controlled Conversation Processing layer. It receives user requests, resolves authorized context, chooses direct response versus deterministic workflow or agent delegation, invokes online/offline strategies through InterfaceManager, validates candidate output, and records conversation provenance.
+Replace the manual-provider-oriented POST /api/chat workflow with a controlled, auditable Conversation Processing lifecycle. The system accepts a user turn, establishes request identity and policy context, classifies the work, retrieves only authorized context, selects a permitted execution path, validates the result, streams safe progress, and persists a truthful final outcome.
 
-Conversation Agent is the user-facing workflow agent hosted by Agent Runtime. It does not own provider adapters, database internals, permission policy, or tool execution.
+The Conversation Agent is the user-facing workflow agent hosted by the existing Phase 6 Agent Runtime. It is not a second runtime, provider router, permission engine, database owner, or tool executor.
 
-## 2. Current baseline and reuse
+## 2. Phase boundaries and dependencies
 
-Current chat/API/UI live in `main.py`, `core/orchestrator.py`, and `static/`. Reuse `ConversationService`, `ContextManager`, `PermissionManager`, `ToolRuntime`, `Agent Runtime`, and `InterfaceManager`. Do not duplicate session/message persistence or call provider SDKs from route handlers.
+Reuse:
+- Phase 4: ConversationService, repositories, storage/migration infrastructure, ContextManager, memory and knowledge persistence.
+- Phase 5: PermissionManager, exact-scope grants, approval workflow, ToolRegistry and ToolRuntime.
+- Phase 6: Agent Runtime contracts, registry, lifecycle, controller, checkpoints, budgets, events and scoped execution.
+- Phase 7: the merged Supervisor/OrchestrationService, goal/plan/task contracts, bounded sequential scheduling, handoffs, aggregation, cancellation and reconciliation.
 
-## 3. Scope
+Phase 7 was merged in PR #21 (merge commit c66b2d6acaa359899a26e3dac3aa424b0c33d8a5). Phase 8 may submit a compound goal to the existing orchestration service, but must not replace its scheduler or create a parallel orchestration engine.
 
-- Request envelope and conversation event lifecycle.
-- Intent/request classification with deterministic fallback.
-- Direct response, deterministic service workflow, or Agent Runtime task dispatch.
-- Online and offline execution strategies using the same provider-neutral contract.
-- Authorized context assembly and explicit destination/privacy policy.
-- Response Validator & Composer for structure, evidence, completeness, and safety.
-- Streaming response events with durable final message persistence.
-- Provider/model/task/tool provenance and user-visible partial/failure states.
-- Explicit fallback policy with no private-context cloud egress.
+Phase 8 owns user-turn intake, normalized conversation lifecycle, deterministic dispatch, explicit context and egress authorization, normalized response candidates, validation/composition, safe streaming, cancellation/retry semantics, durable outcomes, UI controls and conversation-level provenance.
 
-## 4. Work packages
+Explicitly deferred:
+- Phase 9: broader multi-agent collaboration, parallel fan-out, agent teams and advanced coordination.
+- Phase 10: AI Librarian.
+- Phase 11: backup, maintenance and external integrations.
+- No provider adapter replacement, credential-vault project, hosted authentication, or broad refactor is part of Phase 8.
 
-### WP-8.1 — Request and conversation contracts
-Define normalized request, intent, execution mode, response candidate, validation report, conversation event, and provenance envelopes. Preserve existing session/message IDs and current fresh-chat behavior.
-**Exit:** request and response contracts are versioned and backward compatible.
+## 3. Current baseline — verify before changing
 
-### WP-8.2 — Request analyzer and dispatcher
-1. Implement deterministic rules for direct response vs task delegation.
-2. Add model-assisted classification only as a proposal with strict schema and fallback.
-3. Resolve required capabilities, scopes, privacy, and output expectations.
-4. Route tasks to Agent Runtime/Supervisor only when the request warrants it.
-5. Never infer permission from intent or user phrasing alone.
-**Exit:** dispatch decisions are explainable and cannot grant access.
+The current chat route is in main.py. It prepares/persists the user turn through ConversationService.prepare_chat(...), assembles bounded context through ContextManager (history-oriented; memory scopes are not implicitly enabled), uses core/orchestrator.py for provider/model message preparation, streams through InterfaceManager.stream_chat(...), and persists the assistant message after successful streaming.
 
-### WP-8.3 — Context and execution strategy
-1. Build context through ContextManager with explicit conversation/memory/knowledge scopes.
-2. Enforce owner, sensitivity, destination, and permission checks before retrieval/transmission.
-3. Implement online strategy via InterfaceManager.
-4. Implement offline strategy via InterfaceManager and local runtime readiness evidence.
-5. Re-check model capability/context limits after a fallback.
-6. Pause/report if no eligible execution path exists.
-**Exit:** both strategies use the same contract and private context is never silently sent to cloud.
+Agent Runtime and orchestration APIs also exist. These HTTP endpoints are application boundaries, not internal service interfaces. Conversation Agent must call application services through dependency injection/composition roots; it must not make loopback HTTP requests back into its own API.
 
-### WP-8.4 — Response Validator & Composer
-1. Validate output schema and required fields.
-2. Verify tool outcomes and cited source references exist.
-3. Detect missing sections, unsupported claims, and unresolved errors.
-4. Distinguish generated content from verified source evidence.
-5. Reject false success when an agent/tool failed or had uncertain side effects.
-6. Compose a user-readable response without dropping material limitations.
-**Exit:** candidate output cannot be marked complete without passing validation.
+Inspect the actual merged main code and tests before implementation. Treat this section as a baseline to verify, not permission to assume signatures or invent missing services. Record discrepancies in the PR and update this plan if contracts materially differ.
 
-### WP-8.5 — Streaming and persistence integration
-1. Stream normalized events (analysis state, progress, candidate, validation, final) without exposing hidden reasoning.
-2. Persist user message before inference and assistant final only after validated completion.
-3. Persist safe execution provenance and failures.
-4. Support cancellation and disconnected clients without duplicate assistant messages.
-5. Preserve existing session title and history semantics.
-**Exit:** reconnect/retry does not corrupt chat history or duplicate side effects.
+## 4. Non-negotiable invariants
 
-### WP-8.6 — UI integration and migration
-1. Add online/offline execution state and task progress to chat UI.
-2. Show provider/model changes and fallback disclosure.
-3. Show approval requests and allow explicit user decision.
-4. Provide clear pause/cancel/retry controls with safe idempotency.
-5. Keep settings/provider selection as user-controlled configuration.
-**Exit:** user can understand and control execution state.
+1. One owner per responsibility. Reuse existing services and repositories; do not duplicate persistence, context retrieval, permissions, tool execution, agent lifecycle or orchestration.
+2. Default deny. A classifier, prompt, model, intent label or user wording never creates a permission or grant.
+3. No implicit cloud egress. Local/private context must not reach a cloud provider unless existing application policy explicitly authorizes that destination and data scope. If authorization is absent or ambiguous, do not transmit; ask, use an eligible local path, or stop clearly.
+4. Model output is untrusted. Classification, plans, tool proposals, evidence references and candidate responses require application-side validation.
+5. Bounded execution. Enforce request, token, wall-clock, tool-call, output-size, retry and delegation limits using existing budget mechanisms.
+6. No unbounded autonomous loop. A turn may delegate a bounded goal; it may not recursively plan or call tools without limits and stop conditions.
+7. No false success. Partial, blocked, failed, rejected or uncertain execution remains distinguishable from success.
+8. No duplicate side effects. Retries, disconnects and recovery must not blindly replay non-idempotent actions.
+9. No hidden reasoning leakage. Never stream or persist private chain-of-thought; persist only safe status, concise progress, structured decisions and user-facing output.
+10. Preserve sessions, messages, titles, provider/model selection, credentials and settings.
 
-### WP-8.7 — Security, evaluation, and delivery
-Test prompt injection, context leakage, permission denials, model unavailability, malformed model output, invalid references, partial tool failure, uncertain side effects, stream disconnect, and persistence recovery. Update AI_ORCHESTRATION, ARCHITECTURE, README, and roadmap; deliver one PR after checks pass.
+## 5. Canonical contracts
 
-## 5. Suggested implementation map
+Define versioned, validated contracts in the project's established style. Names below are semantic requirements, not mandatory class names.
 
-```text
+### 5.1 ConversationRequest
+Include schema_version, request_id (client idempotency key or server-generated stable ID), conversation/session identity, normalized user message, validated attachments/references if supported, user-selected provider/model preferences, requested mode/preferences if exposed, timestamp and safe client metadata. The principal must come from the existing application security boundary, never from a request-body field.
+
+### 5.2 DispatchDecision
+Use a closed enum: direct_response, deterministic_workflow, agent_delegation, needs_user_input, blocked. Include reason codes, required capabilities, explicit data scopes, destination class, execution budget and approval requirement.
+
+Apply deterministic rules and policy checks first. An optional model-assisted classifier may propose a schema-constrained label; validate it and fall back deterministically on malformed output, timeout or model unavailability. A classifier cannot select an unauthorized destination or widen scope.
+
+### 5.3 ResponseCandidate and ValidationReport
+Candidate semantics include normalized content, execution status, provenance references, tool/run outcomes and declared limitations.
+
+Validation report includes valid/partial/rejected status; schema and required-section results; evidence/reference existence checks; required-task coverage and delegated run terminal state; tool outcome and side-effect uncertainty; policy/scope/egress compliance; machine-readable issue codes and safe explanations.
+
+Reference existence is not proof of factual correctness. Distinguish source-backed evidence from generated statements. Never fabricate citations, tool success or completion.
+
+### 5.4 Provenance
+Correlate conversation/session, request, assistant message, provider/model invocation, orchestration goal/plan, agent run and event IDs where available. Record only safe metadata: provider/model IDs, execution mode, route/reason code, timestamps, usage if available, status, source references and error codes. Never log credentials, full private prompts, unredacted context or hidden reasoning.
+
+## 6. Deterministic dispatch policy
+
+Keep the first implementation conservative and testable.
+
+| Request class | Route | Rule |
+|---|---|---|
+| Ordinary question not requiring tools/delegation | Direct response | Use user-selected eligible provider/model and permitted context |
+| Fixed application operation with deterministic service contract | Deterministic workflow | Call the owning service; do not invent an agent for ordinary CRUD |
+| Compound bounded goal requiring registered agents | Agent delegation | Submit scoped goal to existing OrchestrationService/Supervisor |
+| Missing scope, ambiguous destructive intent, unavailable capability or approval requirement | Needs input / blocked | Ask, obtain existing approval or stop safely |
+
+Dispatch thresholds and rules must be explicit in code and tests. Do not invent arbitrary complexity scores. Model classification is advisory only and cannot bypass guardrails.
+
+### Supervisor handoff
+- Create goals through the existing application service/composition root, not HTTP calls to the app's own endpoints.
+- Child scopes must be subsets of the authorized request scope.
+- Preserve request/conversation correlation IDs in supported metadata or a versioned handoff envelope.
+- Pass explicit goal, acceptance criteria, budget and cancellation linkage.
+- Validate persisted plan/run/aggregate results before composing a response.
+- Paused, failed, incomplete or unavailable orchestration remains visible as such.
+- Do not add multi-agent fan-out or parallel scheduling in Phase 8.
+
+## 7. Context, privacy and execution strategies
+
+### Context
+Use ContextManager and existing permission-aware services. Explicitly specify conversation history, memory scopes and knowledge scopes. Empty/omitted scopes remain empty; do not enable all memories or knowledge by default.
+
+Separate retrieval authorization from destination/egress authorization. Permission to read local material does not imply permission to transmit it to a cloud provider. Check both before transmission and ensure sensitive content never enters provider payloads before authorization succeeds.
+
+### Shared online/offline contract
+Both strategies accept the same normalized request/context and return the same normalized candidate/result shape. Both invoke models only through InterfaceManager; no provider SDK calls from Conversation Agent or route handlers.
+
+- Online: eligible cloud provider through InterfaceManager, only after explicit destination authorization for every transmitted data scope.
+- Offline: eligible local provider through InterfaceManager, only when local runtime/provider readiness and model capability are evidenced.
+- Preserve user-selected provider/model by default.
+- Fallback must re-check capability, context window, modality, tool support, health and destination policy. Never assume models are interchangeable.
+- Disclose material fallback/capability changes.
+- If no eligible route exists, pause, ask the user or report a clear limitation. Never silently switch to an unauthorized cloud destination or claim reasoning occurred without a model.
+
+Do not build a speculative autonomous router. Implement only routing required by actual providers and InterfaceManager contracts.
+
+## 8. Streaming, persistence, cancellation and idempotency
+
+### Event protocol
+Define a versioned SSE envelope with stable event_id, request_id, conversation_id, timestamp, event type and bounded payload. Minimum event types:
+- accepted
+- status
+- progress
+- candidate (optional, clearly non-final)
+- validation
+- approval_required
+- final
+- error
+- cancelled
+
+Never emit internal prompts, hidden reasoning, credentials, raw exception strings, raw context or unredacted tool output.
+
+### Persistence
+- Validate request and establish idempotency identity before inference.
+- Persist the user turn once using ConversationService semantics.
+- Persist lifecycle/provenance events through an appropriate existing service; add a migration only if existing tables cannot safely represent required durable state.
+- Persist assistant final only after validation/composition reaches an allowed terminal result.
+- Partial output must not masquerade as a completed assistant message.
+- Preserve session title and fresh-chat semantics.
+- Keep errors/cancellation traceable without corrupting history.
+
+### Idempotency and disconnect
+Define a uniqueness boundary for a request within a conversation. Repeated requests with the same key must return/reconcile the existing operation, not create duplicate turns or side effects.
+
+Specify behavior for duplicate submission while running, retry after completion, browser disconnect, explicit cancellation, server restart, assistant persistence failure after provider completion and uncertain tool side effects.
+
+Use existing Agent Runtime/Orchestration recovery for delegated work. Never blindly rerun non-idempotent tools. If safe recovery is impossible, mark the operation uncertain and require explicit user action. Cancellation propagates to owned runs when supported. An SSE disconnect alone is not proof of cancellation.
+
+## 9. UI integration
+
+Preserve existing chat UX and settings. Add only supported controls/status:
+- visible execution status and safe progress;
+- execution mode and provider/model actually used;
+- explicit fallback disclosure;
+- approval handoff through existing approval mechanism;
+- cancel and safe retry;
+- partial/blocked/failed state distinct from success.
+
+Do not add controls implying unsupported pause/resume or arbitrary routing. Reconnect must not duplicate messages or execution.
+
+## 10. Work packages
+
+### WP-8.0 — Baseline audit and contract freeze
+Inspect merged main, PR #21 implementation, service constructors, repositories, SSE, UI and tests. Map behaviors to existing services and identify only minimal missing seams. Document discrepancies and a file-level plan before coding.
+**Exit:** baseline map, composition design, privacy/data-flow review and implementation plan in PR.
+
+### WP-8.1 — Contracts and request identity
+Add versioned request, dispatch, candidate, validation, provenance and event contracts. Define idempotency and compatibility.
+**Exit:** tests cover valid, invalid, oversized and incompatible payloads.
+
+### WP-8.2 — Conversation service and deterministic dispatcher
+Implement conservative dispatch. Model-assisted classification, if justified, is optional/advisory with strict schema and deterministic fallback.
+**Exit:** table-driven tests prove routing, classifier fallback and no permission escalation.
+
+### WP-8.3 — Context authorization and strategies
+Integrate ContextManager, PermissionManager and InterfaceManager. Implement only supported online/offline strategies. Enforce destination authorization before cloud egress.
+**Exit:** fake-provider tests prove normalized contract parity, routing policy, fail-closed behavior and zero unauthorized private-context transmission.
+
+### WP-8.4 — Supervisor/Agent Runtime delegation
+Integrate through existing OrchestrationService composition root. Define correlation, scoped handoff, budgets, cancellation and aggregate mapping. No internal HTTP calls and no Phase 9 features.
+**Exit:** tests cover direct/delegated decisions, scope containment, successful/partial/failed orchestration, cancellation and unavailable Supervisor.
+
+### WP-8.5 — Response validation and composition
+Implement schema, reference, task coverage, tool outcome and policy validation; compose truthful final/partial/blocked responses.
+**Exit:** false-success, missing-reference, malformed-candidate and uncertain-side-effect cases are rejected or partial.
+
+### WP-8.6 — Streaming, persistence and UI migration
+Integrate versioned SSE, idempotency, durable outcomes, cancellation, reconnect and UI state. Preserve API compatibility where practical; document intentional changes.
+**Exit:** disconnect/retry/restart tests prove no duplicate messages or side effects.
+
+### WP-8.7 — Security, regression and delivery
+Run focused tests throughout, then one full Python suite at the end, frontend syntax checks and loopback smoke tests. Update affected docs and prepare one PR.
+**Exit:** acceptance checklist is evidenced by tests and CI; no merge.
+
+## 11. Suggested module map (not mandatory)
+
+Prefer extending existing services. Add core/conversation_agent only if it creates a genuine cohesive boundary:
+
+~~~text
 core/conversation_agent/
   contracts.py
   analyzer.py
@@ -94,42 +209,64 @@ core/conversation_agent/
   validator.py
   composer.py
   service.py
-core/orchestrator.py  # compatibility facade or migrated entry point
-main.py
-static/
-tests/
-  test_conversation_dispatch.py
-  test_execution_strategies.py
-  test_response_validation.py
-  test_conversation_events.py
-  test_chat_security.py
-```
+~~~
 
-## 6. Required validation
+Potential integration points: main.py, core/orchestrator.py (compatibility facade only if needed), core/conversations/, core/context/, core/agents/, core/orchestration/, core/interface_manager.py, static/ and tests/.
 
-```powershell
+Do not create every suggested file automatically. Keep modules minimal and consistent with project conventions.
+
+## 12. Test strategy and required validation
+
+Focused tests during implementation:
+- request schema, ID generation, duplicate submission and compatibility;
+- deterministic dispatch and classifier failure;
+- context scopes, permission denial and destination/egress denial;
+- cloud adapter receives no private context without explicit authorization;
+- offline readiness and model capability fallback;
+- provider/model selection preservation and visible fallback;
+- Supervisor handoff, scope containment, correlation and aggregate statuses;
+- validator schema, evidence references, missing tasks and tool outcomes;
+- SSE event ordering, payload redaction and no hidden reasoning;
+- cancellation, disconnect, retry, restart recovery and persistence failures;
+- UI state and legacy chat regression.
+
+Use fake providers/agents and deterministic clocks/IDs where practical. No live cloud credentials or hardware-intensive model loading in CI.
+
+Final validation (once per phase, after focused tests):
+
+~~~powershell
 python -m compileall -q core main.py
 python -m pytest -q
 node --check static/app.js
-```
+~~~
 
-Use fake providers for deterministic CI, then a loopback HTTP smoke test. Include explicit online/offline tests and verify that a private scope cannot reach a cloud adapter without destination authorization.
+Also run loopback HTTP smoke tests for direct chat, deterministic delegated chat fixtures, SSE final/error/cancel behavior and persistence across restart. Report exact commands, counts, warnings and environment limitations. Do not repeat the full suite after every small change.
 
-## 7. Phase-wide acceptance
+## 13. Phase-wide acceptance checklist
 
-- Current chat behavior is migrated without losing sessions/messages or provider/model settings.
-- Request classification and dispatch are deterministic, bounded, and auditable.
-- Direct response and agent task paths share one normalized execution contract.
-- Online/offline strategies are provider-neutral and re-check capabilities.
-- Context retrieval and egress are permission checked.
-- Response Validator reports evidence, gaps, and tool outcome status.
-- Streaming, cancellation, and persistence are restart-safe and idempotent.
-- No private local context is transmitted implicitly to a cloud provider.
-- Full regression and documentation checks pass.
+- [ ] Sessions, messages, titles, provider/model settings and credentials remain intact.
+- [ ] Conversation Agent reuses Agent Runtime; no second runtime.
+- [ ] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
+- [ ] Dispatch is deterministic, bounded, explainable and tested.
+- [ ] Classification cannot grant permissions, widen scopes or select unauthorized egress.
+- [ ] Context scopes are explicit; memory/knowledge are not implicitly enabled.
+- [ ] Cloud transmission is denied unless destination authorization covers the data.
+- [ ] Online/offline paths use InterfaceManager and re-check capability/readiness.
+- [ ] User-selected provider/model is preserved; fallback is permitted and disclosed.
+- [ ] Supervisor handoff uses internal composition, existing Phase 7 contracts and bounded scopes.
+- [ ] Phase 9 multi-agent enhancements are not introduced.
+- [ ] Validator distinguishes valid, partial and rejected; never fabricates evidence.
+- [ ] Streaming never exposes hidden reasoning, secrets, raw exceptions or private context.
+- [ ] Idempotency, cancellation, disconnect and restart do not duplicate messages or side effects.
+- [ ] UI accurately communicates status, fallback, approval and partial/failure.
+- [ ] Focused tests, one final full suite, JS syntax and loopback smoke tests pass.
+- [ ] README, roadmap, architecture, AI orchestration, docs index, changelog and this plan agree.
+- [ ] One implementation PR is open for review and has not been merged.
 
-## 8. Execution directive
+## 14. Execution directive
 
-**Project:** Local AI Assistant  
-**Phase:** 8 of 11 — Conversation Agent
+Implement Phase 8 only, on a dedicated branch named feat/phase-8-conversation-agent created from the then-current main. The documentation-preparation branch is not the implementation branch.
 
-Execute WP-8.1 through WP-8.7 after its dependencies are accepted. Preserve existing user data and provider/model selection. Do not turn the current chat route into an unbounded autonomous agent loop.
+Before coding, verify that the documentation-preparation PR has merged and branch from updated main. If it has not merged, stop and report the dependency rather than implementing against stale contracts.
+
+Execute WP-8.0 through WP-8.7 in order. Commit coherent milestones on that one branch. Do not create additional phase branches or combine Phase 9/10/11 work. Do not alter main directly. Do not merge the PR. If acceptance cannot be met, open a PR only when remaining gaps are explicit and safe; otherwise report the blocker without claiming completion.

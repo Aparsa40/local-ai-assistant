@@ -4,6 +4,11 @@ All notable changes are documented here. The project follows Semantic Versioning
 
 ## Unreleased
 
+### Documentation — Phase 8 preparation (2026-11-25)
+- Rewrote the Phase 8 Conversation Agent execution plan as an implementation and acceptance contract covering request identity, deterministic dispatch, explicit context/egress authorization, online/offline strategy parity, Supervisor handoff, response validation, SSE lifecycle, idempotency, cancellation, recovery, UI migration and test strategy.
+- Reconciled Phase 7 status with merged PR #21 and documented the boundary between the delivered sequential orchestration baseline, Phase 8 conversation integration and Phase 9 multi-agent expansion.
+- Updated README, roadmap, documentation index, AI orchestration and Phase 7 execution records.
+
 ### Added (Phase 7 - Supervisor & Orchestrator)
 - Bounded orchestration layer in `core/orchestration/`: typed, versioned contracts (Goal, Plan, TaskNode, Dependency, Assignment, Handoff, Evidence, AggregateResult) with explicit state transition tables, and a deterministic graph validator that rejects cycles, invalid or missing task references, unknown agent versions, invalid state transitions, and malformed planning output before any plan is persisted or scheduled.
 - Deterministic sequential scheduler with persisted scheduling decisions, dependency-gated starts, duplicate-execution prevention, plan wall-clock and retry budgets, explicit failure/cancellation propagation, and restart-safe `reconcile` recovery.

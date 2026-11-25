@@ -1,6 +1,6 @@
 # Agent Runtime
 
-**Status:** Implemented in Phase 6 for exactly one bounded agent plus restart recovery; Phase 7 adds the Supervisor agent and orchestration layer on the same runtime. Conversation Agent and multi-agent orchestration remain accepted target design (Phases 8-9).
+**Status:** Phase 6 Agent Runtime and Phase 7 Supervisor/Orchestrator are implemented and merged (PR #19 and PR #21). Conversation Agent is Phase 8 planned work; broader multi-agent collaboration is Phase 9 planned work.
 
 ## 1. Purpose
 
@@ -111,10 +111,10 @@ For multi-agent runs:
 2. Add a single bounded agent with no autonomous external side effects.
 3. Add model-backed planning and tool proposals through Interface Manager.
 4. Add permissioned Tool Runtime and resumable checkpoints.
-5. Add a Supervisor and a second specialized agent.
-6. Add multi-agent handoffs and coordination.
+5. Add the Supervisor and orchestration baseline (implemented in Phase 7).
+6. Integrate user-facing Conversation Agent in Phase 8, then expand specialized-agent collaboration in Phase 9.
 
-Items 1, 2, 3 (route allowlist and transmission authorization), and 4 are implemented in Phase 6. Items 5 and 6 are future phases.
+Items 1, 2, 3 (route allowlist and transmission authorization), and 4 are implemented in Phase 6. The Supervisor/orchestration baseline (item 5) is implemented in Phase 7. Conversation Agent integration is Phase 8; broader multi-agent collaboration remains Phase 9.
 
 ## 10. Non-goals for the first version
 
@@ -127,7 +127,7 @@ Items 1, 2, 3 (route allowlist and transmission authorization), and 4 are implem
 
 ## 11. Phase 6 implementation record
 
-Phase 6 delivers exactly one bounded, application-owned runtime on the builtin tool set. It is not a general autonomous-agent platform, and no Supervisor, Conversation Agent, multi-agent orchestration, or AI Librarian workflow is implemented.
+Phase 6 delivered the bounded, application-owned Agent Runtime. Phase 7 subsequently added the Supervisor/Orchestrator baseline on that runtime and merged it via PR #21. Conversation Agent, broader multi-agent collaboration and AI Librarian workflows are not implemented yet (Phases 8, 9 and 10 respectively).
 
 Implemented components (branch `feat/phase-6-agent-runtime`):
 
