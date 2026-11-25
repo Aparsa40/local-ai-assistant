@@ -55,6 +55,14 @@ class ConversationOperationRepository:
                 "updated_at": now,
             },
         )
+        # Keep a bounded replay window while never pruning in-flight work.
+        self._db.execute(
+            text(
+                "DELETE FROM conversation_operations WHERE rowid IN ("
+                "SELECT rowid FROM conversation_operations WHERE state <> 'running' "
+                "ORDER BY updated_at DESC LIMIT -1 OFFSET 2000)"
+            )
+        )
         self._db.commit()
         return result.rowcount == 1
 
