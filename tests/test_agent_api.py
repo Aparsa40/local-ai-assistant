@@ -277,7 +277,9 @@ def test_agent_api_execute_fails_closed_without_a_trusted_behavior(agent_client)
     try:
         services = app_module.agent_container.build_services(db)
         run = services.lifecycle.get_run(run_id)
-        assert run.status.value == "pending"
+        # Fail closed: the run ends truthfully with no executor claim left.
+        assert run.status.value == "failed"
+        assert run.error_code == "missing_trusted_behavior"
         assert services.lifecycle.has_executor(run_id) is False
     finally:
         db.close()
