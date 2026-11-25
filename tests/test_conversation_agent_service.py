@@ -57,7 +57,7 @@ def build_service(items=(), im=None, gateway=None, registry=None):
     service = ConversationAgentService(
         interface_manager=im,
         conversation_builder=lambda db, access, pm: conversation,
-        context_builder=lambda conv, db: FakeContextManager(items),
+        context_builder=lambda conv, db, access: FakeContextManager(items),
         session_factory=lambda: contextlib.nullcontext(None),
         orchestration_gateway=gateway,
         registry=registry,
