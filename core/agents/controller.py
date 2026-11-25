@@ -118,11 +118,6 @@ class ExecutionController:
         run = self.lifecycle.get_run(run_id)
         task = self.lifecycle.get_task(run.task_id)
         definition = self.registry.get_enabled(run.agent_id, run.agent_version)
-        behavior = self.behaviors.get((run.agent_id, run.agent_version))
-        if behavior is None:
-            raise AgentControllerError(
-                "No trusted behavior is registered for this agent version."
-            )
 
         if run.status is AgentRunStatus.RUNNING and self.lifecycle.has_executor(run_id):
             raise AgentConcurrencyError("Another executor already holds this run.")
@@ -171,6 +166,22 @@ class ExecutionController:
                 ),
             )
             raise
+
+        # Scoped context assembly precedes behavior selection: a run whose
+        # declared scopes cannot be assembled must fail closed with the more
+        # specific context error before any trusted strategy is chosen.
+        behavior = self.behaviors.get((run.agent_id, run.agent_version))
+        if behavior is None:
+            # The run is already RUNNING and executor-claimed here, so the
+            # missing strategy must release the claim and end the run truthfully.
+            self._release_and_fail(
+                run_id,
+                error_code="missing_trusted_behavior",
+                error_message="No trusted behavior is registered for this agent version.",
+            )
+            raise AgentControllerError(
+                "No trusted behavior is registered for this agent version."
+            )
 
         observations, pending = self._restore_state(run_id)
         started = time.monotonic()
