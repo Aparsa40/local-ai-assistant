@@ -100,18 +100,27 @@ class DeterministicDispatcher:
         # move an ordinary question to needs_user_input and back; every other
         # proposal is ignored and the deterministic rule stands.
         if self._classifier is not None:
-            proposal = self._classifier.classify(request)
+            try:
+                proposal = self._classifier.classify(request)
+            except Exception:
+                # A classifier is advisory only. Its failure must not prevent
+                # deterministic routing.
+                proposal = None
             if proposal is not None:
-                route, reason = proposal
-                if route in {Route.DIRECT_RESPONSE, Route.NEEDS_USER_INPUT}:
-                    return DispatchDecision(
-                        route=route,
-                        reason_codes=(reason,),
-                        destination_class=destination if route is Route.DIRECT_RESPONSE else DestinationClass.NONE,
-                        provider_id=provider_id if route is Route.DIRECT_RESPONSE else None,
-                        model=model if route is Route.DIRECT_RESPONSE else None,
-                        budget=request.budget,
-                    )
+                try:
+                    route, reason = proposal
+                    if route in {Route.DIRECT_RESPONSE, Route.NEEDS_USER_INPUT}:
+                        return DispatchDecision(
+                            route=route,
+                            reason_codes=(reason,),
+                            destination_class=destination if route is Route.DIRECT_RESPONSE else DestinationClass.NONE,
+                            provider_id=provider_id if route is Route.DIRECT_RESPONSE else None,
+                            model=model if route is Route.DIRECT_RESPONSE else None,
+                            budget=request.budget,
+                        )
+                except (TypeError, ValueError):
+                    # Ignore malformed classifier output.
+                    pass
 
         return DispatchDecision(
             route=Route.DIRECT_RESPONSE,
