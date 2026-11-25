@@ -482,6 +482,7 @@ class ConversationAgentService:
                             ("; private context was excluded" if excluded else "")
                         )
                         result = cloud_result
+                        mode = ExecutionMode.ONLINE
                 else:
                     limitations.append(
                         "The local provider was not ready and the cloud fallback is not authorized for the requested context."
@@ -535,7 +536,7 @@ class ConversationAgentService:
             )
 
         truncated = "[output truncated at the execution budget]" in result.content
-        status = ExecutionStatus.PARTIAL if truncated else ExecutionStatus.COMPLETED
+        status = ExecutionStatus.PARTIAL if (truncated or fallback_applied) else ExecutionStatus.COMPLETED
         if truncated:
             limitations.append("The response was truncated at the execution output budget.")
         return TurnOutcome(
