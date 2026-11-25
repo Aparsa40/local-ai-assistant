@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Callable
+from typing import Awaitable, Callable
 
 from core.conversation_agent.contracts import (
     ConversationRequest,
@@ -42,13 +42,14 @@ class OrchestrationGateway:
         *,
         authorized_scopes: tuple[DataScopeRef, ...],
         cancel_check: Callable[[], bool] | None = None,
-        approval_callback: Callable[[dict], object] | None = None,
+        approval_callback: Callable[[dict], Awaitable[None]] | None = None,
         owner_id: str = "local-user",
     ) -> DelegatedOutcome:
         from core.agents.contracts import DataScope
         from core.orchestration.contracts import OrchestrationBudgets
         from core.orchestration.supervisor import OrchestrationServiceError
 
+        started_at = asyncio.get_running_loop().time()
         # Child scopes must be a subset of the authorized parent scope.
         allowed = {(scope.domain, scope.scope_type, scope.scope_id, scope.owner_id) for scope in authorized_scopes}
         child_scopes: tuple[DataScope, ...] = tuple(
@@ -121,7 +122,9 @@ class OrchestrationGateway:
                     owner_id=owner_id,
                     cancel_check=cancel_check,
                     approval_callback=approval_callback,
-                    timeout_seconds=request.budget.wall_clock_seconds,
+                    timeout_seconds=request.budget.wall_clock_seconds - (
+                        asyncio.get_running_loop().time() - started_at
+                    ),
                 )
                 if view is None:
                     view = service.plan_view(plan_id) or {}
@@ -170,7 +173,9 @@ class OrchestrationGateway:
         timeout_seconds: int,
     ) -> dict | None:
         """Wait for a user decision, execute the same child run, then resume its plan."""
-        deadline = asyncio.get_running_loop().time() + max(1, int(timeout_seconds))
+        if timeout_seconds <= 0:
+            return None
+        deadline = asyncio.get_running_loop().time() + float(timeout_seconds)
         pending = self._pending_approval(view)
         while pending is not None:
             await approval_callback({
