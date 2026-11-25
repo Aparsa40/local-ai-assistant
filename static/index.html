@@ -159,6 +159,17 @@
                             <span x-show="msg.model" class="bg-slate-950 px-2 py-0.5 rounded text-[10px] text-sky-400" x-text="msg.model"></span>
                         </div>
                         <div class="prose prose-invert text-sm leading-relaxed" x-html="renderMarkdown(msg.content)"></div>
+                        <div x-show="msg.approval" class="mt-4 rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-sm">
+                            <p class="mb-3 text-amber-200">این اجرای واگذارشده برای ادامه به تأیید نیاز دارد.</p>
+                            <div x-show="msg.approvalError" class="mb-2 text-rose-300" x-text="msg.approvalError"></div>
+                            <div x-show="msg.approvalBusy" class="mb-2 text-slate-300">در حال ثبت تصمیم و ادامهٔ اجرا...</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" @click="decideConversationApproval(msg, true)" :disabled="msg.approvalBusy"
+                                        class="rounded bg-emerald-700 px-3 py-2 text-xs font-bold hover:bg-emerald-600 disabled:opacity-50">تأیید و ادامه</button>
+                                <button type="button" @click="decideConversationApproval(msg, false)" :disabled="msg.approvalBusy"
+                                        class="rounded bg-rose-800 px-3 py-2 text-xs font-bold hover:bg-rose-700 disabled:opacity-50">رد درخواست</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </template>
