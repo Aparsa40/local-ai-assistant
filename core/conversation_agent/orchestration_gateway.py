@@ -6,7 +6,9 @@ claims success for incomplete orchestration.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+from typing import Callable
 
 from core.conversation_agent.contracts import (
     ConversationRequest,
@@ -39,6 +41,7 @@ class OrchestrationGateway:
         request: ConversationRequest,
         *,
         authorized_scopes: tuple[DataScopeRef, ...],
+        cancel_check: Callable[[], bool] | None = None,
     ) -> DelegatedOutcome:
         from core.agents.contracts import DataScope
         from core.orchestration.contracts import OrchestrationBudgets
@@ -84,7 +87,16 @@ class OrchestrationGateway:
                 )
             plan_id = planned.get("plan_id") if isinstance(planned, dict) else None
             try:
-                await service.execute_plan(plan_id)
+                if cancel_check is not None and cancel_check():
+                    await service.cancel_plan(plan_id, reason="conversation_cancelled")
+                else:
+                    execution = asyncio.create_task(service.execute_plan(plan_id))
+                    while not execution.done():
+                        if cancel_check is not None and cancel_check():
+                            await service.cancel_plan(plan_id, reason="conversation_cancelled")
+                            break
+                        await asyncio.sleep(0.05)
+                    await execution
             except Exception:
                 view = service.plan_view(plan_id) or {}
                 return DelegatedOutcome(
