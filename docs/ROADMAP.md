@@ -176,7 +176,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 8 — Conversation Agent
 
-**Status:** Planned — execution contract ready; implementation not started. Depends on merged Phase 7 baseline.
+**Status:** Implemented on branch `feat/phase-8-conversation-agent` and under review via an open pull request; merges only after acceptance review. Depends on the merged Phase 7 baseline.
 
 **Goal:** Build the user-facing conversational workflow on top of the completed storage, context, permission, tool, and agent foundations.
 

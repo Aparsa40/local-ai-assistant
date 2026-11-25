@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
 **Document type:** Authoritative execution and acceptance contract  
-**Status:** Execution-ready plan; implementation not started  
+**Status:** Implementation delivered on branch `feat/phase-8-conversation-agent` (WP-8.0 through WP-8.7); under review and not merged. Baseline discrepancy records: no provenance/operation table existed in storage, so Phase 8 uses an in-process idempotent operation registry plus message metadata instead of a speculative migration; the deterministic workflow registry ships empty, so deterministic-workflow routes are denied safely until owning services register workflows; model-assisted classification is supported but not enabled by default.  
 **Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
 **Last reviewed:** 2026-11-25
 

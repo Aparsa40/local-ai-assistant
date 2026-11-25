@@ -116,3 +116,8 @@ Related: ARCHITECTURE.md, AGENT_RUNTIME.md, INTERFACE_MANAGER.md, PERMISSIONS.md
 ## Phase boundary for Conversation Agent
 
 Phase 8 integrates the existing OrchestrationService through its composition root, with bounded goals, child scopes contained by the authorized request scope, correlation IDs and truthful handling of partial/failed runs. It must not call the application's own HTTP endpoints internally, replace the scheduler, or implement Phase 9 features. Context retrieval and cloud egress are separate authorization decisions; private local context must never be sent to a cloud provider without explicit destination authorization.
+
+
+## Phase 8 record — Conversation Agent delegation (implemented on feat/phase-8-conversation-agent)
+
+Conversation turns are dispatched deterministically. Agent delegation submits one bounded goal to the existing OrchestrationService through its composition root (never through loopback HTTP), with child data scopes constrained to the authorized request scope, existing Phase 7 budgets, and cancellation linkage. Paused, failed, incomplete, or unavailable orchestration stays visible in the final response; success is never claimed while required tasks remain incomplete. Phase 9 multi-agent enhancements are explicitly not included.

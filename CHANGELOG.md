@@ -4,6 +4,16 @@ All notable changes are documented here. The project follows Semantic Versioning
 
 ## Unreleased
 
+### Added (Phase 8 — Conversation Agent, implementation branch feat/phase-8-conversation-agent, under review)
+- Versioned Conversation Agent contracts in `core/conversation_agent/contracts.py`: ConversationRequest, DispatchDecision, ResponseCandidate, ValidationReport, Provenance, and a versioned SSE ConversationEvent envelope with whitelisted payload redaction.
+- Deterministic, conservative dispatcher (`dispatcher.py`): direct response, registered deterministic workflows, explicit agent delegation, needs-user-input, and blocked routes; an advisory model classifier, when configured, may only move ordinary questions to needs-user-input, and malformed, failing, or unavailable classification falls back deterministically. Classification never grants permissions or selects destinations.
+- Destination and egress authorization (`egress.py`), separate from retrieval authorization: local Ollama is a local destination; cloud adapters never receive memory/knowledge-scope content unless the user explicitly authorized private-context egress for that request; fail-closed when the whole payload would be private.
+- Normalized online/offline strategies through the InterfaceManager only (`strategies/`), with evidenced local-readiness probing, output budgets, mid-stream cancellation checkpoints, and deterministic, disclosed fallback from an unready selected local provider to an eligible authorized cloud provider.
+- Bounded delegation through the existing Phase 7 OrchestrationService composition root (`orchestration_gateway.py`): child scopes are a subset of the authorized request scope, correlation is preserved, and partial/failed/cancelled orchestration is reported truthfully.
+- Response validator and composer: valid/partial/rejected states, fabricated-reference detection against retrieved context, delegated task-coverage and terminal-state checks, and truthful limitation text.
+- Conversation lifecycle service with an in-process idempotent operation registry: stable request identity, duplicate-submission reconciliation without duplicated turns or side effects, disconnect-safe leaders (an SSE disconnect does not cancel), explicit cancellation via POST /api/chat/cancel, and wall-clock/output budgets.
+- POST /api/chat migrated to the new lifecycle with a backward-compatible request schema (extended with optional idempotency and scope fields) and the Alpine.js chat UI now renders versioned status/validation/final/cancelled/error events with truthful execution status.
+
 ### Documentation — Phase 8 preparation (2026-11-25)
 - Rewrote the Phase 8 Conversation Agent execution plan as an implementation and acceptance contract covering request identity, deterministic dispatch, explicit context/egress authorization, online/offline strategy parity, Supervisor handoff, response validation, SSE lifecycle, idempotency, cancellation, recovery, UI migration and test strategy.
 - Reconciled Phase 7 status with merged PR #21 and documented the boundary between the delivered sequential orchestration baseline, Phase 8 conversation integration and Phase 9 multi-agent expansion.
