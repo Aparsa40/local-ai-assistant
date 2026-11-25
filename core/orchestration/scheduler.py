@@ -142,10 +142,8 @@ class OrchestrationScheduler:
             raise OrchestrationSchedulerError("The plan was not found.")
         return plan
 
-    def run_plan(self, plan_id: str) -> object:
-        """Synchronously drive one accepted plan to a terminal aggregate."""
-        import asyncio
-
+    async def run_plan(self, plan_id: str) -> object:
+        """Drive one accepted plan to a terminal aggregate; awaits child runs."""
         plan = self._require(plan_id)
         if plan.status is PlanStatus.DRAFT:
             plan = self.accept_plan(plan_id)
@@ -164,10 +162,10 @@ class OrchestrationScheduler:
                 return plan
             elapsed = self._monotonic() - started
             if elapsed > plan.budgets.max_wall_clock_seconds:
-                return self.cancel_plan(
+                return await self.cancel_plan(
                     plan_id, reason="wall_clock_budget_exceeded", cancel_plan_status=PlanStatus.FAILED,
                 )
-            progressed = self._step_plan(plan_id)
+            progressed = await self._step_plan(plan_id)
             if progressed is None:
                 plan = self._require(plan_id)
                 if any(
@@ -175,11 +173,12 @@ class OrchestrationScheduler:
                     for node in plan.nodes
                 ):
                     raise OrchestrationSchedulerError(
-                        "The scheduler stopped while a task was still active."
+                        "The scheduler stopped while a task was still active; the run "
+                        "requires approval or resumption."
                     )
                 return self._finalize(plan_id, plan)
 
-    def _step_plan(self, plan_id: str):
+    async def _step_plan(self, plan_id: str):
         """Run one deterministic sequential scheduling step.
 
         Returns the node handled, or None when no node is eligible this step.
@@ -200,7 +199,7 @@ class OrchestrationScheduler:
                 order.append(node)
         if not order:
             return None
-        return self._execute_node(plan, order[0])
+        return await self._execute_node(plan, order[0])
 
     def _propagate_failed_prerequisite(self, plan, node) -> None:
         """Explicit policy: dependents of a failed prerequisite are skipped."""
@@ -236,7 +235,7 @@ class OrchestrationScheduler:
 
     # -- node execution over the Agent Runtime -----------------------------------
 
-    def _execute_node(self, plan, node):
+    async def _execute_node(self, plan, node):
         """Assign, then execute one node through the Agent Runtime."""
         version = self._read_node_version(node.node_id)
         scheduled = self.nodes.transition(
@@ -299,10 +298,9 @@ class OrchestrationScheduler:
             event_type="node_running", outcome="running",
             metadata={"run_id": run.run_id, "task_id": task.task_id},
         )
-        import asyncio
 
         try:
-            run = asyncio.run(self.controller.execute(run.run_id))
+            run = await self.controller.execute(run.run_id)
         except Exception as exc:
             self._fail_node(plan, node.node_id, "execution_error", str(exc)[:300])
             return node
@@ -321,6 +319,10 @@ class OrchestrationScheduler:
             "plan_id": plan.plan_id,
             "node_id": node.node_id,
             "goal_id": plan.goal_id,
+            # Top-level query: the Phase 6 context builder binds the task
+            # request from payload["query"], so it must not be nested only in
+            # task_input.
+            "query": str(node.payload.get("query", ""))[:2000],
             "acceptance": {
                 "kind": node.acceptance.kind,
                 "description": node.acceptance.description,
@@ -464,10 +466,8 @@ class OrchestrationScheduler:
 
     # -- cancellation and recovery ---------------------------------------------------
 
-    def cancel_plan(self, plan_id: str, *, reason: str = "requested_by_owner", cancel_plan_status=PlanStatus.CANCELLED) -> object:
+    async def cancel_plan(self, plan_id: str, *, reason: str = "requested_by_owner", cancel_plan_status=PlanStatus.CANCELLED) -> object:
         """Cancel a plan and propagate the cancellation to its tasks."""
-        import asyncio
-
         plan = self._require(plan_id)
         for node in plan.nodes:
             if node.status in {NodeStatus.PENDING, NodeStatus.SCHEDULED}:
@@ -496,11 +496,11 @@ class OrchestrationScheduler:
                     AgentRunStatus.PENDING, AgentRunStatus.RUNNING, AgentRunStatus.PAUSED,
                 }:
                     try:
-                        asyncio.run(self.lifecycle.cancel(
+                        await self.lifecycle.cancel(
                             node.run_id,
                             expected_version=run.version,
                             reason=reason[:200],
-                        ))
+                        )
                     except Exception:
                         pass
                 try:

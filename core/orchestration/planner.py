@@ -274,20 +274,25 @@ class PlanningService:
             return False
         if len(encoded.encode("utf-8")) > 32768:
             return False
-        for key in ("data_scopes", "tool_scopes"):
-            scopes = schema.get(key)
-            if not isinstance(scopes, list) or not scopes or len(scopes) > 10:
+        data_scopes = schema.get("data_scopes")
+        # At least one explicit data scope is required so a node can never be
+        # scheduled with inherited or implicit data access.
+        if not isinstance(data_scopes, list) or not data_scopes or len(data_scopes) > 10:
+            return False
+        for item in data_scopes:
+            if not isinstance(item, dict) or set(item) != {
+                "domain", "scope_type", "scope_id", "owner_id",
+            }:
                 return False
-            for item in scopes:
-                if key == "tool_scopes":
-                    if not isinstance(item, str) or not item or len(item) > 80:
-                        return False
-                elif not isinstance(item, dict) or set(item) != {
-                    "domain", "scope_type", "scope_id", "owner_id",
-                }:
-                    return False
-                elif item.get("domain") not in {"conversation", "knowledge", "memory"}:
-                    return False
+            if item.get("domain") not in {"conversation", "knowledge", "memory"}:
+                return False
+        tool_scopes = schema.get("tool_scopes")
+        # Tool scopes may be empty: a tool-free agent is a legal candidate.
+        if not isinstance(tool_scopes, list) or len(tool_scopes) > 10:
+            return False
+        for item in tool_scopes:
+            if not isinstance(item, str) or not item or len(item) > 80:
+                return False
         return True
 
     def _hydrate_node(self, schema, index: int, plan_id: str, goal: Goal) -> TaskNode:

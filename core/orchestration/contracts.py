@@ -310,7 +310,7 @@ class TaskNode:
             raise PlanValidationError("status must be a NodeStatus")
         for name, value, minimum in (("attempts", self.attempts, 0), ("max_retries", self.max_retries, 0)):
             if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > 3:
-                raise PlanValidationError(name + " must be an integer between " + str(minimum) + " and 3")
+                raise PlanValidationError(name + " must be an integer between " + str(minimum) + " and " + str(3))
         for name in ("agent_id", "agent_version", "run_id", "error_code", "error_message"):
             value = getattr(self, name)
             if value is not None and (not isinstance(value, str) or len(value) > 160):
@@ -446,6 +446,7 @@ class Plan:
     error_code: str | None = None
     error_message: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    version: int = 0
 
     def __post_init__(self) -> None:
         _required_hex32(self.plan_id, "plan_id")
@@ -454,6 +455,8 @@ class Plan:
         _required_hex32(self.parent_task_id, "parent_task_id")
         if not isinstance(self.revision, int) or isinstance(self.revision, bool) or not 0 <= self.revision <= 8:
             raise PlanValidationError("revision must be an integer between 0 and 8")
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or not 0 <= self.version <= 1000000:
+            raise PlanValidationError("version must be a non-negative integer")
         if not isinstance(self.status, PlanStatus):
             raise PlanValidationError("status must be a PlanStatus")
         if not isinstance(self.nodes, tuple) or any(not isinstance(item, TaskNode) for item in self.nodes):

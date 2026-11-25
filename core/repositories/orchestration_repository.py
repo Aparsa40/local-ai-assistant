@@ -327,6 +327,7 @@ class OrchestrationPlanRepository(BaseRepository):
             error_code=record.error_code,
             error_message=record.error_message,
             created_at=_aware(record.created_at),
+            version=int(record.version),
         )
 
     def create(self, plan: Plan) -> Plan:
