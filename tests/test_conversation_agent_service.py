@@ -317,3 +317,29 @@ def test_offline_not_ready_cloud_fallback_is_disclosed_as_partial():
     assert final["data"]["status"] == "partial"
     assert final["data"]["provenance"]["fallback_applied"] is True
     assert final["data"]["provenance"]["fallback_reason"]
+
+
+def test_delegated_approval_callback_is_published_as_sse_event():
+    async def delegate(request, authorized_scopes, cancel_check=None, **kwargs):
+        await kwargs["approval_callback"]({
+            "approval_id": "approval-chat-1",
+            "run_id": "run-chat-1",
+            "node_id": "node-chat-1",
+            "plan_id": "plan-chat-1",
+        })
+        return DelegatedOutcome(
+            status=ExecutionStatus.COMPLETED,
+            content="Approved delegated result.",
+            goal_id="goal-chat-1",
+            plan_id="plan-chat-1",
+        )
+
+    gateway = SimpleNamespace(delegate=delegate)
+    service, conversation, im, _ = build_service(gateway=gateway)
+    parsed = _parse(run(_collect(service, _payload(force_delegation=True))))
+    approval = next(event for event in parsed if event["type"] == "approval_required")
+    assert approval["data"]["approval_id"] == "approval-chat-1"
+    assert approval["data"]["run_id"] == "run-chat-1"
+    assert approval["data"]["plan_id"] == "plan-chat-1"
+    assert parsed[-1]["type"] == "final"
+    assert parsed[-1]["data"]["content"] == "Approved delegated result."
