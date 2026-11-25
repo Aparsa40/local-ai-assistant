@@ -154,6 +154,7 @@ def test_approval_timeout_cancels_the_paused_plan():
     gateway = OrchestrationGateway(
         orchestration_factory=lambda db: orchestration,
         session_factory=lambda: nullcontext(None),
+        approval_wait_seconds=0,
     )
     request = ConversationRequest.from_payload(
         {
