@@ -262,9 +262,21 @@ class ConversationAgentService:
                 return
             context_manager = self._context_builder(conversation_service, db)
 
-        outcome = await self._produce_candidate(
-            operation, request, decision, conversation_service, context_manager
-        )
+        try:
+            outcome = await asyncio.wait_for(
+                self._produce_candidate(
+                    operation, request, decision, conversation_service, context_manager
+                ),
+                timeout=request.budget.wall_clock_seconds,
+            )
+        except asyncio.TimeoutError:
+            outcome = None
+            await operation.publish(self._event(operation, "final", {
+                "status": "unavailable",
+                "content": "The execution budget expired before completion; nothing was fabricated.",
+                "reason_codes": ["budget_exceeded"],
+            }))
+            return
         if outcome is None:
             return
         candidate = outcome.candidate
@@ -275,6 +287,22 @@ class ConversationAgentService:
             "state": report.state.value,
             "issues": [issue.code for issue in report.issues],
         }))
+
+        if candidate.status is ExecutionStatus.CANCELLED:
+            await operation.publish(self._event(operation, "cancelled", {
+                "status": "cancelled",
+                "message": "The request was cancelled before completion.",
+                "provenance": Provenance(
+                    session_id=request.session_id,
+                    request_id=request.request_id,
+                    route=decision.route.value,
+                    mode=candidate.mode.value,
+                    provider_id=candidate.provider_id,
+                    model_used=candidate.model_used,
+                    execution_status="cancelled",
+                ).to_dict(),
+            }))
+            return
 
         reason_text = None
         if report.state is ValidationState.REJECTED:

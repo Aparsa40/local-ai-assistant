@@ -93,7 +93,14 @@ class OperationRegistry:
             oldest = completions.pop(0)
             self._operations.pop(oldest, None)
         while len(self._operations) > self._max_completed * 2:
-            self._operations.popitem(last=False)
+            running = [key for key, op in self._operations.items() if not op.is_terminal]
+            for key in list(self._operations):
+                if key in running:
+                    continue
+                self._operations.pop(key)
+                break
+            else:
+                break
 
     async def follow(self, operation: ConversationOperation, *, from_index: int = 0) -> AsyncIterator[ConversationEvent]:
         """Replay buffered events, then follow live events until terminal."""
