@@ -424,6 +424,12 @@ class ConversationAgentService:
         for item in transmissible:
             if getattr(item, "source_type", "") == "conversation":
                 messages.append({"role": item.role or "user", "content": item.content})
+        # Private local context is transmitted only when it survived
+        # partitioning, which already required explicit user authorization for
+        # cloud destinations.
+        for item in transmissible:
+            if getattr(item, "source_type", "") in {"memory", "knowledge"}:
+                messages.append({"role": "system", "content": item.content})
         messages.append({"role": "user", "content": request.message})
 
         def build_execution_request(provider_id: str, destination_class: DestinationClass) -> ExecutionRequest:
