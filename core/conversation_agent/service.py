@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from typing import AsyncIterator, Callable, Optional
 
 from core.context.schemas import ContextRequest
+from core.conversation_agent.context_approvals import ContextApprovalRequired
+from core.permissions.types import ApprovalStatus
 from core.conversation_agent.contracts import (
     ConversationEvent,
     ConversationRequest,
@@ -242,6 +244,70 @@ class ConversationAgentService:
                 "message": "The request failed before completion.",
             }))
 
+    async def _await_context_approval(
+        self,
+        operation: ConversationOperation,
+        request: ConversationRequest,
+        coordinator,
+        pending: ContextApprovalRequired,
+    ) -> bool:
+        """Wait for a user decision and authorize only the exact pending context read."""
+        approval = coordinator.request(pending)
+        access_request = pending.access_request
+        await operation.publish(self._event(operation, "approval_required", {
+            "kind": "context",
+            "domain": pending.domain,
+            "status": "approval_required",
+            "message": "دسترسی به محدودهٔ حافظه یا دانش برای ادامه نیازمند تأیید شماست.",
+            "approval_id": approval.approval_id,
+            "request_id": access_request.request_id,
+            "resource_type": access_request.resource.resource_type.value,
+            "resource_id": access_request.resource.resource_id,
+            "operation": access_request.operation.value,
+            "scope_type": access_request.scope.scope_type.value,
+            "scope_id": access_request.scope.scope_id,
+        }))
+        deadline = asyncio.get_running_loop().time() + max(
+            0.0, request.budget.wall_clock_seconds - 1.0
+        )
+        while True:
+            if self._abort_check(operation)():
+                await operation.publish(self._event(operation, "cancelled", {
+                    "status": "cancelled",
+                    "message": "درخواست هنگام انتظار برای تأیید لغو شد.",
+                }))
+                return False
+            current = coordinator.status(approval.approval_id)
+            if current is None:
+                await operation.publish(self._event(operation, "error", {
+                    "status": "failed",
+                    "error_code": "context_approval_missing",
+                    "message": "درخواست تأیید دیگر در دسترس نیست.",
+                }))
+                return False
+            if current.status is ApprovalStatus.APPROVED:
+                coordinator.accept(pending, approval.approval_id)
+                return True
+            if current.status in {ApprovalStatus.REJECTED, ApprovalStatus.EXPIRED}:
+                await operation.publish(self._event(operation, "final", {
+                    "status": "blocked",
+                    "content": _TERMINAL_LANGUAGE["blocked"],
+                    "reason_codes": [
+                        "context_approval_rejected"
+                        if current.status is ApprovalStatus.REJECTED
+                        else "context_approval_expired"
+                    ],
+                }))
+                return False
+            if asyncio.get_running_loop().time() >= deadline:
+                await operation.publish(self._event(operation, "final", {
+                    "status": "unavailable",
+                    "content": "مهلت تأیید دسترسی به پایان رسید؛ هیچ داده‌ای بازیابی نشد.",
+                    "reason_codes": ["context_approval_timeout"],
+                }))
+                return False
+            await asyncio.sleep(0.1)
+
     def _abort_check(self, operation: ConversationOperation) -> Callable[[], bool]:
         return lambda: operation.cancel_requested
 
@@ -398,17 +464,28 @@ class ConversationAgentService:
             KnowledgeScope(scope.scope_type, scope.scope_id, scope.owner_id)
             for scope in request.knowledge_scopes
         )
+        context_request = ContextRequest(
+            conversation_id=request.session_id,
+            query=request.message,
+            owner_id=_owner_id(access),
+            history_limit=request.history_limit,
+            memory_scopes=memory_scopes,
+            knowledge_scopes=knowledge_scopes,
+        )
         try:
-            package = context_manager.assemble(
-                ContextRequest(
-                    conversation_id=request.session_id,
-                    query=request.message,
-                    owner_id=_owner_id(access),
-                    history_limit=request.history_limit,
-                    memory_scopes=memory_scopes,
-                    knowledge_scopes=knowledge_scopes,
-                )
-            )
+            while True:
+                try:
+                    package = context_manager.assemble(context_request)
+                    break
+                except ContextApprovalRequired as pending:
+                    coordinator = getattr(context_manager, "approval_coordinator", None)
+                    if coordinator is None:
+                        raise
+                    approved = await self._await_context_approval(
+                        operation, request, coordinator, pending,
+                    )
+                    if not approved:
+                        return None
         except Exception:
             await operation.publish(self._event(operation, "error", {
                 "status": "failed",
