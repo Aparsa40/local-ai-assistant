@@ -97,7 +97,7 @@ def test_local_unready_falls_back_to_authorized_cloud_and_discloses():
     service = ConversationAgentService(
         interface_manager=im,
         conversation_builder=lambda db, access, pm: conversation,
-        context_builder=lambda conv, db: FakeContextManager([context_item("conversation", "message:1")]),
+        context_builder=lambda conv, db, access: FakeContextManager([context_item("conversation", "message:1")]),
         session_factory=lambda: contextlib.nullcontext(None),
         registry=OperationRegistry(),
         readiness_probe=probe,
@@ -122,7 +122,7 @@ def test_local_unready_fallback_denied_for_private_context():
     service = ConversationAgentService(
         interface_manager=im,
         conversation_builder=lambda db, access, pm: conversation,
-        context_builder=lambda conv, db: FakeContextManager([context_item("memory", "memory:1", "PRIVATE-MEMORY")]),
+        context_builder=lambda conv, db, access: FakeContextManager([context_item("memory", "memory:1", "PRIVATE-MEMORY")]),
         session_factory=lambda: contextlib.nullcontext(None),
         registry=OperationRegistry(),
         readiness_probe=_probe,
