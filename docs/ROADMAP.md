@@ -160,7 +160,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 7 — Supervisor & Orchestrator
 
-**Status:** Planned.
+**Status:** Implemented and merged via PR #21 on 2026-11-25 (merge commit c66b2d6acaa359899a26e3dac3aa424b0c33d8a5). Known limitations are recorded in the Phase 7 execution plan; Phase 8 must consume the delivered service without silently expanding it.
 
 **Goal:** Coordinate complex work through task decomposition, dependency management, and controlled handoffs.
 
@@ -176,7 +176,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 8 — Conversation Agent
 
-**Status:** Planned.
+**Status:** Planned — execution contract ready; implementation not started. Depends on merged Phase 7 baseline.
 
 **Goal:** Build the user-facing conversational workflow on top of the completed storage, context, permission, tool, and agent foundations.
 
@@ -193,7 +193,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 9 — Multi-Agent System and Specialized Agents
 
-**Status:** Planned.
+**Status:** Planned — owns broader multi-agent collaboration, specialized-agent teams and advanced coordination beyond the sequential Phase 7 baseline.
 
 **Goal:** Expand from one bounded agent to multiple specialized agents collaborating through explicit contracts.
 
@@ -245,6 +245,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 ## Cross-phase execution rules
 
 - Follow the dedicated execution plan for the active phase.
+- Phase 8 must use the merged Phase 7 service as-is; Phase 9 owns broader multi-agent enhancements.
 - Do not skip dependencies or silently change phase numbering.
 - Do not mark planned functionality as implemented.
 - Do not introduce a module without documenting its boundary and data ownership.
