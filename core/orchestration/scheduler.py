@@ -187,11 +187,17 @@ class OrchestrationScheduler:
         continues the existing plan; it never starts or re-executes a child run.
         """
         plan = self._require(plan_id)
+        node = next((item for item in plan.nodes if item.run_id == run_id), None)
         if plan.status is not PlanStatus.RUNNING:
+            if (
+                node is not None
+                and node.status in {NodeStatus.COMPLETED, NodeStatus.FAILED, NodeStatus.CANCELLED}
+                and plan.status in {PlanStatus.COMPLETED, PlanStatus.FAILED, PlanStatus.CANCELLED}
+            ):
+                return plan
             raise OrchestrationSchedulerError(
                 "Only a running plan can resume a child run."
             )
-        node = next((item for item in plan.nodes if item.run_id == run_id), None)
         if node is None:
             raise OrchestrationSchedulerError(
                 "The child run does not belong to this plan."
