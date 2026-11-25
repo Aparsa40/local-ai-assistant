@@ -34,13 +34,4 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q core main.py
       - name: Run tests
-        run: |
-          python -m pytest -q -W default 2>&1 | tee /tmp/pytest.log
-          exit ${PIPESTATUS[0]}
-
-      - name: Emit failing test annotations
-        if: failure()
-        run: |
-          for line in $(grep -E '^FAILED tests/' /tmp/pytest.log | head -30); do
-            echo "::error::$line"
-          done
+        run: python -m pytest -q -W default
