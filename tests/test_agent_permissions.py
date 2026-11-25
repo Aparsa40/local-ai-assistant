@@ -191,8 +191,16 @@ def test_scoped_context_assembly_fails_closed_without_a_grant(tmp_path):
             data_scopes=(env.data_scope(),),
         )
         run = env.services.lifecycle.create_run(task.task_id)
+        # The coroutine must actually run: an un-awaited call would silently
+        # skip every assertion below.
         with pytest.raises(AgentScopeDeniedError):
-            env.services.controller.execute(run.run_id)
+            env.execute(run.run_id)
+        live = env.services.lifecycle.get_run(run.run_id)
+        # Fail closed: the run ends truthfully, the executor claim is released,
+        # and no knowledge grant for the declared scope exists.
+        assert live.status is AgentRunStatus.FAILED
+        assert live.error_code == "context_or_capability_error"
+        assert env.services.lifecycle.has_executor(run.run_id) is False
         assert grants_for(env, run.run_id, "agent-scope") == ()
     finally:
         env.dispose()
