@@ -365,6 +365,16 @@ class OrchestrationService:
                     "agent_id": node.agent_id,
                     "agent_version": node.agent_version,
                     "run_id": node.run_id,
+                    "run_status": (
+                        self._agent_services.lifecycle.get_run(node.run_id).status.value
+                        if node.run_id and self._agent_services.lifecycle.runs.get(node.run_id) is not None
+                        else None
+                    ),
+                    "pending_approval_id": (
+                        self._agent_services.lifecycle.get_run(node.run_id).pending_approval_id
+                        if node.run_id and self._agent_services.lifecycle.runs.get(node.run_id) is not None
+                        else None
+                    ),
                     "attempts": node.attempts,
                     "max_retries": node.max_retries,
                     "error_code": node.error_code,
