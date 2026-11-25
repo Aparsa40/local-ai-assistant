@@ -174,7 +174,8 @@ def test_cancellation_prevents_persistence():
         assert registry.request_cancel(1, request_id)
         return [chunk async for chunk in iterator]
 
-    parsed = _parse([json.dumps({"type": "accepted"})] + run(scenario()))
+    parsed = _parse(run(scenario()))
+    assert any(event["type"] == "cancelled" for event in parsed)
     assert conversation.assistant == []
 
 
