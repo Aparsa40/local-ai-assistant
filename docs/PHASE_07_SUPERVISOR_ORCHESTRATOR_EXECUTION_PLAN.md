@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 7 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Implemented — PR #21 is open for review; merge is gated on passing CI and completed review  
+**Status:** Implementation correction in progress — PR #21 remains open; multi-task catalog routing and multi-agent fan-out are required before Phase 7 can be accepted  
 **Dependencies:** Phase 6 Agent Runtime and at least one validated agent  
 **Last reviewed:** 2026-11-25
 
@@ -21,14 +21,17 @@ Reuse `core/agents/` from Phase 6, `core/interface_manager.py`, `core/context/`,
 
 - Supervisor agent definition and versioned planning contracts.
 - Structured task decomposition and dependency graph.
-- Capability-based agent selection using declared, verified capabilities.
-- Sequential task scheduling first; bounded concurrency only after correctness tests.
+- Canonical task catalog sourced from InterfaceManager model/operator profiles, with one deterministic primary route per task ID and explicit ordered fallbacks.
+- Model capability profiles that distinguish primary specialties from overlapping secondary capabilities; overlap must never create duplicate task execution.
+- Goal decomposition into one or more atomic task nodes, with every requested task accounted for before execution.
+- Multi-agent fan-out: different task nodes in one goal may be assigned to different registered model-backed agents; a single node must never be marked covered by a union of agents unless it is explicitly decomposed into child nodes.
+- Sequential execution is acceptable initially, but every planned node must be executed or explicitly marked blocked/failed; bounded parallel execution can follow after correctness tests.
 - Typed handoff payloads with provenance and schema validation.
 - Result aggregation, conflict/incomplete-result handling, and evidence coverage.
 - Global budgets, deadlines, cancellation propagation, and stop conditions.
 - Auditable assignment, handoff, retry, and aggregation events.
 
-Out of scope: unrestricted autonomous planning, multi-agent collaboration beyond registered Phase 6 agents, new provider adapters, user-facing conversation routing (Phase 8), and self-issued permissions.
+Out of scope: unrestricted autonomous planning, new provider adapters, user-facing conversation routing (Phase 8), and self-issued permissions. Multi-agent delegation across the registered, catalog-routed task agents is in scope and is mandatory in this phase.
 
 ## 4. Work packages
 
@@ -49,32 +52,34 @@ Out of scope: unrestricted autonomous planning, multi-agent collaboration beyond
 **Deliverable:** scheduler and tests.
 **Exit:** no task starts early, twice, or after cancellation.
 
-### WP-7.3 — Capability-based assignment
-1. Define agent capability declarations and evidence levels.
-2. Match required capabilities to registered agent definitions.
-3. Consider model capability/availability only through InterfaceManager evidence.
-4. Treat unknown capability as unknown; do not infer from model names.
-5. Deny assignments whose requested data/tool scopes exceed the parent run.
-**Deliverable:** deterministic assignment resolver.
-**Exit:** assignment is explainable and least-privilege.
+### WP-7.3 — Interface catalog task routing and assignment
+1. Consume the InterfaceManager's persisted operator/model catalog; do not invent model capabilities or infer them from model names.
+2. Normalize supported work into stable canonical task IDs (not free-form labels).
+3. For each model, record evidence-backed primary specialties, secondary/overlapping capabilities, availability, and ordered fallback eligibility.
+4. Each canonical task ID must resolve to exactly one primary route at a time; overlapping models are alternatives/fallbacks unless the plan explicitly requests independent review. This prevents duplicate or arbitrary execution.
+5. Match each atomic task node to its primary registered model-backed agent and use only an eligible fallback when the primary is unavailable or fails under an explicit retry policy.
+6. Treat unknown capability as unknown; do not infer from model names. Deny scope expansion beyond the parent run.
+**Deliverable:** versioned task-route catalog and deterministic resolver with explainable primary/fallback decisions.
+**Exit:** every task ID has a traceable route or an explicit uncovered-task result; no capability union can falsely qualify one executor.
 
-### WP-7.4 — Planning strategy
-1. Begin with deterministic templates and structured LLM proposals.
-2. Validate LLM-produced plans against schemas, budgets, allowed agent IDs, and dependency graph constraints.
-3. Require application-side policy checks before plan acceptance.
-4. Bound plan revisions and reject recursive decomposition loops.
-5. Never let the Supervisor issue grants or approvals.
-**Deliverable:** planning service.
-**Exit:** model output cannot expand authority or exceed budgets.
+### WP-7.4 — Goal decomposition and task planning
+1. Decompose a compound goal into atomic task nodes using the canonical task IDs exposed by the InterfaceManager route catalog.
+2. A model that owns multiple primary task IDs may receive multiple nodes; overlapping secondary capability does not create duplicate execution.
+3. Preserve explicit dependencies between nodes and allow independent nodes to be fanned out to different agents.
+4. Validate LLM-proposed plans against the route catalog, schemas, budgets, scopes, and DAG constraints; reject unknown or unrouted task IDs instead of silently dropping them.
+5. Require application-side policy checks before plan acceptance; bound revisions and reject recursive decomposition loops.
+6. Never let the Supervisor issue grants or approvals; model/tool calls remain behind InterfaceManager, ToolRuntime, and PermissionManager.
+**Deliverable:** catalog-aware planner that accounts for every requested task and emits a complete executable DAG.
+**Exit:** compound requests are split into all required atomic tasks, each with an explicit route, dependency, scope, and acceptance criterion.
 
-### WP-7.5 — Handoff and aggregation
-1. Define versioned input/output handoff envelopes.
-2. Preserve agent/run IDs, source references, evidence, and confidence semantics.
-3. Validate payload size/schema before persistence.
-4. Aggregate by explicit acceptance criteria, not majority vote or stylistic similarity.
-5. Surface contradictions, missing evidence, and partial completion.
-**Deliverable:** HandoffManager and ResultAggregator.
-**Exit:** every aggregate is traceable to contributing runs and unresolved conflicts remain visible.
+### WP-7.5 — Multi-agent fan-out, handoff, and aggregation
+1. Execute every ready task node through its catalog-selected registered agent; different nodes in one plan may use different agents/models.
+2. Support bounded fan-out for independent nodes (sequential execution is a valid first implementation, but no node may be silently omitted).
+3. Preserve agent/model/provider/run IDs, task-route ID, source references, evidence, and confidence semantics in handoffs.
+4. Validate payload size/schema before persistence and enforce least-privilege grants independently for every child run.
+5. Aggregate only after all required nodes reach a terminal state; expose contradictions, missing results, unavailable routes, and partial completion.
+**Deliverable:** complete multi-agent execution path from plan DAG through child runs to aggregate response.
+**Exit:** a compound goal cannot be reported complete unless every required task node completed and its result is represented in the aggregate.
 
 ### WP-7.6 — Recovery, cancellation, and audit
 1. Resume interrupted plans from durable scheduler state.
@@ -124,7 +129,11 @@ Run deterministic tests with fake agents/models; test persistence recovery and l
 
 - Plans are valid DAGs with explicit completion criteria and bounded budgets.
 - Only registered Phase 6 agents can be assigned.
-- Assignment respects capability evidence, permission scope, and model availability.
+- Assignment respects evidence-backed task routes, primary/fallback policy, permission scope, and model availability.
+- A compound request is decomposed into all required canonical task IDs; every task is assigned to its primary model-backed agent or an explicit eligible fallback.
+- Overlapping model skills are resolved deterministically; no task is duplicated or omitted because of overlap.
+- One agent's capabilities are never unioned with another's to claim a single node was executed; decomposition creates separate nodes and runs.
+- Multi-agent results are collected and aggregated before the parent goal can be marked complete.
 - Handoffs are typed, versioned, size-limited, and provenance-preserving.
 - Aggregation exposes disagreement and incomplete evidence.
 - Cancellation, retries, deadlines, and recovery are deterministic and auditable.
@@ -141,19 +150,19 @@ Execute WP-7.1 through WP-7.7 in order after Phase 6. The Supervisor must run as
 
 ## 9. Delivery record (2026-11-25)
 
-**Status:** Implemented on branch `feat/phase-7-supervisor-orchestrator`; PR #21 targets `main` and remains open pending review and CI.
+**Status:** Existing implementation on branch `feat/phase-7-supervisor-orchestrator`; PR #21 targets `main` and remains open. The implementation is not Phase 7-complete until the required catalog-aware decomposition and multi-agent fan-out acceptance criteria above are met.
 
 - **WP-7.1:** Typed Goal, Plan, TaskNode, Dependency, Assignment, Evidence, Handoff, AggregateResult, and bounded orchestration budgets; deterministic DAG validation, topological ordering, cycle detection, and explicit state transitions.
 - **WP-7.2:** Persistence models, SQLite migration `0006_orchestration`, domain repository, sequential bounded scheduler, optimistic concurrency, retry limits, dependency skipping, cancellation, and reconciliation.
-- **WP-7.3:** Registered Phase 6 agent candidates only; explainable capability assignment, parent-scope containment, InterfaceManager model evidence, and exact per-run capability grants derived from trusted agent definitions.
-- **WP-7.4:** Deterministic templates and bounded, schema-validated model proposals through InterfaceManager; trusted Supervisor orchestration and structured outcomes. The Supervisor does not issue grants or execute tools.
-- **WP-7.5:** Typed handoffs, provenance-preserving result aggregation, and explicit incomplete/failure outcomes.
+- **WP-7.3 (current partial):** Registered Phase 6 agent candidates only; explainable single-agent capability assignment, parent-scope containment, coarse InterfaceManager provider evidence, and exact per-run capability grants. The task-route catalog and model-backed primary/fallback assignment remain outstanding.
+- **WP-7.4 (current partial):** Deterministic templates and bounded, schema-validated proposals exist, but deterministic templates are not catalog-aware and the current Supervisor run primarily records accepted plan bounds. Compound-goal task decomposition remains outstanding.
+- **WP-7.5 (current partial):** Typed handoffs and plan-level aggregation exist for one agent per node. Full catalog-routed multi-agent fan-out and complete compound-task coverage remain outstanding.
 - **WP-7.6:** Tests for DAG validation, scheduling, retries, dependency skipping, cancellation, wall-clock budgets, handoffs, aggregation, recovery, permission isolation, and assignment denial. A regression test additionally proves that capabilities declared by separate agents cannot be combined to qualify either agent.
 - **WP-7.7:** Orchestration API endpoints in `main.py` and a minimal read-mostly status panel in `static/app.js`.
 - **Documentation:** `docs/AGENT_RUNTIME.md`, `docs/AI_ORCHESTRATION.md`, `README.md`, and `CHANGELOG.md` updated.
 
-**Known limitations:** Scheduling is sequential; dependency policy currently supports `all_success`; paused child runs require explicit resume or reconciliation; the UI is read-mostly; orchestration coordination is trusted application code and the hosted Supervisor run records plan acceptance.
+**Known limitations:** Scheduling is sequential; dependency policy currently supports `all_success`; paused child runs require explicit resume or reconciliation; the UI is read-mostly; the hosted Supervisor run records plan acceptance rather than autonomously planning. Most importantly, the current one-agent-per-node resolver cannot yet route a compound goal across multiple model-backed agents from the InterfaceManager task catalog. This is a Phase 7 acceptance blocker, not a feature deferred to a new manager layer.
 
-**Post-review correction:** Assignment eligibility requires one registered agent to declare the complete required capability set. Partial capabilities distributed across multiple candidates are not combined. The regression test is `test_assignment_requires_one_candidate_to_cover_all_capabilities`.
+**Post-review correction:** Assignment eligibility requires one registered agent to declare the complete capability set for an atomic node. Partial capabilities distributed across multiple candidates are not combined. Compound work must be decomposed into separate atomic nodes and routed individually; simply denying the compound node is not sufficient Phase 7 behavior. The regression test is `test_assignment_requires_one_candidate_to_cover_all_capabilities`.
 
 **Required validation:** `python -m compileall -q core main.py`, `python -m pytest -q -W default`, and `node --check static/app.js`. The pull request must remain unmerged until these checks pass and the review is complete.
