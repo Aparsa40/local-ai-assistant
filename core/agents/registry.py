@@ -39,13 +39,20 @@ class AgentRegistry:
         return definition
 
     def get(self, agent_id: str, version: str) -> AgentDefinition:
-        """Return a deep copy; callers can never mutate registered contracts."""
+        """Return a deep copy; callers can never mutate registered contracts.
+
+        With a repository attached, lookups read through to persistence so
+        definitions disabled or changed elsewhere are never served stale from
+        the in-process cache.
+        """
         key = (agent_id, version)
-        definition = self._definitions.get(key)
-        if definition is None and self.repository is not None:
+        if self.repository is not None:
             definition = self.repository.get(agent_id, version)
-            if definition is not None:
-                self._definitions[key] = definition
+            if definition is None:
+                raise AgentDefinitionError("The requested agent definition is unknown.")
+            self._definitions[key] = definition
+            return copy.deepcopy(definition)
+        definition = self._definitions.get(key)
         if definition is None:
             raise AgentDefinitionError("The requested agent definition is unknown.")
         return copy.deepcopy(definition)
