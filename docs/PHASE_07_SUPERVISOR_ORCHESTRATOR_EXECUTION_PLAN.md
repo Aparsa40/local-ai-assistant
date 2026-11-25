@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 7 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Implementation correction in progress — PR #21 remains open; multi-task catalog routing and multi-agent fan-out are required before Phase 7 can be accepted  
+**Status:** Implemented and merged via PR #21 (merge commit c66b2d6acaa359899a26e3dac3aa424b0c33d8a5). The merged implementation and documented limitations are the Phase 7 baseline for Phase 8.  
 **Dependencies:** Phase 6 Agent Runtime and at least one validated agent  
 **Last reviewed:** 2026-11-25
 
@@ -150,7 +150,7 @@ Execute WP-7.1 through WP-7.7 in order after Phase 6. The Supervisor must run as
 
 ## 9. Delivery record (2026-11-25)
 
-**Status:** Existing implementation on branch `feat/phase-7-supervisor-orchestrator`; PR #21 targets `main` and remains open. The implementation is not Phase 7-complete until the required catalog-aware decomposition and multi-agent fan-out acceptance criteria above are met.
+**Delivery status:** PR #21 was merged into main on 2026-11-25 (13 commits; merge commit c66b2d6acaa359899a26e3dac3aa424b0c33d8a5). The merge establishes the delivered Phase 7 baseline; it does not imply every aspirational capability in this plan was implemented. Known limitations below are accepted/deferred boundaries and must not be silently pulled into Phase 8.
 
 - **WP-7.1:** Typed Goal, Plan, TaskNode, Dependency, Assignment, Evidence, Handoff, AggregateResult, and bounded orchestration budgets; deterministic DAG validation, topological ordering, cycle detection, and explicit state transitions.
 - **WP-7.2:** Persistence models, SQLite migration `0006_orchestration`, domain repository, sequential bounded scheduler, optimistic concurrency, retry limits, dependency skipping, cancellation, and reconciliation.
@@ -161,8 +161,16 @@ Execute WP-7.1 through WP-7.7 in order after Phase 6. The Supervisor must run as
 - **WP-7.7:** Orchestration API endpoints in `main.py` and a minimal read-mostly status panel in `static/app.js`.
 - **Documentation:** `docs/AGENT_RUNTIME.md`, `docs/AI_ORCHESTRATION.md`, `README.md`, and `CHANGELOG.md` updated.
 
-**Known limitations:** Scheduling is sequential; dependency policy currently supports `all_success`; paused child runs require explicit resume or reconciliation; the UI is read-mostly; the hosted Supervisor run records plan acceptance rather than autonomously planning. Most importantly, the current one-agent-per-node resolver cannot yet route a compound goal across multiple model-backed agents from the InterfaceManager task catalog. This is a Phase 7 acceptance blocker, not a feature deferred to a new manager layer.
+**Known limitations at merge:** Scheduling is sequential; dependency policy currently supports `all_success`; paused child runs require explicit resume or reconciliation; the UI is read-mostly; and hosted Supervisor behavior is bounded by the implementation delivered in PR #21. These limitations are part of the accepted Phase 7 baseline unless a later dedicated phase explicitly addresses them. Phase 8 must use only available OrchestrationService contracts and must not assume parallel fan-out, a complete model-backed task catalog, or autonomous recursive planning.
 
-**Post-review correction:** Assignment eligibility requires one registered agent to declare the complete capability set for an atomic node. Partial capabilities distributed across multiple candidates are not combined. Compound work must be decomposed into separate atomic nodes and routed individually; simply denying the compound node is not sufficient Phase 7 behavior. The regression test is `test_assignment_requires_one_candidate_to_cover_all_capabilities`.
+**Assignment invariant:** Assignment eligibility requires one registered agent to declare the complete capability set for an atomic node. Partial capabilities distributed across multiple candidates are not combined. The regression test is `test_assignment_requires_one_candidate_to_cover_all_capabilities`.
 
 **Required validation:** `python -m compileall -q core main.py`, `python -m pytest -q -W default`, and `node --check static/app.js`. The pull request must remain unmerged until these checks pass and the review is complete.
+
+
+## 10. Phase boundary after PR #21
+
+- Phase 7 delivered the Supervisor/Orchestrator baseline described by PR #21 and the implementation record above.
+- Phase 8 consumes the existing orchestration service as a bounded delegation target; it does not repair or expand Phase 7 implicitly.
+- Phase 9 owns broader multi-agent collaboration, specialized-agent teams and advanced coordination. Missing fan-out or richer multi-agent behavior must not be smuggled into Phase 8.
+- A limitation is not evidence that the merged PR failed its actual implementation scope; describe it accurately and assign future work only where the roadmap says it belongs.
