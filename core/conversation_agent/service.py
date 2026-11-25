@@ -374,7 +374,7 @@ class ConversationAgentService:
         access,
     ) -> Optional[TurnOutcome]:
         if decision.route is Route.AGENT_DELEGATION:
-            return await self._delegate(operation, request, decision)
+            return await self._delegate(operation, request, decision, access)
         return await self._respond(operation, request, decision, context_manager, access)
 
     async def _respond(
@@ -591,6 +591,7 @@ class ConversationAgentService:
         operation: ConversationOperation,
         request: ConversationRequest,
         decision: DispatchDecision,
+        access,
     ) -> Optional[TurnOutcome]:
         if self._orchestration_gateway is None:
             await operation.publish(self._event(operation, "final", {
@@ -603,10 +604,19 @@ class ConversationAgentService:
             "status": "delegating",
             "detail": "A bounded goal was submitted to the orchestration service.",
         }))
+        async def publish_approval_required(pending: dict) -> None:
+            await operation.publish(self._event(operation, "approval_required", {
+                "status": "approval_required",
+                "message": "برای ادامهٔ اجرای عامل، تأیید شما لازم است.",
+                **pending,
+            }))
+
         outcome = await self._orchestration_gateway.delegate(
             request,
             authorized_scopes=tuple(request.memory_scopes) + tuple(request.knowledge_scopes),
             cancel_check=self._abort_check(operation),
+            approval_callback=publish_approval_required,
+            owner_id=_owner_id(access),
         )
         await operation.publish(self._event(operation, "progress", {
             "status": "delegation_finished",
