@@ -47,7 +47,7 @@ from core.catalog_storage import (
     get_latest_intelligence_report,
 )
 from core.agents import AgentRuntimeContainer
-from core.agents.contracts import DataScope, StopReason
+from core.agents.contracts import AgentConcurrencyError, AgentTransitionError, DataScope, StopReason
 from core.agents.controller import AgentControllerError
 from core.agents.context import AgentScopeDeniedError
 from core.agents.lifecycle import RunNotFoundError, TaskNotFoundError
@@ -627,6 +627,16 @@ def serialize_agent_run(run) -> dict:
 
 
 def serialize_agent_run_event(event) -> dict:
+    # list_for_run returns redacted event mappings; event records are
+    # attribute-like. Accept both shapes without exposing extra fields.
+    if isinstance(event, dict):
+        created_at = event.get("created_at")
+        return {
+            "event_type": event.get("event_type"),
+            "outcome": event.get("outcome"),
+            "metadata": dict(event.get("metadata") or {}),
+            "created_at": created_at.isoformat() if created_at else None,
+        }
     return {
         "event_type": event.event_type,
         "outcome": event.outcome,
