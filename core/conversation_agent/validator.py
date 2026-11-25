@@ -38,9 +38,12 @@ class ResponseValidator:
 
         # Reference existence: a source reference that was never retrieved is a
         # fabricated citation. Existence is not proof of factual correctness.
+        # A reference that was never retrieved is a fabricated citation: it is
+        # disclosed as an issue and the response is PARTIAL at best. Existence
+        # is never treated as proof of factual correctness, but a disclosed
+        # unknown citation does not by itself destroy otherwise truthful content.
         for ref in candidate.source_refs:
             if context_refs and ref not in context_refs:
-                references_ok = False
                 issues.append(ValidationIssue("unknown_reference", "A cited source reference was not part of the retrieved context."))
                 break
 

@@ -26,6 +26,10 @@ class ResponseComposer:
             base = _TERM_LANGUAGE.get(candidate.status.value, "The request did not complete successfully.")
             if reason_text:
                 base = reason_text
+            if candidate.content.strip():
+                # A partial outcome may carry a truthful summary; it is kept
+                # together with its limitations rather than replaced.
+                base = candidate.content.rstrip()
             notes = list(candidate.limitations)
             if notes:
                 base += "\n\nLimitations:\n" + "\n".join("- " + note for note in notes)

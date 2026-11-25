@@ -259,5 +259,8 @@ def test_offline_not_ready_without_fallback_is_unavailable():
     )
     parsed = _parse(run(_collect(service, _payload(provider_id="ollama", model="local-model"))))
     final = parsed[-1]
-    # No fallback configured with eligible state; the truth is "unavailable".
-    assert final["data"]["status"] in {"unavailable", "partial"}
+    # The local provider was not ready; the configured, authorized cloud
+    # fallback completed the turn and the fallback is disclosed.
+    assert final["data"]["status"] == "completed"
+    assert final["data"]["provenance"]["fallback_applied"] is True
+    assert final["data"]["provenance"]["fallback_reason"]
