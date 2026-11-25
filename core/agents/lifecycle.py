@@ -140,18 +140,37 @@ class AgentLifecycleManager:
 
     # -- transitions -------------------------------------------------------
 
+    @staticmethod
+    def _require_fresh_version(run: AgentRun, expected_version: int) -> None:
+        """Reject caller-provided versions that no longer match persistence.
+
+        The caller-supplied expected version is authoritative: a stale caller
+        version must surface as the domain-level concurrency error instead of
+        being silently replaced with the latest persisted version.
+        """
+        if (
+            isinstance(expected_version, bool)
+            or not isinstance(expected_version, int)
+            or expected_version != run.version
+        ):
+            raise AgentConcurrencyError(
+                "The run changed concurrently; reload it before retrying."
+            )
+
     def _transition(
         self,
         run: AgentRun,
         target: AgentRunStatus,
         *,
         event_type: str,
+        expected_version: int,
         metadata=None,
         **updates,
     ) -> AgentRun:
         require_transition(run.status, target)
+        self._require_fresh_version(run, expected_version)
         try:
-            updated = self.runs.transition(run.run_id, expected_version=run.version, **updates)
+            updated = self.runs.transition(run.run_id, expected_version=expected_version, **updates)
         except AgentConcurrencyError:
             raise
         if updated is None:
@@ -172,12 +191,17 @@ class AgentLifecycleManager:
 
     def start(self, run_id: str, *, expected_version: int) -> AgentRun:
         run = self.get_run(run_id)
+        # Validate before claiming: an illegal repeated start must surface as a
+        # transition error, not as an executor-claim conflict.
+        require_transition(run.status, AgentRunStatus.RUNNING)
+        self._require_fresh_version(run, expected_version)
         self.claim_executor(run_id)
         try:
             updated = self._transition(
                 run,
                 AgentRunStatus.RUNNING,
                 event_type="run_started",
+                expected_version=expected_version,
                 status=AgentRunStatus.RUNNING,
                 started_at=self._clock(),
                 stop_reason=None,
@@ -198,6 +222,7 @@ class AgentLifecycleManager:
             run,
             AgentRunStatus.PAUSED,
             event_type="run_paused",
+            expected_version=expected_version,
             status=AgentRunStatus.PAUSED,
             stop_reason=reason,
             metadata={"reason_code": reason.value},
@@ -215,6 +240,7 @@ class AgentLifecycleManager:
             run,
             AgentRunStatus.PAUSED,
             event_type="run_paused_for_approval",
+            expected_version=expected_version,
             status=AgentRunStatus.PAUSED,
             stop_reason=StopReason.PAUSED_FOR_APPROVAL,
             pending_approval_id=approval_id,
@@ -229,12 +255,15 @@ class AgentLifecycleManager:
             raise AgentError(
                 "The run still has an unresolved approval; decide the approval first."
             )
+        require_transition(run.status, AgentRunStatus.RUNNING)
+        self._require_fresh_version(run, expected_version)
         self.claim_executor(run_id)
         try:
             updated = self._transition(
                 run,
                 AgentRunStatus.RUNNING,
                 event_type="run_resumed",
+                expected_version=expected_version,
                 status=AgentRunStatus.RUNNING,
                 attempt=run.attempt + 1,
                 stop_reason=None,
@@ -254,6 +283,7 @@ class AgentLifecycleManager:
         run = self.get_run(run_id)
         if run.status is not AgentRunStatus.PAUSED or not run.pending_approval_id:
             raise AgentError("The run has no pending approval to clear.")
+        self._require_fresh_version(run, expected_version)
         updated = self.runs.transition(
             run_id, expected_version=expected_version, pending_approval_id=None,
         )
@@ -279,6 +309,7 @@ class AgentLifecycleManager:
             run,
             AgentRunStatus.CANCELLED,
             event_type="run_cancelled",
+            expected_version=expected_version,
             status=AgentRunStatus.CANCELLED,
             stop_reason=StopReason.CANCELLED,
             finished_at=self._clock(),
@@ -295,6 +326,7 @@ class AgentLifecycleManager:
             run,
             AgentRunStatus.SUCCEEDED,
             event_type="run_completed",
+            expected_version=expected_version,
             status=AgentRunStatus.SUCCEEDED,
             stop_reason=StopReason.COMPLETED,
             outcome=outcome,
@@ -328,6 +360,7 @@ class AgentLifecycleManager:
             run,
             AgentRunStatus.FAILED,
             event_type="run_failed",
+            expected_version=expected_version,
             status=AgentRunStatus.FAILED,
             stop_reason=stop_reason,
             error_code=error_code,
