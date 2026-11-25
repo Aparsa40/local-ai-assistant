@@ -216,7 +216,7 @@ class OrchestrationScheduler:
                 "The child run must be explicitly resumed and reach a terminal state first."
             )
         if node.status is NodeStatus.RUNNING:
-            self._map_run_outcome(plan, node.node_id, run)
+            self._map_run_outcome(plan, node.node_id, run, allow_retry=False)
         # A repeated call for an already-reconciled run is idempotent: the
         # terminal node is not mapped again, and only still-pending nodes run.
         return await self.run_plan(plan_id)
@@ -401,7 +401,7 @@ class OrchestrationScheduler:
 
     # -- terminal mapping ---------------------------------------------------------
 
-    def _map_run_outcome(self, plan, node_id: str, run):
+    def _map_run_outcome(self, plan, node_id: str, run, *, allow_retry: bool = True):
         node = self.nodes.get(node_id, plan.owner_id)
         if run.status is AgentRunStatus.SUCCEEDED:
             self.handoff_manager.record_outcome(plan, node, run)
@@ -447,7 +447,7 @@ class OrchestrationScheduler:
             return node
         # Failure with bounded retries.
         attempts = node.attempts
-        if attempts <= node.max_retries and attempts < 3:
+        if allow_retry and attempts <= node.max_retries and attempts < 3:
             retried = self.nodes.transition(
                 node_id,
                 expected_version=self._read_node_version(node_id),
