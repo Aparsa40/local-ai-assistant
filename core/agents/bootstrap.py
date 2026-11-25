@@ -72,7 +72,35 @@ def _knowledge_search_definition() -> ToolDefinition:
             },
             "required": ["run_id", "scope_type", "scope_id", "owner_id", "query"],
         },
-        output_schema={"type": "object", "properties": {}},
+        output_schema={
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "minimum": 0, "maximum": 10},
+                "truncated": {"type": "boolean"},
+                "results": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 10,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "source_id": {"type": "string", "maxLength": 160},
+                            "chunk_id": {"type": "integer", "minimum": 0},
+                            "title": {"type": "string", "maxLength": 200},
+                            "source_type": {"type": "string", "maxLength": 40},
+                            "uri": {"type": "string", "maxLength": 400},
+                            "rank": {"type": "number"},
+                            "content": {"type": "string", "maxLength": 400},
+                        },
+                        "required": [
+                            "source_id", "chunk_id", "title", "source_type",
+                            "uri", "rank", "content",
+                        ],
+                    },
+                },
+            },
+            "required": ["count", "truncated", "results"],
+        },
         timeout_seconds=15,
         max_input_bytes=16384,
         max_output_bytes=32768,
@@ -127,7 +155,7 @@ def _knowledge_search_handler(storage_session_factory):
         ]
         return {
             "count": len(bounded),
-            "truncated": len(bounded) < len(results),
+            "truncated": len(results) >= limit,
             "results": bounded,
         }
 
