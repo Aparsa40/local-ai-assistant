@@ -157,3 +157,56 @@ def test_set_enabled_rejects_unknown_definitions():
     finally:
         session.close()
         engine.dispose()
+
+
+def test_persisted_disable_is_never_shadowed_by_the_registry_cache():
+    engine, session = _make_session()
+    try:
+        repository = AgentDefinitionRepository(session)
+        registry = AgentRegistry(repository)
+        registry.register(make_definition())
+        assert registry.get_enabled("registry-agent", "1.0.0").enabled is True
+
+        # Disabled directly in persistence, outside this registry instance.
+        assert repository.set_enabled("registry-agent", "1.0.0", False) is not None
+        with pytest.raises(AgentDefinitionError, match="disabled"):
+            registry.get_enabled("registry-agent", "1.0.0")
+        # A repeated lookup must not resurrect the stale enabled copy.
+        with pytest.raises(AgentDefinitionError, match="disabled"):
+            registry.get_enabled("registry-agent", "1.0.0")
+        assert registry.get("registry-agent", "1.0.0").enabled is False
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_persisted_reenable_is_visible_through_the_registry():
+    engine, session = _make_session()
+    try:
+        repository = AgentDefinitionRepository(session)
+        registry = AgentRegistry(repository)
+        registry.register(make_definition())
+        assert repository.set_enabled("registry-agent", "1.0.0", False) is not None
+        with pytest.raises(AgentDefinitionError, match="disabled"):
+            registry.get_enabled("registry-agent", "1.0.0")
+
+        assert repository.set_enabled("registry-agent", "1.0.0", True) is not None
+        assert registry.get_enabled("registry-agent", "1.0.0").enabled is True
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_registry_set_enabled_refreshes_the_cached_contract():
+    engine, session = _make_session()
+    try:
+        registry = AgentRegistry(AgentDefinitionRepository(session))
+        registry.register(make_definition())
+        assert registry.set_enabled("registry-agent", "1.0.0", False).enabled is False
+        with pytest.raises(AgentDefinitionError, match="disabled"):
+            registry.get_enabled("registry-agent", "1.0.0")
+        assert registry.set_enabled("registry-agent", "1.0.0", True).enabled is True
+        assert registry.get_enabled("registry-agent", "1.0.0").enabled is True
+    finally:
+        session.close()
+        engine.dispose()
