@@ -9,10 +9,10 @@
 
 ## Current implementation verification (2026-11-25)
 
-Latest verified branch head: `75864b7e611b2b53b86a83414ed8a8355fe84743`.
+Latest verified branch head: `9fbec75793b312fc0319403a576742a3506acfbc`.
 
 - GitHub Actions: successful.
-- Python suite: 465 passed in 26.19s.
+- Python suite: 465 passed in 32.31s (GitHub Actions run `45675058898`).
 - `python -m compileall -q core main.py`: successful in CI.
 - `node --check static/app.js`: successful in CI.
 - FastAPI TestClient smoke test: direct chat SSE lifecycle, durable operation registry, and assistant-message persistence verified.
