@@ -337,7 +337,8 @@ def _conversation_operations(connection) -> None:
         "message_hash VARCHAR(64) NOT NULL, state VARCHAR(20) NOT NULL, "
         "events JSON NOT NULL DEFAULT '[]', created_at VARCHAR(40) NOT NULL, "
         "updated_at VARCHAR(40) NOT NULL, "
-        "PRIMARY KEY (session_id, request_id))"
+        "PRIMARY KEY (session_id, request_id), "
+        "FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)"
     ))
     connection.execute(text(
         "CREATE INDEX IF NOT EXISTS ix_conversation_operations_updated_at "
