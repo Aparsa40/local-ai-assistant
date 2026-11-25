@@ -221,7 +221,7 @@ def test_invalid_payload_single_error_event_no_side_effects():
     assert conversation.prepared == []
 
 
-def test_offline_not_ready_without_fallback_is_unavailable():
+def test_offline_not_ready_cloud_fallback_is_disclosed_as_partial():
     class FailingLocalIM:
         async def stream_chat(self, provider_id, messages, model=None, temperature=None):
             raise RuntimeError("local unavailable")
@@ -262,6 +262,6 @@ def test_offline_not_ready_without_fallback_is_unavailable():
     final = parsed[-1]
     # The local provider was not ready; the configured, authorized cloud
     # fallback completed the turn and the fallback is disclosed.
-    assert final["data"]["status"] == "completed"
+    assert final["data"]["status"] == "partial"
     assert final["data"]["provenance"]["fallback_applied"] is True
     assert final["data"]["provenance"]["fallback_reason"]
