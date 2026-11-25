@@ -7,6 +7,7 @@ function chatApp() {
         isLoading: false,
         streamingSessionId: null,
         activeRequestId: null,
+        pendingRetry: null,
         showSettings: false,
         activeTab: 'persona',
         sidebarCollapsed: localStorage.getItem('wiz-sidebar-collapsed') === 'true',
@@ -775,27 +776,45 @@ function chatApp() {
             }
         },
 
-        async sendMessage() {
-            if (!this.inputMessage.trim() || this.isLoading) return;
-            const userText = this.inputMessage;
-            this.inputMessage = '';
+        async sendMessage(retry = null) {
+            if (this.isLoading) return;
+
+            const isRetry = Boolean(retry);
+            if (!isRetry && !this.inputMessage.trim()) return;
+            const userText = isRetry ? retry.message : this.inputMessage;
+            const sessionId = isRetry ? retry.sessionId : this.currentSessionId;
+            const request_id = isRetry
+                ? retry.requestId
+                : 'req_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2));
+            let aiMsgIndex;
+
+            if (isRetry) {
+                if (!this.pendingRetry || this.pendingRetry.requestId !== request_id || sessionId !== this.currentSessionId) return;
+                aiMsgIndex = retry.assistantIndex;
+                this.messages[aiMsgIndex].content = 'در حال بازیابی پاسخ قبلی...';
+                this.messages[aiMsgIndex].model = 'در حال اتصال مجدد...';
+                this.pendingRetry = null;
+            } else {
+                this.inputMessage = '';
+                this.messages.push({ role: 'user', content: userText });
+                aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: '' }) - 1;
+            }
+
             this.isLoading = true;
-            this.streamingSessionId = this.currentSessionId;
-            this.messages.push({ role: 'user', content: userText });
-            const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: '' }) - 1;
-            this.scrollToBottom();
-            // Stable idempotency key: a retry of the same turn reconciles on the
-            // server instead of duplicating messages or side effects.
-            const request_id = 'req_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2));
+            this.streamingSessionId = sessionId;
             this.activeRequestId = request_id;
+            this.scrollToBottom();
+            let terminalReceived = false;
+            let retryableFailure = true;
 
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: this.currentSessionId, message: userText, request_id })
+                    body: JSON.stringify({ session_id: sessionId, message: userText, request_id })
                 });
                 if (!response.ok) {
+                    retryableFailure = false;
                     const error = await response.json();
                     throw new Error(error.detail || 'درخواست چت ناموفق بود.');
                 }
@@ -806,10 +825,10 @@ function chatApp() {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
+                    const events = buffer.split('\\n\\n');
                     buffer = events.pop() || '';
                     for (const event of events) {
-                        const line = event.split('\n').find(part => part.startsWith('data:'));
+                        const line = event.split('\\n').find(part => part.startsWith('data:'));
                         if (!line) continue;
                         const data = JSON.parse(line.slice(5).trim());
                         // Legacy protocol events and versioned Phase 8 events share one parser.
@@ -828,32 +847,52 @@ function chatApp() {
                             const state = (data.data || {}).state;
                             if (state === 'partial') this.messages[aiMsgIndex].model = 'پاسخ بخشی تأیید شد';
                         } else if (data.type === 'final') {
+                            terminalReceived = true;
                             const detail = data.data || {};
                             this.messages[aiMsgIndex].content = detail.content !== undefined ? detail.content : this.messages[aiMsgIndex].content;
                             if (detail.provenance && detail.provenance.provider_id) {
                                 this.messages[aiMsgIndex].model = detail.provenance.provider_id + ' / ' + (detail.provenance.model_used || '');
                             }
                             if (detail.status && detail.status !== 'completed') {
-                                this.messages[aiMsgIndex].content += '\n\n⚠️ وضعیت اجرا: ' + detail.status;
+                                this.messages[aiMsgIndex].content += '\\n\\n⚠️ وضعیت اجرا: ' + detail.status;
                             }
                         } else if (data.type === 'cancelled') {
-                            this.messages[aiMsgIndex].content += '\n\n⏹ اجرا لغو شد.';
+                            terminalReceived = true;
+                            this.messages[aiMsgIndex].content += '\\n\\n⏹ اجرا لغو شد.';
                         } else if (data.type === 'error') {
+                            terminalReceived = true;
                             const detail = data.data || {};
-                            this.messages[aiMsgIndex].content += '\n\n❌ خطا: ' + (detail.message || detail.content || 'نامشخص');
+                            this.messages[aiMsgIndex].content += '\\n\\n❌ خطا: ' + (detail.message || detail.content || 'نامشخص');
                         }
                     }
                 }
-                await this.loadSessions();
-                // This endpoint serves local metadata only; it does not call provider model catalogs.
-                await this.loadProviderCapabilities();
+                if (!terminalReceived && retryableFailure) {
+                    this.pendingRetry = { sessionId, message: userText, requestId: request_id, assistantIndex: aiMsgIndex };
+                    this.messages[aiMsgIndex].content += '\\n\\n⚠️ ارتباط پیش از دریافت نتیجه نهایی قطع شد. می‌توانی با همان شناسه درخواست دوباره تلاش کنی.';
+                } else {
+                    this.pendingRetry = null;
+                    await this.loadSessions();
+                    // This endpoint serves local metadata only; it does not call provider model catalogs.
+                    await this.loadProviderCapabilities();
+                }
             } catch (error) {
-                this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
+                if (retryableFailure) {
+                    this.pendingRetry = { sessionId, message: userText, requestId: request_id, assistantIndex: aiMsgIndex };
+                    this.messages[aiMsgIndex].content = 'ارتباط قطع شد: ' + error.message + '\\n\\nمی‌توانی با همان شناسه درخواست دوباره تلاش کنی.';
+                } else {
+                    this.messages[aiMsgIndex].content = 'خطا در درخواست: ' + error.message;
+                    this.pendingRetry = null;
+                }
             } finally {
                 this.isLoading = false;
                 this.streamingSessionId = null;
                 this.activeRequestId = null;
             }
+        },
+
+        async retryPendingMessage() {
+            if (!this.pendingRetry || this.isLoading) return;
+            return this.sendMessage(this.pendingRetry);
         },
 
         async cancelMessage() {
