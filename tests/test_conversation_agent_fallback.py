@@ -89,6 +89,12 @@ def test_selected_provider_preserved_when_no_failure():
 
 def test_local_unready_falls_back_to_authorized_cloud_and_discloses():
     im = LocalNeverReadyIM()
+    readiness_calls = []
+
+    async def probe(provider_id, model):
+        readiness_calls.append((provider_id, model))
+        return False
+
     conversation = FakeConversationService()
     service = ConversationAgentService(
         interface_manager=im,
@@ -96,14 +102,16 @@ def test_local_unready_falls_back_to_authorized_cloud_and_discloses():
         context_builder=lambda conv, db: FakeContextManager([context_item("conversation", "message:1")]),
         session_factory=lambda: contextlib.nullcontext(None),
         registry=OperationRegistry(),
-        readiness_probe=_probe,
+        readiness_probe=probe,
         fallback_order=("openrouter",),
     )
     payload = {"session_id": 1, "message": "q", "request_id": "req_" + "c" * 24, "provider_id": "ollama", "model": "local-model"}
     parsed = [json.loads(c[len("data: "):]) for c in run(_collect(service, payload))]
     final = parsed[-1]
-    assert im.received[0] == "ollama"
-    assert "openrouter" in im.received
+    # An unready local provider is rejected before inference; the readiness
+    # probe proves it was checked, then only the authorized cloud fallback runs.
+    assert readiness_calls == [("ollama", "local-model")]
+    assert im.received == ["openrouter"]
     assert final["data"]["status"] == "partial"
     assert final["data"]["provenance"]["fallback_applied"] is True
     assert "cloud answer" in final["data"]["content"]
