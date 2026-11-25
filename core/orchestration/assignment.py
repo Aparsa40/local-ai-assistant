@@ -155,17 +155,37 @@ class CapabilityAssignmentResolver:
                 "No registered agent declares the required capabilities.",
             ), ())
 
-        missing = [
-            capability for capability in node.required_capabilities
-            if not any(
-                capability in candidate.capabilities
-                for _, candidate, _, _ in scored
-            )
+        required = set(node.required_capabilities)
+        eligible = [
+            entry for entry in scored
+            if required.issubset(set(entry[1].capabilities))
         ]
-        if missing:
-            return self._denied(plan, node, (
-                "Required capability " + missing[0] + " is unknown to the runtime.",
-            ), ())
+        if not eligible:
+            missing = sorted(
+                capability for capability in required
+                if not any(
+                    capability in candidate.capabilities
+                    for _, candidate, _, _ in scored
+                )
+            )
+            if missing:
+                reason = (
+                    "Required capability " + missing[0]
+                    + " is unknown to the runtime."
+                )
+            elif scored:
+                reason = (
+                    "No single registered agent declares every required capability; "
+                    "capabilities cannot be combined across agents."
+                )
+            else:
+                reason = "No registered agent declares the required capabilities."
+            return self._denied(plan, node, (reason,), ())
+
+        # A task is assigned only when one candidate independently satisfies
+        # the complete capability set. Capabilities from separate agents must
+        # never be unioned to manufacture an eligible candidate.
+        scored = eligible
 
         scored.sort(key=_score)
         key, candidate, matched_verify, evidence = scored[0]
