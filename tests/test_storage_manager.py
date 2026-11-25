@@ -182,6 +182,6 @@ def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
             assert session.query(RuntimeEvent).count() == 1
             revisions = session.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
             # Ordered revisions 0001..0007, including 0007_conversation_operations.
-            assert revisions == 6
+            assert revisions == 7
     finally:
         manager.dispose()
