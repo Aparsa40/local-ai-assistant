@@ -10,6 +10,7 @@ on:
 permissions:
   contents: read
   checks: write
+  issues: write
 
 jobs:
   test:
@@ -37,7 +38,8 @@ jobs:
       - name: Run tests
         run: |
           set -o pipefail
-          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt      - name: Comment pytest output on the PR (diagnostics)
+          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt
+      - name: Post pytest output as a PR comment (temporary diagnostics)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,5 +47,7 @@ jobs:
         run: |
           if [ -n "$PR_NUMBER" ]; then
             gh api --method POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-              -F body=@pytest_out.txt >/dev/null
+              -F body=@pytest_out.txt
+          else
+            echo "No pull request context; skipping comment."
           fi
