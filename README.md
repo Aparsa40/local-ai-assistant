@@ -217,5 +217,5 @@ MIT — see [LICENSE](LICENSE).
 - Phase 4 WP-4.7 and Phase 5 operational authorization/Knowledge integration are merged into `main`.
 - Phase 5 completion PR: [#17](https://github.com/Aparsa40/local-ai-assistant/pull/17), squash merge commit `22ac914163afb35778e27f52f774630919d9272d`.
 - CI for the merged implementation passed (235 tests; Python compile and frontend syntax checks). A separate Windows HTTP smoke test remains outstanding.
-- Phase 6 is implemented on `feat/phase-6-agent-runtime` with its pull request pending review and CI; it is not merged.
-- Phases 7–11 have authoritative execution plans; these phases remain **planned**, not implemented.
+- Phase 6 is completed and merged via [PR #19](https://github.com/Aparsa40/local-ai-assistant/pull/19), merge commit `4d6128af3935a09c984719a20e23f446d8c95eab`; final push and pull-request CI passed on head `bdf4e01dd593a860d9efb245f533c019c857ef17`.
+- Phase 7 has an authoritative execution plan and its Phase 6 prerequisites are satisfied; it is **ready to execute**, not implemented. Phases 8–11 remain **planned**, not implemented.
