@@ -606,6 +606,7 @@ class ConversationAgentService:
         outcome = await self._orchestration_gateway.delegate(
             request,
             authorized_scopes=tuple(request.memory_scopes) + tuple(request.knowledge_scopes),
+            cancel_check=self._abort_check(operation),
         )
         await operation.publish(self._event(operation, "progress", {
             "status": "delegation_finished",
