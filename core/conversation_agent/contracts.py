@@ -201,7 +201,7 @@ class ConversationRequest:
         if self.provider_id is not None:
             if not isinstance(self.provider_id, str) or not _PROVIDER_PATTERN.fullmatch(self.provider_id):
                 raise ContractValidationError("provider_id must be a provider identifier")
-        if self.model is not None:
+        if self.model not in (None, ""):
             _safe_text(self.model, "model", 160)
         self._bounded_int(self.history_limit, "history_limit", 1, 100)
         if not isinstance(self.authorize_private_context_egress, bool) or not isinstance(self.force_delegation, bool):
@@ -449,7 +449,8 @@ _SAFE_EVENT_KEYS = frozenset({
     "route", "reason_codes", "destination_class", "provider_id", "model",
     "mode", "status", "state", "content", "limitations", "source_refs",
     "fallback_applied", "fallback_reason", "error_code", "message",
-    "goal_id", "plan_id", "issues", "node_outcomes", "detail", "provenance",
+    "goal_id", "plan_id", "orchestration_goal_id", "orchestration_plan_id",
+    "validation_state", "issues", "node_outcomes", "detail", "provenance", "deep",
 })
 
 
