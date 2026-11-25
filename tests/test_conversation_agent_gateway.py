@@ -83,11 +83,11 @@ class _ApprovalAwareOrchestrationService:
 
     def plan_view(self, plan_id):
         return {
-            "status": "completed" if self.run_status == "succeeded" else "running",
+            "status": "completed" if self.run_status == "succeeded" else "cancelled" if self.run_status == "cancelled" else "running",
             "nodes": [{
                 "node_id": "node-1",
                 "title": "Approval-gated task",
-                "status": "completed" if self.run_status == "succeeded" else "running",
+                "status": "completed" if self.run_status == "succeeded" else "cancelled" if self.run_status == "cancelled" else "running",
                 "run_id": "run-123",
                 "run_status": self.run_status,
                 "pending_approval_id": self.pending_approval_id,
