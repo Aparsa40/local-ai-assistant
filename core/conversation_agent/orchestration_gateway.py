@@ -42,6 +42,8 @@ class OrchestrationGateway:
         *,
         authorized_scopes: tuple[DataScopeRef, ...],
         cancel_check: Callable[[], bool] | None = None,
+        approval_callback: Callable[[dict], object] | None = None,
+        owner_id: str = "local-user",
     ) -> DelegatedOutcome:
         from core.agents.contracts import DataScope
         from core.orchestration.contracts import OrchestrationBudgets
@@ -61,7 +63,7 @@ class OrchestrationGateway:
             service = self._orchestration_factory(db)
             try:
                 goal = service.create_goal(
-                    owner_id="local-user",
+                    owner_id=owner_id,
                     description=request.message[:2000],
                     success_criteria=request.message[:500],
                     data_scopes=child_scopes,
@@ -76,7 +78,7 @@ class OrchestrationGateway:
                     error_code="goal_rejected",
                 )
             try:
-                planned = await service.plan_goal(goal.goal_id, owner_id="local-user")
+                planned = await service.plan_goal(goal.goal_id, owner_id=owner_id)
             except Exception:
                 return DelegatedOutcome(
                     status=ExecutionStatus.UNAVAILABLE,
@@ -98,18 +100,123 @@ class OrchestrationGateway:
                         await asyncio.sleep(0.05)
                     await execution
             except Exception:
+                self._refresh_session(db)
                 view = service.plan_view(plan_id) or {}
-                return DelegatedOutcome(
-                    status=ExecutionStatus.FAILED,
-                    content="",
-                    goal_id=goal.goal_id,
+                pending = self._pending_approval(view)
+                if pending is None or approval_callback is None:
+                    return DelegatedOutcome(
+                        status=ExecutionStatus.FAILED,
+                        content="",
+                        goal_id=goal.goal_id,
+                        plan_id=plan_id,
+                        node_outcomes=tuple(view.get("nodes", [])),
+                        limitations=("Plan execution failed before reaching a terminal aggregate.",),
+                        error_code="execution_failed",
+                    )
+                view = await self._continue_approval_chain(
+                    service,
+                    db,
+                    view,
                     plan_id=plan_id,
-                    node_outcomes=tuple(view.get("nodes", [])),
-                    limitations=("Plan execution failed before reaching a terminal aggregate.",),
-                    error_code="execution_failed",
+                    owner_id=owner_id,
+                    cancel_check=cancel_check,
+                    approval_callback=approval_callback,
+                    timeout_seconds=request.budget.wall_clock_seconds,
                 )
+                if view is None:
+                    view = service.plan_view(plan_id) or {}
+                    return DelegatedOutcome(
+                        status=ExecutionStatus.UNAVAILABLE,
+                        content="",
+                        goal_id=goal.goal_id,
+                        plan_id=plan_id,
+                        node_outcomes=tuple(view.get("nodes", [])),
+                        limitations=("Approval was not completed within the conversation execution budget.",),
+                        error_code="approval_timeout",
+                    )
+            self._refresh_session(db)
             view = service.plan_view(plan_id) or {}
             return self._map_view(view, goal.goal_id, plan_id)
+
+    @staticmethod
+    def _refresh_session(db) -> None:
+        """Release stale read state while a human approval is handled elsewhere."""
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        try:
+            db.expire_all()
+        except Exception:
+            pass
+
+    @staticmethod
+    def _pending_approval(view: dict) -> dict | None:
+        return next((
+            node for node in view.get("nodes", [])
+            if node.get("run_status") == "paused" and node.get("pending_approval_id")
+        ), None)
+
+    async def _continue_approval_chain(
+        self,
+        service,
+        db,
+        view: dict,
+        *,
+        plan_id: str,
+        owner_id: str,
+        cancel_check,
+        approval_callback,
+        timeout_seconds: int,
+    ) -> dict | None:
+        """Wait for a user decision, execute the same child run, then resume its plan."""
+        deadline = asyncio.get_running_loop().time() + max(1, int(timeout_seconds))
+        pending = self._pending_approval(view)
+        while pending is not None:
+            await approval_callback({
+                "approval_id": pending["pending_approval_id"],
+                "run_id": pending["run_id"],
+                "node_id": pending["node_id"],
+                "plan_id": plan_id,
+            })
+            while True:
+                if cancel_check is not None and cancel_check():
+                    await service.cancel_plan(plan_id, reason="conversation_cancelled")
+                    self._refresh_session(db)
+                    return service.plan_view(plan_id) or {}
+                self._refresh_session(db)
+                view = service.plan_view(plan_id) or {}
+                current = next((
+                    node for node in view.get("nodes", [])
+                    if node.get("run_id") == pending.get("run_id")
+                ), None)
+                if current is None:
+                    return view
+                if current.get("run_status") in {"succeeded", "failed", "cancelled"}:
+                    try:
+                        await service.resume_plan(
+                            plan_id,
+                            run_id=str(current["run_id"]),
+                            owner_id=owner_id,
+                        )
+                    except Exception:
+                        self._refresh_session(db)
+                        view = service.plan_view(plan_id) or {}
+                        next_pending = self._pending_approval(view)
+                        if next_pending is None:
+                            return None
+                        pending = next_pending
+                        break
+                    self._refresh_session(db)
+                    view = service.plan_view(plan_id) or {}
+                    pending = self._pending_approval(view)
+                    if pending is None:
+                        return view
+                    break
+                if asyncio.get_running_loop().time() >= deadline:
+                    return None
+                await asyncio.sleep(0.1)
+        return view
 
     @staticmethod
     def _map_view(view: dict, goal_id: str, plan_id: str) -> DelegatedOutcome:
