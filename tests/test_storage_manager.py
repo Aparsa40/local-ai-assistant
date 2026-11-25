@@ -105,6 +105,11 @@ def test_storage_manager_creates_the_current_orm_schema():
         "knowledge_files",
         "knowledge_chunks",
         "knowledge_artifacts",
+        "agent_definitions",
+        "agent_tasks",
+        "agent_runs",
+        "agent_run_events",
+        "agent_checkpoints",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
@@ -131,6 +136,11 @@ def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
             "knowledge_files",
             "knowledge_chunks",
             "knowledge_artifacts",
+            "agent_definitions",
+            "agent_tasks",
+            "agent_runs",
+            "agent_run_events",
+            "agent_checkpoints",
         } <= tables
 
         with manager.transaction() as session:
@@ -157,6 +167,7 @@ def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
             assert session.query(RuntimeStatus).count() == 1
             assert session.query(RuntimeEvent).count() == 1
             revisions = session.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
-            assert revisions == 4
+            # Ordered revisions 0001..0005, including 0005_agent_runtime.
+            assert revisions == 5
     finally:
         manager.dispose()
