@@ -46,8 +46,13 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           if [ -n "$PR_NUMBER" ]; then
+            {
+              echo '<!-- ci-diag -->'
+              echo 'Diagnostic pytest output tail:'
+              tail -c 30000 pytest_out.txt
+            } > comment_body.md
             gh api --method POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
-              -F body=@pytest_out.txt
+              -F body=@comment_body.md
           else
             echo "No pull request context; skipping comment."
           fi
