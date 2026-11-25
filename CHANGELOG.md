@@ -15,9 +15,9 @@ All notable changes are documented here. The project follows Semantic Versioning
 - POST /api/chat migrated to the new lifecycle with a backward-compatible request schema (extended with optional idempotency and scope fields). Memory and Knowledge context services are wired through the existing PermissionManager adapters, scope ownership comes from trusted AccessContext, and the Alpine.js UI supports explicit cancellation and same-request retry.
 
 ### Phase 8 acceptance status
-- Latest verified approval-handoff revision: 471 Python tests passed in 23.59s; compileall and JavaScript syntax validation passed in CI run `45700583734` (commit `53aa03cc`).
+- Latest verified approval-handoff revision: 475 Python tests passed in 23.94s; compileall and JavaScript syntax validation passed in CI run `45702444215` (commit `eafe9096`).
 - Delegated Agent Runtime tool approvals now flow through `approval_required` SSE events and actionable chat UI controls; approval decisions resume the same child run and reconcile the existing plan without re-execution.
-- Remaining before phase acceptance: permission-driven memory/knowledge context approvals still need a request-bound continuation path. Deterministic workflow routes remain fail-closed until an owning service registers a workflow; model-assisted classification remains optional/off by default; real local loopback smoke remains outstanding.
+- Memory/knowledge context approvals now create request-bound approval requests, emit actionable SSE events, and consume the approved action exactly once before retrieval resumes. Remaining before phase acceptance: deterministic workflow routes remain fail-closed until an owning service registers a real workflow; model-assisted classification remains optional/off by default; real local loopback smoke remains outstanding.
 
 ### Documentation — Phase 8 preparation (2026-11-25)
 - Rewrote the Phase 8 Conversation Agent execution plan as an implementation and acceptance contract covering request identity, deterministic dispatch, explicit context/egress authorization, online/offline strategy parity, Supervisor handoff, response validation, SSE lifecycle, idempotency, cancellation, recovery, UI migration and test strategy.
