@@ -36,4 +36,9 @@ jobs:
       - name: Run tests
         run: |
           set -o pipefail
-          python -m pytest -q -W default --tb=short 2>&1 | tee "$GITHUB_STEP_SUMMARY"
+          {
+            echo 'DIAG-BEGIN'
+            echo '```'
+            python -m pytest -q -W default --tb=short
+            echo '```'
+          } 2>&1 | tee "$GITHUB_STEP_SUMMARY"
