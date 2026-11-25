@@ -137,24 +137,40 @@ class ExecutionController:
         elif run.status is not AgentRunStatus.RUNNING:
             raise AgentControllerError("The run is already finished.")
 
-        binding = self.capability_resolver.resolve(definition, run, task)
-        # Exact per-run knowledge grants are issued once, on the first attempt,
-        # by trusted application code; agent subjects can never issue grants.
-        if run.attempt <= 1:
-            issued = self.capability_resolver.issue_capability_grants(
-                definition, run, task, binding,
-                issuer=PermissionSubject(SubjectType.USER, "local-user"),
-                managed=self.managed_permission_manager,
-                audit_service=self.audit_service,
-            )
-            if issued:
-                self.events.record(
-                    run_id=run_id,
-                    event_type="capability_grants_issued",
-                    outcome="issued",
-                    metadata={"count": issued, "agent_id": run.agent_id},
+        # The run is now RUNNING and executor-claimed: every later failure path
+        # must release the executor claim and leave a truthful terminal state.
+        try:
+            binding = self.capability_resolver.resolve(definition, run, task)
+            # Exact per-run knowledge grants are issued once, on the first attempt,
+            # by trusted application code; agent subjects can never issue grants.
+            if run.attempt <= 1:
+                issued = self.capability_resolver.issue_capability_grants(
+                    definition, run, task, binding,
+                    issuer=PermissionSubject(SubjectType.USER, "local-user"),
+                    managed=self.managed_permission_manager,
+                    audit_service=self.audit_service,
                 )
-        ctx = self.context_builder.build(definition, run, task, binding=binding)
+                if issued:
+                    self.events.record(
+                        run_id=run_id,
+                        event_type="capability_grants_issued",
+                        outcome="issued",
+                        metadata={"count": issued, "agent_id": run.agent_id},
+                    )
+            ctx = self.context_builder.build(definition, run, task, binding=binding)
+        except AgentConcurrencyError:
+            # Claim conflicts during start/resume release their own claim.
+            raise
+        except Exception:
+            self._release_and_fail(
+                run_id,
+                error_code="context_or_capability_error",
+                error_message=(
+                    "Execution stopped before the first step: context or "
+                    "capability validation failed."
+                ),
+            )
+            raise
 
         observations, pending = self._restore_state(run_id)
         started = time.monotonic()
@@ -220,6 +236,9 @@ class ExecutionController:
                     )
         except AgentConcurrencyError:
             run = self.runs.get(run_id)
+            # The loop already claimed the executor: a concurrent owner's
+            # transition must not leak our claim.
+            self.lifecycle.release_executor(run_id)
             if run is not None and run.status is not AgentRunStatus.RUNNING:
                 return run
             raise
@@ -231,7 +250,11 @@ class ExecutionController:
                 stop_reason=exc.stop_reason,
             )
         except Exception:
-            self.lifecycle.release_executor(run_id)
+            self._release_and_fail(
+                run_id,
+                error_code="execution_error",
+                error_message="The run failed unexpectedly; inspect the redacted events.",
+            )
             raise
 
     # -- tool actions -----------------------------------------------------------
@@ -467,6 +490,26 @@ class ExecutionController:
             error_message=error_message,
             stop_reason=stop_reason,
         )
+
+    def _release_and_fail(self, run_id: str, *, error_code: str, error_message: str) -> None:
+        """Release the executor claim and fail the run after an unexpected error.
+
+        No failure path may leave a run RUNNING or an executor claim leaked.
+        The message is static and redacted: raw exception details are never
+        persisted into run state or events.
+        """
+        self.lifecycle.release_executor(run_id)
+        try:
+            self._fail(
+                run_id,
+                error_code=error_code,
+                error_message=error_message,
+                stop_reason=StopReason.FAILED,
+            )
+        except Exception:
+            # _fail can itself fail (run vanished, concurrent terminal state);
+            # never mask the original exception.
+            pass
 
     # -- state helpers ------------------------------------------------------------
 
