@@ -118,7 +118,7 @@ def build_conversation_agent_service() -> ConversationAgentService:
         orchestration_gateway=gateway,
         dispatcher=DeterministicDispatcher(orchestration_available=True),
         readiness_probe=local_readiness_probe,
-        fallback_order=("ollama",),
+        fallback_order=(),
     )
 
 
