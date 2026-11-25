@@ -3,16 +3,16 @@
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
 **Document type:** Authoritative execution and acceptance contract  
-**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The latest verified revision `66865c95bff8383cdfb8c06cad4f3f7c7bc84fd5` passes 468 Python tests, Python compilation, and JavaScript syntax validation in GitHub Actions run `45698090232`; the existing FastAPI TestClient chat smoke tests also pass. Durable request identity/event replay and interrupted-operation recovery are implemented through migration `0007_conversation_operations`; delegated Phase 7 cancellation propagation is also implemented. Phase 8 is **not yet complete**: delegated Agent Runtime tool approvals now emit an actionable `approval_required` SSE event and resume the same child run after an authorized decision; permission-driven memory/knowledge context approvals still lack a request-bound continuation path. The deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. A real local loopback-server smoke run is still outstanding. Do not merge or mark the phase complete until the remaining acceptance gaps are resolved or explicitly accepted as deferred.  
+**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The latest verified revision `743ea9dd51d5c80f67abf8521c7ab86c91b6630c` passes 468 Python tests, Python compilation, and JavaScript syntax validation in GitHub Actions run `45698639009`; the existing FastAPI TestClient chat smoke tests also pass. Durable request identity/event replay and interrupted-operation recovery are implemented through migration `0007_conversation_operations`; delegated Phase 7 cancellation propagation is also implemented. Phase 8 is **not yet complete**: delegated Agent Runtime tool approvals now emit an actionable `approval_required` SSE event and resume the same child run after an authorized decision; permission-driven memory/knowledge context approvals still lack a request-bound continuation path. The deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. A real local loopback-server smoke run is still outstanding. Do not merge or mark the phase complete until the remaining acceptance gaps are resolved or explicitly accepted as deferred.  
 **Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
 **Last reviewed:** 2026-11-25
 
 ## Current implementation verification (2026-11-25)
 
-Latest verified branch head: `66865c95bff8383cdfb8c06cad4f3f7c7bc84fd5`.
+Latest verified branch head: `743ea9dd51d5c80f67abf8521c7ab86c91b6630c`.
 
 - GitHub Actions: successful.
-- Python suite: 468 passed in 22.25s (GitHub Actions run `45698090232`).
+- Python suite: 468 passed in 29.45s (GitHub Actions run `45698639009`).
 - `python -m compileall -q core main.py`: successful in CI.
 - `node --check static/app.js`: successful in CI.
 - FastAPI TestClient smoke test: direct chat SSE lifecycle, durable operation registry, and assistant-message persistence verified.
