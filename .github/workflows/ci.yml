@@ -37,15 +37,13 @@ jobs:
       - name: Run tests
         run: |
           set -o pipefail
-          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt
-      - name: Publish diagnostic output
+          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt      - name: Comment pytest output on the PR (diagnostics)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          PYTEST_OUT_JSON: null
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          CHECK_ID=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '.check_runs[] | select(.name == "Unit tests (Python 3.11)") | .id' | head -n 1)
-          export PYTEST_TEXT="$(tail -c 60000 pytest_out.txt)"
-          jq -n --arg t "$PYTEST_TEXT" '{output:{title:"pytest diagnostics", summary:"pytest output tail", text:$t}}' > body.json
-          gh api --method PATCH "repos/${{ github.repository }}/check-runs/$CHECK_ID" --input body.json >/dev/null
-          echo "check-run $CHECK_ID updated"
+          if [ -n "$PR_NUMBER" ]; then
+            gh api --method POST "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+              -F body=@pytest_out.txt >/dev/null
+          fi
