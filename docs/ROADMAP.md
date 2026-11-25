@@ -176,7 +176,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 8 — Conversation Agent
 
-**Status:** Implementation is under review in PR #23. Durable request/event recovery, delegated cancellation, and an actionable approval-required SSE/UI handoff for Agent Runtime tool approvals are implemented; the approval continuation uses the same child run and the public Phase 7 plan-resume contract. The real local loopback smoke remains an open acceptance gap; memory/knowledge context approvals now use request-bound, one-time approval continuation. The latest approval-handoff revision passed 475 Python tests, Python compilation, and JavaScript syntax validation in CI run `45703021153` on commit `4b861666`. Depends on the merged Phase 7 baseline.
+**Status:** Implementation is under review in PR #23. Durable request/event recovery, delegated cancellation, and an actionable approval-required SSE/UI handoff for Agent Runtime tool approvals are implemented; the approval continuation uses the same child run and the public Phase 7 plan-resume contract. The real local loopback smoke remains an open acceptance gap; memory/knowledge context approvals now use request-bound, one-time approval continuation. The latest approval-handoff revision passed 475 Python tests, Python compilation, and JavaScript syntax validation in CI run `45703361535` on commit `d36e5520`. Depends on the merged Phase 7 baseline.
 
 **Goal:** Build the user-facing conversational workflow on top of the completed storage, context, permission, tool, and agent foundations.
 
