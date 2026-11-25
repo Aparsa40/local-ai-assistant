@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
 
 from core.permissions.approvals import ApprovalService
 from core.permissions.types import AccessRequest, ApprovalRequest, ApprovalStatus
