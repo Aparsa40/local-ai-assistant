@@ -269,7 +269,7 @@ class ConversationAgentService:
                     "message": "The conversation session was not found.",
                 }))
                 return
-            context_manager = self._context_builder(conversation_service, db)
+            context_manager = self._context_builder(conversation_service, db, access)
 
         try:
             outcome = await asyncio.wait_for(
