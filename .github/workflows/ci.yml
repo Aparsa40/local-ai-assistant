@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   test:
@@ -36,9 +37,15 @@ jobs:
       - name: Run tests
         run: |
           set -o pipefail
-          {
-            echo 'DIAG-BEGIN'
-            echo '```'
-            python -m pytest -q -W default --tb=short
-            echo '```'
-          } 2>&1 | tee "$GITHUB_STEP_SUMMARY"
+          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt
+      - name: Publish diagnostic output
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTEST_OUT_JSON: null
+        run: |
+          CHECK_ID=$(gh api "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" --jq '.check_runs[] | select(.name == "Unit tests (Python 3.11)") | .id' | head -n 1)
+          export PYTEST_TEXT="$(tail -c 60000 pytest_out.txt)"
+          jq -n --arg t "$PYTEST_TEXT" '{output:{title:"pytest diagnostics", summary:"pytest output tail", text:$t}}' > body.json
+          gh api --method PATCH "repos/${{ github.repository }}/check-runs/$CHECK_ID" --input body.json >/dev/null
+          echo "check-run $CHECK_ID updated"
