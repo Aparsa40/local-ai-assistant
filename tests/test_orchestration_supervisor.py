@@ -595,7 +595,12 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
     try:
         orch = make_orch(env)
         goal = make_goal(orch)
-        result = plan_with_dependencies(orch, goal)
+        result = asyncio.run(orch.plan_goal(
+            goal.goal_id,
+            owner_id=OWNER_ID,
+            strategy="validated_model_proposal",
+            proposal_text=proposal_for(goal, node_count=1),
+        ))
         plan_id = result["plan_id"]
         plan = orch.plans.get(plan_id)
         node = plan.nodes[0]
@@ -645,7 +650,16 @@ def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
         run = env.services.lifecycle.complete(
             run.run_id,
             expected_version=run.version,
-            outcome={"status": "complete", "summary": "Approved child result", "results": []},
+            outcome={
+                "status": "complete",
+                "summary": "Approved child result",
+                "results": [{
+                    "source_id": "approved-source",
+                    "title": "Approved result",
+                    "content": "Verified result from the resumed child run.",
+                    "uri": "local://approved-source",
+                }],
+            },
         )
 
         finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
