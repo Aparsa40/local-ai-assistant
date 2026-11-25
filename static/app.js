@@ -913,7 +913,17 @@ function chatApp() {
                     { method: 'POST' }
                 );
                 const decisionBody = await decision.json().catch(() => ({}));
-                if (!decision.ok) throw new Error(decisionBody.detail || 'ثبت تصمیم تأیید ناموفق بود.');
+                if (!decision.ok) {
+                    // Replayed approval events may outlive the first successful click.
+                    // Accept only the exact already-recorded decision, never a different one.
+                    const listResponse = await fetch('/api/permissions/approvals?limit=100');
+                    const listBody = await listResponse.json().catch(() => ({}));
+                    const recorded = (listBody.approvals || []).find(item => item.approval_id === approval.approval_id);
+                    const expectedStatus = approve ? 'approved' : 'rejected';
+                    if (recorded?.status !== expectedStatus) {
+                        throw new Error(decisionBody.detail || 'ثبت تصمیم تأیید ناموفق بود.');
+                    }
+                }
 
                 const resume = await fetch(
                     '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/resume',
@@ -923,12 +933,15 @@ function chatApp() {
                 if (!resume.ok) throw new Error(resumeBody.detail || 'آماده‌سازی ادامهٔ اجرا ناموفق بود.');
 
                 if (approve) {
-                    const execute = await fetch(
-                        '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/execute',
-                        { method: 'POST' }
-                    );
-                    const executeBody = await execute.json().catch(() => ({}));
-                    if (!execute.ok) throw new Error(executeBody.detail || 'ادامهٔ اجرای عامل ناموفق بود.');
+                    const runStatus = resumeBody.run?.status;
+                    if (runStatus === 'paused') {
+                        const execute = await fetch(
+                            '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/execute',
+                            { method: 'POST' }
+                        );
+                        const executeBody = await execute.json().catch(() => ({}));
+                        if (!execute.ok) throw new Error(executeBody.detail || 'ادامهٔ اجرای عامل ناموفق بود.');
+                    }
                     message.content += '\\n\\n✅ تأیید ثبت شد؛ اجرای همان عامل از نقطهٔ توقف ادامه یافت.';
                 } else {
                     message.content += '\\n\\n⛔ درخواست رد شد و اجرای وابسته لغو شد.';
