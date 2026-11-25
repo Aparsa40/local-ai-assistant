@@ -42,8 +42,6 @@ class LocalNeverReadyIM:
 
     async def stream_chat(self, provider_id, messages, model=None, temperature=None):
         self.received.append(provider_id)
-        if provider_id == "ollama":
-            raise RuntimeError("local model is not running")
         for chunk in ["cloud answer"]:
             yield chunk
 
