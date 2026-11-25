@@ -20,9 +20,10 @@ Latest verified branch head: `d36e5520f66dc49659359ba6872f2f3c08e5309e`.
 - Focused regression coverage includes immediate SSE disconnect/retry, same-key conflict, restart replay/recovery, trusted scope ownership, boolean authorization flags, classifier failure, offline readiness, UI cancellation/retry, Phase 7 cancellation propagation, delegated approval event/redaction, same-child-run continuation, owner-checked idempotent plan resume, and request-bound memory/knowledge approval creation, decision, one-time consumption and context reassembly.
 
 Outstanding acceptance gaps:
-1. Deterministic workflow registry is empty; routes remain denied until owning services register real workflows.
-3. Model-assisted classification remains optional and disabled by default.
-4. A real loopback server smoke run in the target local environment; CI currently uses FastAPI TestClient rather than launching the user's local server.
+1. Deterministic workflow registry is empty; routes remain denied until owning services register real workflows or this capability is explicitly deferred.
+2. A real loopback server smoke run in the target local environment; CI currently uses FastAPI TestClient rather than launching the user's local server.
+
+Model-assisted classification remains optional and disabled by default by design.
 
 ## 1. Purpose
 
