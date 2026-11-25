@@ -31,10 +31,18 @@ class DelegatedOutcome:
 class OrchestrationGateway:
     """Submit one bounded goal and map persisted results to a truthful outcome."""
 
-    def __init__(self, orchestration_factory, session_factory, *, default_budgets=None) -> None:
+    def __init__(
+        self,
+        orchestration_factory,
+        session_factory,
+        *,
+        default_budgets=None,
+        approval_wait_seconds: float | None = None,
+    ) -> None:
         self._orchestration_factory = orchestration_factory
         self._session_factory = session_factory
         self._default_budgets = default_budgets
+        self._approval_wait_seconds = approval_wait_seconds
 
     async def delegate(
         self,
@@ -122,9 +130,13 @@ class OrchestrationGateway:
                     owner_id=owner_id,
                     cancel_check=cancel_check,
                     approval_callback=approval_callback,
-                    timeout_seconds=request.budget.wall_clock_seconds - (
-                        asyncio.get_running_loop().time() - started_at
-                    ) - 1.0,
+                    timeout_seconds=(
+                        self._approval_wait_seconds
+                        if self._approval_wait_seconds is not None
+                        else request.budget.wall_clock_seconds - (
+                            asyncio.get_running_loop().time() - started_at
+                        ) - 1.0
+                    ),
                 )
                 if view is None:
                     view = service.plan_view(plan_id) or {}
