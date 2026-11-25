@@ -6,6 +6,7 @@ treated here are untrusted input that must be validated by application code.
 """
 from __future__ import annotations
 
+import json
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -17,14 +18,15 @@ CONVERSATION_AGENT_CONTRACTS_VERSION = 1
 EVENT_PROTOCOL_VERSION = 1
 
 MAX_MESSAGE_CHARS = 12000
-MAX_REASON_CODE = 80
+MAX_SOURCE_REFS = 100
 MAX_LIMITATION_CHARS = 500
 MAX_LIMITATIONS = 20
-MAX_SOURCE_REFS = 100
 MAX_METADATA_ENTRIES = 20
 MAX_METADATA_VALUE_CHARS = 300
 
 _CODE_PATTERN = re.compile(r"^[a-z0-9_]{1,80}$")
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{8,64}$")
+_PROVIDER_PATTERN = re.compile(r"^[a-z0-9_]+$")
 
 EVENT_TYPES = frozenset({
     "accepted", "status", "progress", "candidate", "validation",
@@ -40,16 +42,16 @@ def new_request_id() -> str:
     return "req_" + secrets.token_hex(12)
 
 
-def _check_code(value: str, label: str) -> str:
+def _check_code(value: Any, label: str) -> str:
     if not isinstance(value, str) or not _CODE_PATTERN.fullmatch(value):
         raise ContractValidationError(label + " must be a lowercase reason code")
     return value
 
 
-def _safe_text(value: str, label: str, maximum: int) -> str:
+def _safe_text(value: Any, label: str, maximum: int) -> str:
     if not isinstance(value, str):
         raise ContractValidationError(label + " must be a string")
-    normalized = " ".join(value.split())
+    normalized = value.strip()
     if not normalized or len(normalized) > maximum:
         raise ContractValidationError(label + " is empty or exceeds the bound")
     if any(ord(ch) < 32 for ch in normalized):
@@ -67,10 +69,9 @@ def _safe_metadata(value: Any) -> dict:
         if not isinstance(key, str) or not key or len(key) > 80:
             raise ContractValidationError("metadata keys must be bounded strings")
         if isinstance(item, (str, int, float, bool)) or item is None:
-            rendered = item if isinstance(item, str) else item
-            if isinstance(rendered, str) and len(rendered) > MAX_METADATA_VALUE_CHARS:
+            if isinstance(item, str) and len(item) > MAX_METADATA_VALUE_CHARS:
                 raise ContractValidationError("metadata string values exceed the bound")
-            safe[key] = rendered
+            safe[key] = item
         else:
             raise ContractValidationError("metadata values must be primitives")
     return safe
@@ -181,6 +182,10 @@ class ConversationRequest:
     client_metadata: dict = field(default_factory=dict)
     created_at: datetime = field(default_factory=_utc_now)
 
+    @property
+    def budget(self) -> ExecutionBudget:
+        return ExecutionBudget()
+
     def validate(self) -> None:
         if isinstance(self.session_id, bool) or not isinstance(self.session_id, int) or self.session_id < 1:
             raise ContractValidationError("session_id must be a positive integer")
@@ -191,16 +196,14 @@ class ConversationRequest:
             raise ContractValidationError("message exceeds the 12000 character bound")
         if any(ord(ch) < 32 and ch not in "\t\n\r" for ch in message):
             raise ContractValidationError("message must not contain control characters")
-        if not isinstance(self.request_id, str) or not _CODE_PATTERN.fullmatch(self.request_id.replace("-", "_").replace("_req_", "req_")) and not re.fullmatch(r"req_[0-9a-f]{24}", self.request_id):
-            if not re.fullmatch(r"^[A-Za-z0-9_.:-]{8,64}$", self.request_id or ""):
-                raise ContractValidationError("request_id must be a stable bounded identifier")
+        if not isinstance(self.request_id, str) or not _REQUEST_ID_PATTERN.fullmatch(self.request_id):
+            raise ContractValidationError("request_id must be a stable bounded identifier")
         if self.provider_id is not None:
-            _safe_text(self.provider_id, "provider_id", 80)
-            if not re.fullmatch(r"^[a-z0-9_]+$", self.provider_id):
+            if not isinstance(self.provider_id, str) or not _PROVIDER_PATTERN.fullmatch(self.provider_id):
                 raise ContractValidationError("provider_id must be a provider identifier")
         if self.model is not None:
             _safe_text(self.model, "model", 160)
-        self.history_limit = ConversationRequest._bounded_int(self.history_limit, "history_limit", 1, 100)
+        self._bounded_int(self.history_limit, "history_limit", 1, 100)
         if not isinstance(self.authorize_private_context_egress, bool) or not isinstance(self.force_delegation, bool):
             raise ContractValidationError("boolean flags must be booleans")
         if self.schema_version != CONVERSATION_AGENT_CONTRACTS_VERSION:
@@ -210,15 +213,10 @@ class ConversationRequest:
         _safe_metadata(self.client_metadata)
         self.budget.validate()
 
-    @property
-    def budget(self) -> ExecutionBudget:
-        return ExecutionBudget()
-
     @staticmethod
-    def _bounded_int(value: Any, label: str, minimum: int, maximum: int) -> int:
+    def _bounded_int(value: Any, label: str, minimum: int, maximum: int) -> None:
         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
             raise ContractValidationError(label + " is outside the bounded range")
-        return value
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any], *, session_id: int) -> "ConversationRequest":
@@ -234,17 +232,25 @@ class ConversationRequest:
             authorize_private_context_egress=bool(payload.get("authorize_private_context_egress", False)),
             force_delegation=bool(payload.get("force_delegation", False)),
             history_limit=payload.get("history_limit", 20),
-            memory_scopes=tuple(
-                DataScopeRef(**item) for item in (payload.get("memory_scopes") or [])
-            ),
-            knowledge_scopes=tuple(
-                DataScopeRef(**item) for item in (payload.get("knowledge_scopes") or [])
-            ),
+            memory_scopes=cls._scopes(payload.get("memory_scopes")),
+            knowledge_scopes=cls._scopes(payload.get("knowledge_scopes")),
             client_metadata=payload.get("client_metadata") or {},
-            created_at=_utc_now(),
         )
         request.validate()
         return request
+
+    @staticmethod
+    def _scopes(value: Any) -> tuple[DataScopeRef, ...]:
+        if value in (None, ()):
+            return ()
+        if not isinstance(value, list) or len(value) > 10:
+            raise ContractValidationError("scopes must be a list of at most 10 entries")
+        refs = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise ContractValidationError("each scope entry must be an object")
+            refs.append(DataScopeRef(**item))
+        return tuple(refs)
 
 
 @dataclass(frozen=True)
@@ -304,7 +310,7 @@ class Provenance:
         for ref in self.source_refs:
             if not isinstance(ref, str) or not ref or len(ref) > 300:
                 raise ContractValidationError("source references must be bounded strings")
-        if self.source_refs and len(self.source_refs) > MAX_SOURCE_REFS:
+        if len(self.source_refs) > MAX_SOURCE_REFS:
             raise ContractValidationError("too many source references")
         if self.error_code is not None:
             _check_code(self.error_code, "error code")
@@ -435,10 +441,34 @@ class ConversationEvent:
             "ts": self.created_at.isoformat(),
             "data": self.payload,
         }
-        return "data: " + json_dumps(envelope) + "\n\n"
+        return "data: " + json.dumps(envelope, ensure_ascii=False, default=str) + "\n\n"
 
 
-def json_dumps(value: Any) -> str:
-    import json
+# Safe keys that may be persisted or streamed inside event payloads.
+_SAFE_EVENT_KEYS = frozenset({
+    "route", "reason_codes", "destination_class", "provider_id", "model",
+    "mode", "status", "state", "content", "limitations", "source_refs",
+    "fallback_applied", "fallback_reason", "error_code", "message",
+    "goal_id", "plan_id", "issues", "node_outcomes", "detail", "provenance",
+})
 
-    return json.dumps(value, ensure_ascii=False, default=str)
+
+def redact_payload(payload: Mapping[str, Any]) -> dict:
+    """Keep only whitelisted, bounded keys; never raw context or exceptions."""
+    safe: dict = {}
+    for key, value in payload.items():
+        if key not in _SAFE_EVENT_KEYS:
+            continue
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            if isinstance(value, str) and len(value) > 20000:
+                safe[key] = value[:20000]
+            else:
+                safe[key] = value
+        elif isinstance(value, list):
+            safe[key] = [
+                item if isinstance(item, (str, int, float, bool)) or item is None else str(item)[:300]
+                for item in value[:MAX_SOURCE_REFS]
+            ]
+        elif isinstance(value, dict):
+            safe[key] = redact_payload(value)
+    return safe
