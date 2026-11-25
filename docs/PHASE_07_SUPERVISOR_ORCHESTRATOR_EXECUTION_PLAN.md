@@ -3,9 +3,9 @@
 **Project:** Local AI Assistant  
 **Phase:** 7 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Planned — execution contract prepared; no Supervisor implementation is claimed  
+**Status:** Ready to execute — Phase 6 dependency and validated builtin agent are merged; Supervisor implementation is not yet claimed  
 **Dependencies:** Phase 6 Agent Runtime and at least one validated agent  
-**Last reviewed:** 2026-11-24
+**Last reviewed:** 2026-11-25
 
 ## 1. Purpose and boundary
 

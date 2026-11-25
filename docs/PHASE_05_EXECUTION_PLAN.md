@@ -3,10 +3,10 @@
 **Project:** Local AI Assistant  
 **Phase:** 5 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Implementation and WP-5.7 acceptance complete on `feat/phase-5-operational-authorization`; PR and merge pending. Latest CI: 235 tests passed, Python compilation and frontend syntax validation passed.  
+**Status:** Implementation and WP-5.7 acceptance complete and merged via PR #17 (`22ac914163afb35778e27f52f774630919d9272d`). CI reported 235 passing tests; Python compilation and frontend syntax validation passed.  
 **Execution branch:** `feat/phase-5-operational-authorization` (created directly from the Phase 4-complete `main`)  
 **Delivery:** One branch and one pull request for the entire phase unless a documented size or CI constraint requires a merge boundary.  
-**Last reviewed:** 2026-11-24
+**Last reviewed:** 2026-11-25
 
 ## 1. Purpose
 
