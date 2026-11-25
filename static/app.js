@@ -846,6 +846,12 @@ function chatApp() {
                         } else if (data.type === 'validation') {
                             const state = (data.data || {}).state;
                             if (state === 'partial') this.messages[aiMsgIndex].model = 'پاسخ بخشی تأیید شد';
+                        } else if (data.type === 'approval_required') {
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].approval = detail;
+                            this.messages[aiMsgIndex].model = 'در انتظار تأیید شما';
+                            this.messages[aiMsgIndex].content += '\\n\\n🔐 برای ادامهٔ اجرای این کار، تأیید شما لازم است.';
+                            this.scrollToBottom();
                         } else if (data.type === 'final') {
                             terminalReceived = true;
                             const detail = data.data || {};
@@ -893,6 +899,47 @@ function chatApp() {
         async retryPendingMessage() {
             if (!this.pendingRetry || this.isLoading) return;
             return this.sendMessage(this.pendingRetry);
+        },
+
+        async decideConversationApproval(message, approve) {
+            const approval = message && message.approval;
+            if (!approval || message.approvalBusy) return;
+            message.approvalBusy = true;
+            message.approvalError = '';
+            try {
+                const action = approve ? 'approve' : 'reject';
+                const decision = await fetch(
+                    '/api/permissions/approvals/' + encodeURIComponent(approval.approval_id) + '/' + action,
+                    { method: 'POST' }
+                );
+                const decisionBody = await decision.json().catch(() => ({}));
+                if (!decision.ok) throw new Error(decisionBody.detail || 'ثبت تصمیم تأیید ناموفق بود.');
+
+                const resume = await fetch(
+                    '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/resume',
+                    { method: 'POST' }
+                );
+                const resumeBody = await resume.json().catch(() => ({}));
+                if (!resume.ok) throw new Error(resumeBody.detail || 'آماده‌سازی ادامهٔ اجرا ناموفق بود.');
+
+                if (approve) {
+                    const execute = await fetch(
+                        '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/execute',
+                        { method: 'POST' }
+                    );
+                    const executeBody = await execute.json().catch(() => ({}));
+                    if (!execute.ok) throw new Error(executeBody.detail || 'ادامهٔ اجرای عامل ناموفق بود.');
+                    message.content += '\\n\\n✅ تأیید ثبت شد؛ اجرای همان عامل از نقطهٔ توقف ادامه یافت.';
+                } else {
+                    message.content += '\\n\\n⛔ درخواست رد شد و اجرای وابسته لغو شد.';
+                }
+                message.approval = null;
+                this.scrollToBottom();
+            } catch (error) {
+                message.approvalError = error.message;
+            } finally {
+                message.approvalBusy = false;
+            }
         },
 
         async cancelMessage() {
