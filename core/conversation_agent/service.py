@@ -10,6 +10,7 @@ endpoints.
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 from dataclasses import dataclass
 from typing import AsyncIterator, Callable, Optional
@@ -36,6 +37,8 @@ from core.conversation_agent.operations import ConversationOperation, OperationR
 from core.conversation_agent.strategies.base import ExecutionRequest
 from core.conversation_agent.validator import ResponseValidator
 from core.conversation_agent.composer import ResponseComposer
+
+logger = logging.getLogger(__name__)
 
 _TERMINAL_LANGUAGE = {
     "failed": "The execution failed and no answer was produced.",
@@ -216,6 +219,10 @@ class ConversationAgentService:
             }))
             raise
         except Exception:
+            logger.exception(
+                "Conversation Agent lifecycle failed",
+                extra={"request_id": operation.request_id, "conversation_id": operation.session_id},
+            )
             if operation.is_terminal:
                 return
             await operation.publish(self._event(operation, "error", {
