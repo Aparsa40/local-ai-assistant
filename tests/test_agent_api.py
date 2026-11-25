@@ -40,7 +40,14 @@ def make_unbounded_definition(**overrides) -> AgentDefinition:
         version="1.0.0",
         goal="A bounded goal.",
         description="A bounded description.",
-        input_schema={"type": "object"},
+        # The input schema must actually declare the task payload fields; the
+        # closed-world validator rejects unknown payload keys otherwise.
+        input_schema={
+            "type": "object",
+            "properties": {"query": {"type": "string", "maxLength": 2000}},
+            "required": [],
+            "additionalProperties": True,
+        },
         output_schema={"type": "object"},
         completion=CompletionCriteria(kind="sources_collected", description="One source."),
         budgets=AgentBudgets(max_iterations=2, max_tool_calls=1),
