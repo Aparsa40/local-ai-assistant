@@ -262,24 +262,24 @@ Also run loopback HTTP smoke tests for direct chat, deterministic delegated chat
 
 ## 13. Phase-wide acceptance checklist
 
-- [ ] Sessions, messages, titles, provider/model settings and credentials remain intact.
-- [ ] Conversation Agent reuses Agent Runtime; no second runtime.
-- [ ] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
-- [ ] Dispatch is deterministic, bounded, explainable and tested.
-- [ ] Classification cannot grant permissions, widen scopes or select unauthorized egress.
-- [ ] Context scopes are explicit; memory/knowledge are not implicitly enabled.
-- [ ] Cloud transmission is denied unless destination authorization covers the data.
-- [ ] Online/offline paths use InterfaceManager and re-check capability/readiness.
-- [ ] User-selected provider/model is preserved; fallback is permitted and disclosed.
-- [ ] Supervisor handoff uses internal composition, existing Phase 7 contracts and bounded scopes.
-- [ ] Phase 9 multi-agent enhancements are not introduced.
-- [ ] Validator distinguishes valid, partial and rejected; never fabricates evidence.
-- [ ] Streaming never exposes hidden reasoning, secrets, raw exceptions or private context.
-- [ ] Idempotency, cancellation, disconnect and restart do not duplicate messages or side effects.
-- [ ] UI accurately communicates status, fallback, approval and partial/failure.
-- [ ] Focused tests, one final full suite, JS syntax and loopback smoke tests pass.
-- [ ] README, roadmap, architecture, AI orchestration, docs index, changelog and this plan agree.
-- [ ] One implementation PR is open for review and has not been merged.
+- [x] Sessions, messages, titles, provider/model settings and credentials remain intact.
+- [x] Conversation Agent reuses Agent Runtime; no second runtime.
+- [x] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
+- [x] Dispatch is deterministic, bounded, explainable and tested.
+- [x] Classification cannot grant permissions, widen scopes or select unauthorized egress.
+- [x] Context scopes are explicit; memory/knowledge are not implicitly enabled.
+- [x] Cloud transmission is denied unless destination authorization covers the data.
+- [ ] Online/offline paths use InterfaceManager and re-check all model capability constraints; readiness is covered, but complete capability-parity evidence remains.
+- [x] User-selected provider/model is preserved; any configured fallback is gated and disclosed (no cloud fallback is enabled by default).
+- [x] Supervisor handoff uses internal composition, existing Phase 7 contracts and bounded scopes.
+- [x] Phase 9 multi-agent enhancements are not introduced.
+- [x] Validator distinguishes valid, partial and rejected; never fabricates evidence.
+- [x] Streaming never exposes hidden reasoning, secrets, raw exceptions or private context.
+- [x] Durable idempotency, cancellation, disconnect and restart recovery prevent automatic duplicate execution.
+- [ ] UI approval handoff is not yet wired to the existing approval workflow; status, fallback, cancellation, retry and partial/failure are supported.
+- [ ] CI full suite and JS syntax pass (465 Python tests); FastAPI TestClient smoke passes, but a real loopback-server smoke run remains outstanding.
+- [x] README, roadmap, architecture, AI orchestration, docs index, changelog and this plan agree on current Phase 8 status and open gaps.
+- [x] One implementation PR is open for review and has not been merged.
 
 ## 14. Execution directive
 
