@@ -147,7 +147,7 @@ Persistence: migration `0005_agent_runtime` adds the agent definition, task, run
 
 Tests: `tests/agent_test_models.py` (full composed environment over a private SQLite file), `tests/test_agent_contracts.py`, `tests/test_agent_registry.py`, `tests/test_agent_lifecycle.py`, `tests/test_agent_execution.py`, and `tests/test_agent_permissions.py` cover contract validation, registry trust, the full transition matrix, concurrency conflicts, event-persistence failure surfacing, restart recovery, every budget class, permission denial paths (run identity, scope binding, capability binding, mutating-tool rejection, issuer identity), grant least privilege, and model unavailability.
 
-Validation status: the required validation commands (`python -m compileall -q core main.py`, `python -m pytest -q`, `node --check static/app.js`) plus loopback HTTP smoke tests must pass in CI or on a local checkout before merge. This branch was authored in a web-only environment without a Python runtime, so CI evidence is the pending gate recorded in the pull request.
+Validation status: GitHub Actions successfully ran Python compilation, frontend syntax validation, and the test suite on the final Phase 6 head `bdf4e01dd593a860d9efb245f533c019c857ef17` for both push and pull-request events before PR #19 merged. A local Windows loopback HTTP smoke test remains a separate environment-level check.
 
 Known limitations: one bounded builtin agent; no Supervisor, Conversation Agent, multi-agent, autonomous publishing, credential access, or unrestricted execution; capability bindings are read-only by design for this phase; cloud/model routing and response composition remain future work.
 
