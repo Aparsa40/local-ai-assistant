@@ -105,6 +105,12 @@ class _ApprovalAwareOrchestrationService:
         self.run_status = "succeeded"
         self.pending_approval_id = None
 
+    async def cancel_plan(self, plan_id, *, reason):
+        assert plan_id == "plan-" + "b" * 24
+        assert reason == "approval_timeout"
+        self.run_status = "cancelled"
+        self.pending_approval_id = None
+
 
 def test_delegation_emits_approval_callback_and_resumes_same_child_run():
     orchestration = _ApprovalAwareOrchestrationService()
@@ -141,3 +147,33 @@ def test_delegation_emits_approval_callback_and_resumes_same_child_run():
     assert orchestration.resumed == ["run-123"]
     assert outcome.status is ExecutionStatus.COMPLETED
     assert outcome.content == "Completed after explicit approval."
+
+
+def test_approval_timeout_cancels_the_paused_plan():
+    orchestration = _ApprovalAwareOrchestrationService()
+    gateway = OrchestrationGateway(
+        orchestration_factory=lambda db: orchestration,
+        session_factory=lambda: nullcontext(None),
+    )
+    request = ConversationRequest.from_payload(
+        {
+            "session_id": 1,
+            "message": "delegate with a short approval budget",
+            "request_id": "req_" + "b" * 24,
+            "budget": {"wall_clock_seconds": 1},
+        },
+        session_id=1,
+    )
+
+    async def on_approval(payload):
+        assert payload["approval_id"] == "approval-123"
+
+    outcome = asyncio.run(gateway.delegate(
+        request,
+        authorized_scopes=(),
+        owner_id="trusted-owner",
+        approval_callback=on_approval,
+    ))
+
+    assert orchestration.run_status == "cancelled"
+    assert outcome.status is ExecutionStatus.CANCELLED
