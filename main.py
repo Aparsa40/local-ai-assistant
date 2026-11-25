@@ -17,6 +17,8 @@ from core.database import init_db
 from core.knowledge import KnowledgeScope, KnowledgeService, KnowledgeAccessDeniedError, KnowledgeNotFoundError, KnowledgeValidationError
 from core.conversations import ConversationNotFoundError, ConversationService
 from core.context import ContextManager, ContextRequest
+from core.memory import MemoryService
+from core.permissions.memory_adapter import PermissionManagerMemoryAccessPolicy
 from core.profiles import ProfileService, ProfileServiceError
 from core.storage.manager import get_storage_manager
 from core.permissions.audit import AuditService
@@ -104,8 +106,21 @@ def build_conversation_agent_service() -> ConversationAgentService:
     def conversations(db, access_ref, permission_manager_ref):
         return ConversationService(db, permission_manager_ref, access_ref, build_audit_service(db))
 
-    def context(conversation_service, db):
-        return ContextManager(conversation_service)
+    def context(conversation_service, db, access_ref):
+        scoped_manager = build_permission_manager(db)
+        audit_service = build_audit_service(db)
+        memory_policy = PermissionManagerMemoryAccessPolicy(
+            scoped_manager,
+            access_ref.subject,
+            audit_service=audit_service,
+        )
+        memory_service = MemoryService(db, access_policy=memory_policy)
+        knowledge_service = build_knowledge_service(db, access_ref)
+        return ContextManager(
+            conversation_service,
+            memory=memory_service,
+            knowledge=knowledge_service,
+        )
 
     # Resolved lazily: the orchestration factory is defined later in this module,
     # after the eagerly-built composition root below.
