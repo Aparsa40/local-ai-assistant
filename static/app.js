@@ -849,6 +849,7 @@ function chatApp() {
                         } else if (data.type === 'approval_required') {
                             const detail = data.data || {};
                             this.messages[aiMsgIndex].approval = detail;
+                            this.loadConversationApprovalDetails(this.messages[aiMsgIndex], detail.approval_id);
                             this.messages[aiMsgIndex].model = 'در انتظار تأیید شما';
                             this.messages[aiMsgIndex].content += '\\n\\n🔐 برای ادامهٔ اجرای این کار، تأیید شما لازم است.';
                             this.scrollToBottom();
@@ -899,6 +900,25 @@ function chatApp() {
         async retryPendingMessage() {
             if (!this.pendingRetry || this.isLoading) return;
             return this.sendMessage(this.pendingRetry);
+        },
+
+        async loadConversationApprovalDetails(message, approvalId) {
+            try {
+                const response = await fetch('/api/permissions/approvals?limit=500');
+                if (!response.ok) return;
+                const data = await response.json();
+                const approval = (data.approvals || []).find(item => item.approval_id === approvalId);
+                if (!approval) return;
+                const resource = approval.resource || {};
+                const scope = approval.scope || {};
+                message.approvalSummary = [
+                    approval.operation || 'operation',
+                    (resource.type || 'resource') + ':' + (resource.id || 'unknown'),
+                    (scope.type || 'scope') + ':' + (scope.id || 'unknown')
+                ].join(' · ');
+            } catch (error) {
+                // The approval action remains available even if its summary cannot be loaded.
+            }
         },
 
         async decideConversationApproval(message, approve) {
