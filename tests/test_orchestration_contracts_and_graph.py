@@ -47,7 +47,17 @@ def make_budgets(**overrides):
     return OrchestrationBudgets(**overrides)
 
 
-def make_node(plan_id, *, ordinal=0, title="Analyze scope", capabilities=("knowledge_search",), **kwargs):
+def make_node(
+    plan_id,
+    *,
+    ordinal=0,
+    title="Analyze scope",
+    capabilities=("knowledge_search",),
+    payload=None,
+    **kwargs,
+):
+    # payload is an explicit keyword argument: forwarding it through **kwargs
+    # as well would pass it to TaskNode more than once.
     return TaskNode(
         node_id=new_node_id(),
         plan_id=plan_id,
@@ -58,15 +68,27 @@ def make_node(plan_id, *, ordinal=0, title="Analyze scope", capabilities=("knowl
             kind="structured_result_present",
             description="A structured result was reported.",
         ),
-        payload={"query": "durable storage"},
+        payload=payload if payload is not None else {"query": "durable storage"},
         data_scopes=(make_scope(),),
         tool_scopes=("knowledge_search",),
         **kwargs,
     )
 
 
-def make_plan(budgets=None, *, goal_id=None, parent_run_id=None, nodes=None, dependencies=None):
-    plan_id = new_plan_id()
+def make_plan(
+    budgets=None,
+    *,
+    plan_id=None,
+    goal_id=None,
+    parent_run_id=None,
+    nodes=None,
+    dependencies=None,
+):
+    # When nodes are supplied, the plan identifier must be the one the nodes
+    # already reference so structural validation sees a consistent plan; a
+    # freshly generated id would reject every graph fixture prematurely.
+    if plan_id is None:
+        plan_id = nodes[0].plan_id if nodes else new_plan_id()
     goal_id = goal_id or new_goal_id()
     if nodes is None:
         first = make_node(plan_id, ordinal=0, title="Analyze scope")
