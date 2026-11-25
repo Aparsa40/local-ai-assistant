@@ -587,3 +587,78 @@ def test_assignment_requires_one_candidate_to_cover_all_capabilities(tmp_path):
         )
     finally:
         env.dispose()
+
+
+def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
+    """A resumed child run is reconciled once, then pending work may continue."""
+    from core.agents.contracts import StopReason
+
+    env = make_agent_env(tmp_path)
+    try:
+        orch = make_orch(env)
+        goal = make_goal(orch)
+        result = plan_with_dependencies(orch, goal)
+        plan_id = result["plan_id"]
+        plan = orch.plans.get(plan_id)
+        node = plan.nodes[0]
+
+        # Put the accepted plan/node into the same persisted state produced
+        # when the scheduler's child run pauses for an approval decision.
+        orch.scheduler._mark_plan_status(plan_id, plan, PlanStatus.RUNNING)
+        task = env.services.lifecycle.create_task(
+            agent_id="knowledge-analyzer",
+            agent_version="1.0.0",
+            owner_id=OWNER_ID,
+            title="Approval-resume test",
+            payload={"query": "approved test"},
+            data_scopes=goal.data_scopes,
+        )
+        run = env.services.lifecycle.create_run(task.task_id)
+        run = env.services.lifecycle.start(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.pause_for_approval(
+            run.run_id,
+            expected_version=run.version,
+            approval_id="approval-test",
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.SCHEDULED,
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.RUNNING,
+            run_id=run.run_id,
+            attempts=1,
+        )
+
+        with pytest.raises(OrchestrationSchedulerError, match="explicitly resumed"):
+            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+
+        # Model the existing authorized approval-resume flow: the approval
+        # decision has already happened before this lifecycle transition.
+        run = env.services.lifecycle.clear_pending_approval(
+            run.run_id, expected_version=run.version,
+        )
+        run = env.services.lifecycle.resume(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.complete(
+            run.run_id,
+            expected_version=run.version,
+            outcome={"status": "complete", "summary": "Approved child result", "results": []},
+        )
+
+        finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+        assert finished.status is PlanStatus.COMPLETED
+        assert finished.nodes[0].status is NodeStatus.COMPLETED
+        assert finished.nodes[0].run_id == run.run_id
+        assert finished.nodes[0].attempts == 1
+        assert len(orch.assignments.list_for_plan(plan_id)) == 0
+
+        # A duplicate reconciliation must not remap the node or create work.
+        again = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id))
+        assert again.status is PlanStatus.COMPLETED
+        assert again.nodes[0].run_id == run.run_id
+        assert again.nodes[0].attempts == 1
+    finally:
+        env.dispose()
