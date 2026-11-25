@@ -96,6 +96,9 @@ class ConversationContextApprovalCoordinator:
         )
 
     def status(self, approval_id: str) -> ApprovalRequest | None:
+        session = getattr(self.approval_service.repository, "db", None)
+        if session is not None and hasattr(session, "expire_all"):
+            session.expire_all()
         return self.approval_service.repository.get(approval_id)
 
     def accept(self, pending: ContextApprovalRequired, approval_id: str) -> None:
