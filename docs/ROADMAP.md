@@ -121,7 +121,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 **Execution plan:** [PHASE_05_EXECUTION_PLAN.md](PHASE_05_EXECUTION_PLAN.md)  
 **Core foundation:** [PR #15](https://github.com/Aparsa40/local-ai-assistant/pull/15).  
-**Operational completion candidate:** `feat/phase-5-operational-authorization` (235 CI tests passed; PR/merge pending).
+**Completion evidence:** PR #17 merged (`22ac914163afb35778e27f52f774630919d9272d`); CI reported 235 passing tests.
 **Module contracts:** [PERMISSIONS.md](PERMISSIONS.md), [TOOL_RUNTIME.md](TOOL_RUNTIME.md)
 
 **Core deliverables:**
