@@ -552,3 +552,38 @@ def test_verified_tool_evidence_comes_from_the_registry(tmp_path):
         assert kinds & {"verified_tool", "declared_capability", "model_catalog"}
     finally:
         env.dispose()
+
+
+def test_assignment_requires_one_candidate_to_cover_all_capabilities(tmp_path):
+    """Capabilities from separate agents must not be combined for assignment."""
+    from dataclasses import replace
+
+    env = make_agent_env(tmp_path)
+    try:
+        orch = make_orch(env)
+        goal = make_goal(orch)
+        result = plan_with_dependencies(orch, goal)
+        plan = orch.plans.get(result["plan_id"])
+        node = replace(
+            plan.nodes[0],
+            required_capabilities=("knowledge_search", "memory_read"),
+        )
+
+        orch.resolver._candidates.clear()
+        orch.resolver.register_candidate(CapabilityCandidate(
+            "search-only", "1.0.0", capabilities=("knowledge_search",),
+        ))
+        orch.resolver.register_candidate(CapabilityCandidate(
+            "memory-only", "1.0.0", capabilities=("memory_read",),
+        ))
+
+        decision = orch.resolver.assign(plan, node)
+
+        assert decision.decision == "denied"
+        assert decision.agent_id is None
+        assert any(
+            "single registered agent" in reason.lower()
+            for reason in decision.reasons
+        )
+    finally:
+        env.dispose()
