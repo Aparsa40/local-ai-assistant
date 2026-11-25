@@ -34,4 +34,6 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q core main.py
       - name: Run tests
-        run: python -m pytest -q -W default
+        run: |
+          set -o pipefail
+          python -m pytest -q -W default --tb=short 2>&1 | tee "$GITHUB_STEP_SUMMARY"
