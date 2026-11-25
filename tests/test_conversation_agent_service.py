@@ -227,7 +227,7 @@ def test_delegation_partial_outcome_preserved():
         {"node_id": "n1", "title": "t1", "status": "completed", "handoff_status": "complete"},
         {"node_id": "n2", "title": "t2", "status": "failed", "handoff_status": "failed"},
     )
-    gateway = SimpleNamespace(delegate=lambda request, authorized_scopes: _resolved(DelegatedOutcome(
+    gateway = SimpleNamespace(delegate=lambda request, authorized_scopes, cancel_check=None: _resolved(DelegatedOutcome(
         status=ExecutionStatus.PARTIAL,
         content="partial summary",
         goal_id="g" * 32,
