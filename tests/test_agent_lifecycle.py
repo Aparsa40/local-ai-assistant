@@ -336,3 +336,77 @@ def test_event_persistence_failures_surface_instead_of_being_swallowed(tmp_path)
         assert env.services.lifecycle.has_executor(run.run_id) is False
     finally:
         env.dispose()
+
+
+def test_terminal_runs_cannot_be_started_but_recovery_stays_available(tmp_path):
+    env = make_agent_env(tmp_path)
+    try:
+        task = make_task(env)
+        run = env.services.lifecycle.create_run(task.task_id)
+        cancelled = env.services.lifecycle.cancel(run.run_id, expected_version=run.version)
+        assert cancelled.status is AgentRunStatus.CANCELLED
+        # Transition validation happens before the executor claim: a repeated
+        # start is a transition error, never an executor-claim conflict.
+        with pytest.raises(AgentTransitionError):
+            env.services.lifecycle.start(run.run_id, expected_version=cancelled.version)
+        assert env.services.lifecycle.has_executor(run.run_id) is False
+    finally:
+        env.dispose()
+
+
+def test_concurrent_start_attempts_cannot_double_claim(tmp_path):
+    env = make_agent_env(tmp_path)
+    try:
+        task = make_task(env)
+        run = env.services.lifecycle.create_run(task.task_id)
+        # Simulate the winning executor: the loser must observe a claim conflict,
+        # and the persisted version must not advance.
+        env.services.lifecycle.claim_executor(run.run_id)
+        with pytest.raises(AgentConcurrencyError):
+            env.services.lifecycle.start(run.run_id, expected_version=run.version)
+        assert env.services.lifecycle.get_run(run.run_id).version == 1
+        env.services.lifecycle.release_executor(run.run_id)
+        started = env.services.lifecycle.start(run.run_id, expected_version=run.version)
+        assert started.status is AgentRunStatus.RUNNING
+        assert started.version == 2
+    finally:
+        env.dispose()
+
+
+def test_concurrent_transitions_do_not_silently_overwrite(tmp_path):
+    env = make_agent_env(tmp_path)
+    try:
+        task = make_task(env)
+        run = env.services.lifecycle.create_run(task.task_id)
+        started = env.services.lifecycle.start(run.run_id, expected_version=run.version)
+
+        # An external writer advances the persisted version between steps.
+        paused = env.services.lifecycle.pause(
+            run.run_id, expected_version=started.version,
+            reason=StopReason.PAUSED_BY_REQUEST,
+        )
+        resumed = env.services.lifecycle.resume(run.run_id, expected_version=paused.version)
+        assert resumed.status is AgentRunStatus.RUNNING
+        assert resumed.version == started.version + 2
+
+        # The caller's snapshot is now stale: every lifecycle transition must
+        # reject it with the domain concurrency error instead of overwriting.
+        with pytest.raises(AgentConcurrencyError):
+            env.services.lifecycle.complete(
+                run.run_id,
+                expected_version=started.version,
+                outcome={"summary": "stale"},
+            )
+        with pytest.raises(AgentConcurrencyError):
+            env.services.lifecycle.cancel(
+                run.run_id,
+                expected_version=started.version,
+            )
+        # The run state is untouched by the rejected transitions.
+        after = env.services.lifecycle.get_run(run.run_id)
+        assert after.status is AgentRunStatus.RUNNING
+        assert after.version == resumed.version
+        assert after.stop_reason is None
+        assert after.outcome is None
+    finally:
+        env.dispose()
