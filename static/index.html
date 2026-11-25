@@ -215,6 +215,8 @@
                         class="rounded px-3 py-2">اسناد و حافظه</button>
                 <button @click="activeTab = 'tools'" :class="activeTab === 'tools' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
                         class="rounded px-3 py-2">ابزارها و اتصال‌ها</button>
+                <button @click="activeTab = 'agents'" :class="activeTab === 'agents' ? 'bg-sky-700 text-white' : 'text-slate-400 hover:bg-slate-800'"
+                        class="rounded px-3 py-2">عامل‌ها</button>
             </nav>
 
             <div class="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
@@ -615,6 +617,60 @@
                     <h3 class="font-semibold text-slate-200">ابزارها و اتصال‌ها</h3>
                     <p>اتصال GitHub، MCP، پوشه‌های سیستم و Discord در فاز کانکتورها توسعه داده می‌شود.</p>
                     <div class="p-4 border border-dashed border-slate-700 rounded text-center text-xs">مدیریت کانکتورها هنوز فعال نشده است.</div>
+                </div>
+                <div x-show="activeTab === 'agents'" class="text-slate-400 space-y-4">
+                    <h3 class="font-semibold text-slate-200">عامل‌ها</h3>
+                    <p>اجرای عامل‌های مهارشده؛ فقط عملیات محلی، کم‌ریسک و مجاز.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button @click="loadAgents()" class="rounded bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs">بارگذاری عامل‌ها</button>
+                        <button @click="loadAgentRuns()" class="rounded bg-slate-800 hover:bg-slate-700 px-3 py-2 text-xs">بارگذاری اجراها</button>
+                    </div>
+                    <div x-show="agentsError" class="text-rose-400 text-xs" x-text="agentsError"></div>
+                    <div class="space-y-2" x-show="agents.length">
+                        <div class="font-semibold text-slate-300 text-xs">عامل‌های ثبت‌شده</div>
+                        <template x-for="agent in agents" :key="agent.agent_id + ':' + agent.version">
+                            <div class="p-3 border border-slate-700 rounded space-y-1">
+                                <div class="text-slate-200 text-xs font-semibold" x-text="agent.agent_id + ' v' + agent.version + (agent.enabled ? '' : ' (غیرفعال)')"></div>
+                                <div class="text-xs" x-text="agent.description"></div>
+                                <div class="text-xs text-slate-500" x-text="'ابزارها: ' + agent.allowed_tools.join(', ') + ' | حداکثر تکرار: ' + agent.budgets.max_iterations"></div>
+                                <form @submit.prevent="createAgentTask(agent)" class="flex flex-wrap gap-2 items-center text-xs">
+                                    <input x-model="agentTaskForm.title" placeholder="عنوان وظیفه" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" maxlength="200">
+                                    <input x-model="agentTaskForm.query" placeholder="پرس‌وجو" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" maxlength="2000">
+                                    <select x-model="agentTaskForm.scope_type" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                                        <option value="user">user</option>
+                                        <option value="conversation">conversation</option>
+                                        <option value="task">task</option>
+                                        <option value="global">global</option>
+                                    </select>
+                                    <input x-model="agentTaskForm.scope_id" placeholder="شناسه محدوده" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" maxlength="160">
+                                    <button type="submit" class="rounded bg-sky-700 hover:bg-sky-600 px-3 py-1">ایجاد وظیفه</button>
+                                </form>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="space-y-2" x-show="agentRuns.length">
+                        <div class="font-semibold text-slate-300 text-xs">اجراهای اخیر</div>
+                        <template x-for="run in agentRuns" :key="run.run_id">
+                            <div class="p-3 border border-slate-700 rounded space-y-1">
+                                <div class="text-xs text-slate-200" x-text="run.agent_id + ' | ' + run.status + (run.stop_reason ? ' (' + run.stop_reason + ')' : '')"></div>
+                                <div class="text-xs text-slate-500" x-text="'تکرار: ' + run.iteration + ' | فراخوانی ابزار: ' + run.tool_calls + ' | تلاش: ' + run.attempt"></div>
+                                <div x-show="run.pending_approval_id" class="text-xs text-amber-400" x-text="'تأیید در انتظار: ' + run.pending_approval_id"></div>
+                                <div x-show="run.outcome" class="text-xs text-slate-400" x-text="'نتیجه: ' + JSON.stringify(run.outcome).slice(0, 300)"></div>
+                                <div class="flex flex-wrap gap-2 text-xs">
+                                    <button @click="executeAgentRun(run.run_id)" class="rounded bg-emerald-800 hover:bg-emerald-700 px-3 py-1">اجرا</button>
+                                    <button @click="pauseAgentRun(run.run_id)" class="rounded bg-amber-800 hover:bg-amber-700 px-3 py-1">توقف</button>
+                                    <button @click="resumeAgentRun(run.run_id)" class="rounded bg-slate-800 hover:bg-slate-700 px-3 py-1">ادامه</button>
+                                    <button @click="cancelAgentRun(run.run_id)" class="rounded bg-rose-900 hover:bg-rose-800 px-3 py-1">لغو</button>
+                                    <template x-if="run.pending_approval_id">
+                                        <div class="flex flex-wrap gap-2">
+                                            <button @click="decideApproval(run.pending_approval_id, 'approve')" class="rounded bg-emerald-700 hover:bg-emerald-600 px-3 py-1">موافقم</button>
+                                            <button @click="decideApproval(run.pending_approval_id, 'reject')" class="rounded bg-rose-700 hover:bg-rose-600 px-3 py-1">رد می‌کنم</button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
             </div>
         </section>

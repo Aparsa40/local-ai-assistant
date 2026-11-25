@@ -46,6 +46,14 @@ from core.catalog_storage import (
     seed_operator_catalogs,
     get_latest_intelligence_report,
 )
+from core.agents import AgentRuntimeContainer
+from core.agents.contracts import AgentConcurrencyError, AgentTransitionError, DataScope, StopReason
+from core.agents.controller import AgentControllerError
+from core.agents.context import AgentScopeDeniedError
+from core.agents.lifecycle import RunNotFoundError, TaskNotFoundError
+from core.agents.registry import AgentDefinitionError
+from core.repositories.agent_repository import AgentDefinitionRepository
+from core.repositories.run_repository import AgentRunEventRepository, AgentRunRepository
 
 app = FastAPI(title="Local Modular AI Assistant")
 permission_manager = PermissionManager(policies=(LocalApplicationPolicy(),))
@@ -57,6 +65,10 @@ runtime_manager = build_runtime_manager(ConfigManager.load_config, storage_manag
 runtime_monitor = RuntimeMonitor(runtime_manager)
 with storage_manager.session() as _catalog_seed_db:
     seed_operator_catalogs(_catalog_seed_db)
+agent_container = AgentRuntimeContainer(storage_manager, interface_manager)
+with storage_manager.session() as _agent_boot_db:
+    agent_container.register_builtin_agents(_agent_boot_db)
+agent_container.recover_stale_runs()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -178,6 +190,16 @@ class KnowledgeIndexRequest(BaseModel):
     extracted_text: str = Field(min_length=1, max_length=5_000_000)
     extractor: str = Field(default="manual", max_length=120)
     extractor_version: str = Field(default="1", max_length=80)
+
+
+class AgentTaskCreateRequest(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=80)
+    agent_version: str = Field(min_length=1, max_length=40)
+    title: str = Field(min_length=1, max_length=200)
+    query: str = Field(default="", max_length=2000)
+    scope_type: str = Field(default="user", min_length=1, max_length=40)
+    scope_id: str = Field(min_length=1, max_length=160)
+    owner_id: str = Field(default="local-user", min_length=1, max_length=160)
 
 
 def build_admin_permission_manager(db: Session) -> PermissionManager:
@@ -548,6 +570,205 @@ async def index_knowledge_source(
         raise HTTPException(status_code=404, detail="Knowledge source not found.") from exc
     except KnowledgeValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def build_agent_services(db: Session):
+    return agent_container.build_services(db)
+
+
+def serialize_agent_definition(definition) -> dict:
+    return {
+        "agent_id": definition.agent_id,
+        "version": definition.version,
+        "goal": definition.goal,
+        "description": definition.description,
+        "completion": {
+            "kind": definition.completion.kind,
+            "description": definition.completion.description,
+            "min_results": definition.completion.min_results,
+        },
+        "budgets": {
+            "max_iterations": definition.budgets.max_iterations,
+            "deadline_seconds": definition.budgets.deadline_seconds,
+            "max_tool_calls": definition.budgets.max_tool_calls,
+            "max_model_tokens": definition.budgets.max_model_tokens,
+            "max_input_bytes": definition.budgets.max_input_bytes,
+            "max_output_bytes": definition.budgets.max_output_bytes,
+        },
+        "allowed_tools": list(definition.allowed_tools),
+        "allowed_models": list(definition.allowed_models),
+        "data_scopes": list(definition.data_scopes),
+        "approval_policy": definition.approval_policy,
+        "enabled": definition.enabled,
+    }
+
+
+def serialize_agent_run(run) -> dict:
+    return {
+        "run_id": run.run_id,
+        "task_id": run.task_id,
+        "agent_id": run.agent_id,
+        "agent_version": run.agent_version,
+        "status": run.status.value,
+        "attempt": run.attempt,
+        "iteration": run.iteration,
+        "tool_calls": run.tool_calls,
+        "model_tokens": run.model_tokens,
+        "pending_approval_id": run.pending_approval_id,
+        "stop_reason": run.stop_reason.value if run.stop_reason else None,
+        "error_code": run.error_code,
+        "error_message": run.error_message,
+        "outcome": run.outcome,
+        "version": run.version,
+        "created_at": run.created_at.isoformat(),
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+    }
+
+
+def serialize_agent_run_event(event) -> dict:
+    # list_for_run returns redacted event mappings; event records are
+    # attribute-like. Accept both shapes without exposing extra fields.
+    if isinstance(event, dict):
+        created_at = event.get("created_at")
+        return {
+            "event_type": event.get("event_type"),
+            "outcome": event.get("outcome"),
+            "metadata": dict(event.get("metadata") or {}),
+            "created_at": created_at.isoformat() if created_at else None,
+        }
+    return {
+        "event_type": event.event_type,
+        "outcome": event.outcome,
+        "metadata": dict(event.metadata or {}),
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+@app.get("/api/agents")
+async def list_agent_definitions(db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    return {"agents": [serialize_agent_definition(item) for item in AgentDefinitionRepository(db).list_all()]}
+
+
+@app.get("/api/agents/runs")
+async def list_agent_runs(limit: int = 50, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    if not 1 <= limit <= 200:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 200.")
+    runs = AgentRunRepository(db).list_recent(limit=limit)
+    return {"runs": [serialize_agent_run(item) for item in runs]}
+
+
+@app.get("/api/agents/runs/{run_id}")
+async def get_agent_run(run_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.READ, db)
+    services = build_agent_services(db)
+    try:
+        run = services.lifecycle.get_run(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found.") from exc
+    events = AgentRunEventRepository(db).list_for_run(run_id, limit=100)
+    # Run events carry redacted, whitelisted metadata only; raw prompts and
+    # tool outputs are never part of the API surface.
+    return {"run": serialize_agent_run(run), "events": [serialize_agent_run_event(item) for item in events]}
+
+
+@app.post("/api/agents/tasks")
+async def create_agent_task(data: AgentTaskCreateRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    services = build_agent_services(db)
+    try:
+        scope = DataScope(
+            domain="knowledge",
+            scope_type=data.scope_type,
+            scope_id=data.scope_id,
+            owner_id=data.owner_id,
+        )
+        task = services.lifecycle.create_task(
+            agent_id=data.agent_id,
+            agent_version=data.agent_version,
+            owner_id=data.owner_id,
+            title=data.title,
+            payload={"query": data.query},
+            data_scopes=(scope,),
+        )
+        run = services.lifecycle.create_run(task.task_id)
+    except AgentDefinitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except TaskNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"task_id": task.task_id, "run": serialize_agent_run(run)}
+
+
+@app.post("/api/agents/runs/{run_id}/execute")
+async def execute_agent_run(run_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    services = build_agent_services(db)
+    try:
+        run = await services.controller.execute(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found.") from exc
+    except AgentConcurrencyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AgentControllerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AgentScopeDeniedError as exc:
+        raise HTTPException(status_code=403, detail="Agent scope access denied.") from exc
+    return {"run": serialize_agent_run(run)}
+
+
+@app.post("/api/agents/runs/{run_id}/pause")
+async def pause_agent_run(run_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    services = build_agent_services(db)
+    try:
+        current = services.lifecycle.get_run(run_id)
+        run = services.lifecycle.pause(run_id, expected_version=current.version, reason=StopReason.PAUSED_BY_REQUEST)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found.") from exc
+    except (AgentTransitionError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"run": serialize_agent_run(run)}
+
+
+@app.post("/api/agents/runs/{run_id}/resume")
+async def resume_agent_run(run_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    """Clear a decided approval handoff; execution still goes through execute."""
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    services = build_agent_services(db)
+    try:
+        run = services.lifecycle.get_run(run_id)
+        if run.pending_approval_id:
+            approval = ApprovalRepository(db).get(run.pending_approval_id)
+            if approval is None or approval.status not in {ApprovalStatus.APPROVED, ApprovalStatus.EXPIRED}:
+                if approval is not None and approval.status is ApprovalStatus.REJECTED:
+                    run = services.lifecycle.cancel(run_id, expected_version=run.version, reason="approval_rejected")
+                    return {"run": serialize_agent_run(run)}
+                raise HTTPException(status_code=409, detail="The pending approval must be decided first.")
+            services.lifecycle.clear_pending_approval(run_id, expected_version=run.version)
+        run = services.lifecycle.get_run(run_id)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found.") from exc
+    except (AgentTransitionError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"run": serialize_agent_run(run)}
+
+
+@app.post("/api/agents/runs/{run_id}/cancel")
+async def cancel_agent_run(run_id: str, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
+    authorize_local_api_access(access, ResourceType.CONFIGURATION, "application-settings", PermissionOperation.UPDATE, db)
+    services = build_agent_services(db)
+    try:
+        current = services.lifecycle.get_run(run_id)
+        run = services.lifecycle.cancel(run_id, expected_version=current.version)
+    except RunNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Agent run not found.") from exc
+    except (AgentTransitionError, AgentConcurrencyError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"run": serialize_agent_run(run)}
 
 
 @app.get("/")

@@ -3,7 +3,7 @@
 **Project:** Local AI Assistant  
 **Phase:** 6 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Planned — execution contract prepared; no Agent Runtime implementation is claimed  
+**Status:** Implemented on `feat/phase-6-agent-runtime` (WP-6.1 through WP-6.8); one pull request pending review and CI; not merged  
 **Dependencies:** Phase 4 Storage/Repositories/Conversation/Memory/Context/Knowledge; Phase 5 Permission Manager/Tool Runtime  
 **Last reviewed:** 2026-11-24
 
@@ -146,7 +146,7 @@ Adapt the exact layout to existing repository conventions; do not create empty p
 python -m compileall -q core main.py
 python -m pytest -q
 node --check static/app.js
-``
+```
 
 Also run focused agent tests and loopback HTTP smoke tests. Verify restart recovery against a temporary SQLite file. Hardware-intensive Ollama loading is not required; model calls should use fakes in deterministic tests.
 
@@ -167,3 +167,20 @@ Also run focused agent tests and loopback HTTP smoke tests. Verify restart recov
 **Phase:** 6 of 11 — Agent Runtime
 
 This is the authoritative execution plan for Phase 6. Execute WP-6.1 through WP-6.8 in order, after Phase 5 acceptance. Do not implement Supervisor, Conversation Agent, or Multi-Agent behavior in this phase. Do not claim a general autonomous agent platform after implementing only a single bounded workflow.
+
+## 9. Delivery record (2026-11-24)
+
+Recorded during delivery on branch `feat/phase-6-agent-runtime`; the branch is not merged.
+
+- **WP-6.1 / WP-6.2:** typed immutable contracts, the allowed `TRANSITIONS` table with terminal absorbing states, ordered migration `0005_agent_runtime` (agent definitions, tasks, runs, run events, checkpoints), and domain repositories with optimistic-concurrency transitions.
+- **WP-6.3:** trusted `AgentRegistry` and `AgentLifecycleManager` with one executor claim per run, truthful stop reasons, approval-pointer gating, and `recover_stale_runs()` restart recovery (orphans are paused with error code `restart_recovery`, never silently re-executed).
+- **WP-6.4:** permission-checked context assembly through the PermissionManager, explicit knowledge `DataScope` resolution, least-privilege read-only `CapabilityBinding`, and exact per-run grants issued by the trusted local owner (agent subjects can never administer permissions).
+- **WP-6.5:** `ExecutionController` bounded by iteration, wall-clock, tool-call, input-byte, output-byte, and model-token budgets; model calls exclusively through InterfaceManager with an `allowed_models` route check and explicit task-level `allow_model_transmission` authorization; every tool proposal validated and executed only through ToolRuntime; checkpoints before externally visible transitions; truthful outcomes.
+- **WP-6.6:** loopback- and same-origin-protected agent endpoints (list definitions, inspect runs and redacted events, create tasks, execute, pause with approval handoff, resume, cancel) wired at startup with builtin registration and restart recovery; minimal run-status UI.
+- **WP-6.7:** builtin deterministic agent `knowledge-analyzer` 1.0.0 (read-only `knowledge_search` tool over one bound scope), plus regression suites in `tests/agent_test_models.py`, `tests/test_agent_contracts.py`, `tests/test_agent_registry.py`, `tests/test_agent_lifecycle.py`, `tests/test_agent_execution.py`, and `tests/test_agent_permissions.py`; the existing `tests/test_knowledge_storage.py` revision assertions were updated for `0005_agent_runtime`.
+- Two focused fixes were required while composing the tests and are committed separately: `fix(agents): wire the local owner grant administration policy into bootstrap` and `fix(agents): allow run attempt updates in the run field whitelist`.
+- **WP-6.8:** this plan, `docs/AGENT_RUNTIME.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/README.md`, `README.md`, and `CHANGELOG.md` updated; migration `0005_agent_runtime` recorded; known limits recorded in [AGENT_RUNTIME.md](AGENT_RUNTIME.md#11-phase-6-implementation-record).
+
+Validation and environment limitation: the authoring environment for the final work packages was web-only (no Python or Node runtime), so `python -m compileall -q core main.py`, `python -m pytest -q`, `node --check static/app.js`, and the loopback HTTP smoke tests could not be executed while authoring. They run in CI on the pull request, and CI evidence must pass before any merge. There is no dedicated API_REFERENCE.md in this repository; the agent endpoints are documented in [AGENT_RUNTIME.md](AGENT_RUNTIME.md#11-phase-6-implementation-record).
+
+Known limits after this phase: exactly one bounded builtin agent; read-only capability bindings only; no Supervisor, Conversation Agent, multi-agent, or AI Librarian behavior; no autonomous publishing, deletion, credential access, or unrestricted execution.

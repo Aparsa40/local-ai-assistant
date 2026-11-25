@@ -35,6 +35,11 @@ function chatApp() {
         intelligenceReport: null,
         intelligenceReportLoading: false,
         intelligenceReportError: '',
+        agents: [],
+        agentRuns: [],
+        agentsLoading: false,
+        agentsError: '',
+        agentTaskForm: { title: '', query: '', scope_type: 'user', scope_id: '' },
         settings: {
             assistant_name: 'دستیار هوشمند',
             system_prompt: '',
@@ -129,6 +134,131 @@ function chatApp() {
                 this.intelligenceReport = data;
             } catch (error) {
                 this.intelligenceReportError = error.message;
+            }
+        },
+
+        async loadAgents() {
+            this.agentsLoading = true;
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                this.agents = data.agents || [];
+            } catch (error) {
+                this.agentsError = 'بارگذاری عامل‌ها ناموفق بود: ' + error.message;
+            } finally {
+                this.agentsLoading = false;
+            }
+        },
+
+        async loadAgentRuns() {
+            this.agentsLoading = true;
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/runs');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                this.agentRuns = data.runs || [];
+            } catch (error) {
+                this.agentsError = 'بارگذاری اجراها ناموفق بود: ' + error.message;
+            } finally {
+                this.agentsLoading = false;
+            }
+        },
+
+        async createAgentTask(agent) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_id: agent.agent_id,
+                        agent_version: agent.version,
+                        title: this.agentTaskForm.title || ('تحلیل دانش ' + agent.agent_id),
+                        query: this.agentTaskForm.query,
+                        scope_type: this.agentTaskForm.scope_type,
+                        scope_id: this.agentTaskForm.scope_id || 'local-user',
+                    })
+                });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'ایجاد وظیفه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async executeAgentRun(runId) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/runs/' + encodeURIComponent(runId) + '/execute', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'اجرا ناموفق بود: ' + error.message;
+            }
+        },
+
+        async pauseAgentRun(runId) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/runs/' + encodeURIComponent(runId) + '/pause', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'توقف ناموفق بود: ' + error.message;
+            }
+        },
+
+        async resumeAgentRun(runId) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/runs/' + encodeURIComponent(runId) + '/resume', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'ادامه ناموفق بود: ' + error.message;
+            }
+        },
+
+        async cancelAgentRun(runId) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/agents/runs/' + encodeURIComponent(runId) + '/cancel', { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'لغو ناموفق بود: ' + error.message;
+            }
+        },
+
+        async decideApproval(approvalId, decision) {
+            this.agentsError = '';
+            try {
+                const response = await fetch('/api/permissions/approvals/' + encodeURIComponent(approvalId) + '/' + decision, { method: 'POST' });
+                if (!response.ok) {
+                    const detail = await response.json().catch(() => ({}));
+                    throw new Error(detail.detail || ('HTTP ' + response.status));
+                }
+                await this.loadAgentRuns();
+            } catch (error) {
+                this.agentsError = 'تصمیم تأیید ناموفق بود: ' + error.message;
             }
         },
 
