@@ -3,9 +3,9 @@
 **Project:** Local AI Assistant  
 **Phase:** 6 of 11  
 **Document type:** Authoritative execution plan  
-**Status:** Implemented on `feat/phase-6-agent-runtime` (WP-6.1 through WP-6.8); one pull request pending review and CI; not merged  
+**Status:** Completed and merged via PR #19 (WP-6.1 through WP-6.8); final push and pull-request CI checks passed  
 **Dependencies:** Phase 4 Storage/Repositories/Conversation/Memory/Context/Knowledge; Phase 5 Permission Manager/Tool Runtime  
-**Last reviewed:** 2026-11-24
+**Last reviewed:** 2026-11-25
 
 ## 1. Purpose and boundary
 
@@ -170,7 +170,7 @@ This is the authoritative execution plan for Phase 6. Execute WP-6.1 through WP-
 
 ## 9. Delivery record (2026-11-24)
 
-Recorded during delivery on branch `feat/phase-6-agent-runtime`; the branch is not merged.
+Recorded during delivery on branch `feat/phase-6-agent-runtime`; merged into `main` via PR #19 (`4d6128af3935a09c984719a20e23f446d8c95eab`).
 
 - **WP-6.1 / WP-6.2:** typed immutable contracts, the allowed `TRANSITIONS` table with terminal absorbing states, ordered migration `0005_agent_runtime` (agent definitions, tasks, runs, run events, checkpoints), and domain repositories with optimistic-concurrency transitions.
 - **WP-6.3:** trusted `AgentRegistry` and `AgentLifecycleManager` with one executor claim per run, truthful stop reasons, approval-pointer gating, and `recover_stale_runs()` restart recovery (orphans are paused with error code `restart_recovery`, never silently re-executed).
