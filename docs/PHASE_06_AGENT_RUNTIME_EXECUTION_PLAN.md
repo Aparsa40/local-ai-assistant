@@ -110,7 +110,7 @@ Phase 5 operational grant/approval integration is a prerequisite. Do not expose 
 **Exit:** all runtime and security invariants pass.
 
 ### WP-6.8 — Documentation and delivery
-Update Agent Runtime contract, architecture, roadmap, API reference, README, and this plan. Record exact migrations, CI checks, and known limits. Deliver one branch/PR for Phase 6 unless review/CI size requires a documented split. Merge only after checks pass and explicit user authorization.
+Update Agent Runtime contract, architecture, roadmap, API reference, README, and this plan. Record exact migrations, CI checks, and known limits. Deliver one branch/PR for Phase 6 unless review/CI size requires a documented split. Merge only after checks pass and explicit user authorization (satisfied for PR #19; retain this rule for future phases).
 
 ## 5. Suggested implementation map
 
@@ -181,6 +181,6 @@ Recorded during delivery on branch `feat/phase-6-agent-runtime`; merged into `ma
 - Two focused fixes were required while composing the tests and are committed separately: `fix(agents): wire the local owner grant administration policy into bootstrap` and `fix(agents): allow run attempt updates in the run field whitelist`.
 - **WP-6.8:** this plan, `docs/AGENT_RUNTIME.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/README.md`, `README.md`, and `CHANGELOG.md` updated; migration `0005_agent_runtime` recorded; known limits recorded in [AGENT_RUNTIME.md](AGENT_RUNTIME.md#11-phase-6-implementation-record).
 
-Validation and environment limitation: the authoring environment for the final work packages was web-only (no Python or Node runtime), so `python -m compileall -q core main.py`, `python -m pytest -q`, `node --check static/app.js`, and the loopback HTTP smoke tests could not be executed while authoring. They run in CI on the pull request, and CI evidence must pass before any merge. There is no dedicated API_REFERENCE.md in this repository; the agent endpoints are documented in [AGENT_RUNTIME.md](AGENT_RUNTIME.md#11-phase-6-implementation-record).
+Validation and environment limitation: the authoring environment for the final work packages was web-only (no Python or Node runtime), so the authoring agent could not run local compile, pytest, frontend syntax, or loopback HTTP smoke tests. GitHub Actions subsequently ran Python compilation, frontend syntax validation, and the test suite successfully on the final head `bdf4e01dd593a860d9efb245f533c019c857ef17` for both push and pull-request events before PR #19 was merged. Local Windows HTTP smoke testing remains a separate environment-level validation. There is no dedicated API_REFERENCE.md in this repository; the agent endpoints are documented in [AGENT_RUNTIME.md](AGENT_RUNTIME.md#11-phase-6-implementation-record).
 
 Known limits after this phase: exactly one bounded builtin agent; read-only capability bindings only; no Supervisor, Conversation Agent, multi-agent, or AI Librarian behavior; no autonomous publishing, deletion, credential access, or unrestricted execution.
