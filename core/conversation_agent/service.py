@@ -171,7 +171,11 @@ class ConversationAgentService:
             yield self._reject(payload, "scope_owner_mismatch", "A requested data scope does not belong to the authenticated local owner.")
             return
 
-        operation, created = self._registry.start(request.session_id, request.request_id, request.message)
+        try:
+            operation, created = self._registry.start(request.session_id, request.request_id, request.message)
+        except Exception:
+            yield self._reject(payload, "operation_store_unavailable", "The request could not be registered safely. No model execution was started.")
+            return
         if not created:
             if not operation.matches_message(request.message):
                 yield self._reject(payload, "idempotency_conflict", "This request ID is already bound to a different message.")
@@ -180,7 +184,7 @@ class ConversationAgentService:
             # Duplicate submission: replay the recorded lifecycle; either the
             # terminal event or the live follow-on stream. No side effects run.
             async for event in self._registry.follow(operation, from_index=0):
-                if event.type == "accepted" and not operation.is_terminal:
+                if event.type == "accepted":
                     continue
                 yield event.to_sse()
             return
