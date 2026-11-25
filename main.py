@@ -79,7 +79,7 @@ agent_container = AgentRuntimeContainer(storage_manager, interface_manager)
 with storage_manager.session() as _agent_boot_db:
     agent_container.register_builtin_agents(_agent_boot_db)
 agent_container.recover_stale_runs()
-conversation_agent_registry = OperationRegistry()
+conversation_agent_registry = OperationRegistry(session_factory=storage_manager.session)
 
 
 async def local_readiness_probe(provider_id: str, model: str) -> bool:
@@ -132,6 +132,7 @@ def build_conversation_agent_service() -> ConversationAgentService:
         session_factory=storage_manager.session,
         orchestration_gateway=gateway,
         dispatcher=DeterministicDispatcher(orchestration_available=True),
+        registry=conversation_agent_registry,
         readiness_probe=local_readiness_probe,
         fallback_order=(),
     )
