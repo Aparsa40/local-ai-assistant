@@ -142,4 +142,5 @@ def test_redact_payload_preserves_only_safe_approval_handoff_identifiers():
         "approval_id": "approval-123",
         "run_id": "run-123",
         "node_id": "node-123",
+        "plan_id": "plan-123",
     }
