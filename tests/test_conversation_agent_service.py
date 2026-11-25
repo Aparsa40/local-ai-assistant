@@ -121,6 +121,42 @@ def test_duplicate_submission_has_no_duplicate_side_effects():
     assert len(im.received) == 1
 
 
+def test_disconnect_immediately_after_acceptance_is_recoverable():
+    service, conversation, im, registry = build_service(items=[context_item("conversation", "message:1")])
+    payload = _payload()
+
+    async def scenario():
+        stream = service.stream(None, None, None, payload).__aiter__()
+        first = await stream.__anext__()
+        await stream.aclose()
+        # Let the detached leader make progress after its subscriber disconnects.
+        await asyncio.sleep(0)
+        replay = await _collect(service, dict(payload))
+        return first, replay
+
+    first, replay = run(scenario())
+    assert json.loads(first[len("data: "):])["type"] == "accepted"
+    parsed = _parse(replay)
+    assert parsed[-1]["type"] == "final"
+    assert len(conversation.prepared) == 1
+    assert len(conversation.assistant) == 1
+    assert len(im.received) == 1
+
+
+def test_idempotency_key_cannot_be_reused_for_a_different_message():
+    service, conversation, im, _ = build_service()
+    payload = _payload()
+    run(_collect(service, dict(payload)))
+    conflict = dict(payload, message="a different message")
+    parsed = _parse(run(_collect(service, conflict)))
+    assert len(parsed) == 1
+    assert parsed[0]["type"] == "error"
+    assert parsed[0]["data"]["error_code"] == "idempotency_conflict"
+    assert len(conversation.prepared) == 1
+    assert len(conversation.assistant) == 1
+    assert len(im.received) == 1
+
+
 def test_private_context_never_reaches_cloud_provider():
     items = [context_item("conversation", "message:1"), context_item("memory", "memory:9", "PRIVATE-MEMORY")]
     service, conversation, im, _ = build_service(items=items)
