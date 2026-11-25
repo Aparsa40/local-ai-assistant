@@ -12,6 +12,13 @@ All notable changes are documented here. The project follows Semantic Versioning
 - SQLite schema migration `0005_agent_runtime` adding the agent definition, task, run, checkpoint, and run-event tables.
 - WP-6.7 regression suites covering contracts, registry, lifecycle and restart recovery, bounded execution budgets, permission denial paths, and per-run grant isolation.
 
+### Fixed (CI remediation)
+- The `knowledge_search` tool now declares a bounded output schema that matches the actual handler response (`count`, `truncated`, `results`); malformed outputs are rejected and the `truncated` flag reports the truth.
+- Agent lifecycle transitions enforce caller-provided expected versions; stale snapshots are rejected with the domain concurrency error, and repeated starts fail as invalid transitions before the executor claim is taken.
+- Agent definition lookups read through persistence, so a definition disabled or re-enabled outside a registry instance is never shadowed by a stale cache.
+- The execution controller fails closed: unexpected context-assembly, capability, or tool-runtime errors fail the run with a redacted message, release the executor claim, and never expose sensitive context.
+- API regression coverage for the loopback-protected agent endpoints: non-loopback and cross-origin denial, missing resources, invalid transitions, run and event serialization, approval-handoff rejection, and fail-closed execution without a trusted behavior.
+
 ### Added
 - Start a fresh empty chat session on every app launch while keeping previous sessions available in the sidebar.
 - Versioned settings migration that defaults new and legacy installations to OpenRouter with `openrouter/free`, while preserving later user provider selections.
