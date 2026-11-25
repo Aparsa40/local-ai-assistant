@@ -73,7 +73,7 @@ def test_selected_provider_preserved_when_no_failure():
     service = ConversationAgentService(
         interface_manager=im,
         conversation_builder=lambda db, access, pm: conversation,
-        context_builder=lambda conv, db: FakeContextManager([context_item("conversation", "message:1")]),
+        context_builder=lambda conv, db, access: FakeContextManager([context_item("conversation", "message:1")]),
         session_factory=lambda: contextlib.nullcontext(None),
         registry=OperationRegistry(),
         readiness_probe=ready,
