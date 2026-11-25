@@ -857,6 +857,7 @@ function chatApp() {
                             terminalReceived = true;
                             const detail = data.data || {};
                             this.messages[aiMsgIndex].content = detail.content !== undefined ? detail.content : this.messages[aiMsgIndex].content;
+                            this.messages[aiMsgIndex].approval = null;
                             if (detail.provenance && detail.provenance.provider_id) {
                                 this.messages[aiMsgIndex].model = detail.provenance.provider_id + ' / ' + (detail.provenance.model_used || '');
                             }
@@ -865,9 +866,11 @@ function chatApp() {
                             }
                         } else if (data.type === 'cancelled') {
                             terminalReceived = true;
+                            this.messages[aiMsgIndex].approval = null;
                             this.messages[aiMsgIndex].content += '\\n\\n⏹ اجرا لغو شد.';
                         } else if (data.type === 'error') {
                             terminalReceived = true;
+                            this.messages[aiMsgIndex].approval = null;
                             const detail = data.data || {};
                             this.messages[aiMsgIndex].content += '\\n\\n❌ خطا: ' + (detail.message || detail.content || 'نامشخص');
                         }
