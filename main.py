@@ -31,6 +31,11 @@ from core.repositories.audit_repository import AuditRepository
 from core.repositories.approval_repository import ApprovalRepository
 from core.repositories.permission_repository import PermissionRepository
 from core.orchestrator import Orchestrator
+from core.conversation_agent.contracts import DataScopeRef
+from core.conversation_agent.dispatcher import DeterministicDispatcher
+from core.conversation_agent.operations import OperationRegistry
+from core.conversation_agent.orchestration_gateway import OrchestrationGateway
+from core.conversation_agent.service import ConversationAgentService
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
     create_offline_intelligence_report,
@@ -72,6 +77,50 @@ agent_container = AgentRuntimeContainer(storage_manager, interface_manager)
 with storage_manager.session() as _agent_boot_db:
     agent_container.register_builtin_agents(_agent_boot_db)
 agent_container.recover_stale_runs()
+conversation_agent_registry = OperationRegistry()
+
+
+async def local_readiness_probe(provider_id: str, model: str) -> bool:
+    """Evidenced local runtime and model readiness without starting a process."""
+    try:
+        await runtime_manager.ensure_runtime(provider_id, auto_start=False)
+        listing = await runtime_manager.list_models(provider_id, refresh=False)
+        items = listing.get("models") if isinstance(listing, dict) else listing
+        names: list[str] = []
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    names.append(str(item.get("name") or item.get("model") or ""))
+                elif isinstance(item, str):
+                    names.append(item)
+        return any(name == model or name.split(":")[0] == model for name in names if name)
+    except Exception:
+        return False
+
+
+def build_conversation_agent_service() -> ConversationAgentService:
+    """Composition root: Conversation Agent reuses the existing services only."""
+
+    def conversations(db, access_ref, permission_manager_ref):
+        return ConversationService(db, permission_manager_ref, access_ref, build_audit_service(db))
+
+    def context(conversation_service, db):
+        return ContextManager(conversation_service)
+
+    gateway = OrchestrationGateway(build_orchestration_service, storage_manager.session)
+    return ConversationAgentService(
+        interface_manager=interface_manager,
+        conversation_builder=conversations,
+        context_builder=context,
+        session_factory=storage_manager.session,
+        orchestration_gateway=gateway,
+        dispatcher=DeterministicDispatcher(orchestration_available=True),
+        readiness_probe=local_readiness_probe,
+        fallback_order=("ollama",),
+    )
+
+
+conversation_agent_service = build_conversation_agent_service()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -147,6 +196,19 @@ async def handle_access_denied(request: Request, exc: AccessDeniedError):
 class ChatRequest(BaseModel):
     session_id: int
     message: str = Field(min_length=1, max_length=12000)
+    request_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.:-]{8,64}$")
+    provider_id: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")
+    model: str | None = Field(default=None, max_length=160)
+    force_delegation: bool = False
+    authorize_private_context_egress: bool = False
+    history_limit: int = Field(default=20, ge=1, le=100)
+    memory_scopes: list[dict] = Field(default_factory=list, max_length=10)
+    knowledge_scopes: list[dict] = Field(default_factory=list, max_length=10)
+
+
+class ChatCancelRequest(BaseModel):
+    session_id: int
+    request_id: str = Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
 class SessionTitleUpdate(BaseModel):
@@ -1279,63 +1341,31 @@ async def get_messages(session_id: int, db: Session = Depends(get_db), access: A
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest, db: Session = Depends(get_db), access: AccessContext = Depends(get_local_access_context)):
-    conversation_service = ConversationService(db, permission_manager, access, build_audit_service(db))
-    try:
-        conversation_service.prepare_chat(req.session_id, req.message)
-        context_package = ContextManager(conversation_service).assemble(
-            ContextRequest(
-                conversation_id=req.session_id,
-                query=req.message,
-                owner_id=access.scope.owner_id,
-                history_limit=20,
-                memory_scopes=(),
-            )
-        )
-    except ConversationNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    """Phase 8 Conversation Agent lifecycle over a versioned SSE protocol."""
+    payload = dict(
+        session_id=req.session_id,
+        message=req.message,
+        request_id=req.request_id,
+        provider_id=req.provider_id,
+        model=req.model,
+        force_delegation=req.force_delegation,
+        authorize_private_context_egress=req.authorize_private_context_egress,
+        history_limit=req.history_limit,
+        memory_scopes=[dict(item) for item in req.memory_scopes],
+        knowledge_scopes=[dict(item) for item in req.knowledge_scopes],
+    )
 
-    history = [
-        {"role": item.role or "user", "content": item.content}
-        for item in context_package.items
-    ]
-    try:
-        orchestrator = Orchestrator()
-        provider_id = orchestrator.get_provider_id()
-        formatted_messages, selected_model = orchestrator.build_messages(history, req.message)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    async def sse_response():
+        async for chunk in conversation_agent_service.stream(db, access, permission_manager, payload):
+            yield chunk
 
-    async def response_generator():
-        full_response = ""
-        yield f"data: {json.dumps({'type': 'meta', 'model': selected_model})}\n\n"
-        try:
-            async for chunk in interface_manager.stream_chat(
-                provider_id, formatted_messages, model=selected_model
-            ):
-                full_response += chunk
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-        except Exception as exc:
-            diagnostic_db = SessionLocal()
-            try:
-                record_model_runtime(
-                    diagnostic_db,
-                    provider_id,
-                    selected_model,
-                    "error",
-                    {"category": getattr(exc, "category", "inference_failed"), "message": "Inference request failed."},
-                )
-            finally:
-                diagnostic_db.close()
-            yield f"data: {json.dumps({'type': 'error', 'content': str(exc)})}\n\n"
-            return
-        db_session = SessionLocal()
-        try:
-            record_model_runtime(db_session, provider_id, selected_model, "available")
-            ConversationService(db_session, permission_manager, access, build_audit_service(db_session)).append_assistant_message(
-                req.session_id, full_response, selected_model
-            )
-        finally:
-            db_session.close()
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+    return StreamingResponse(sse_response(), media_type="text/event-stream")
 
-    return StreamingResponse(response_generator(), media_type="text/event-stream")
+
+@app.post("/api/chat/cancel")
+async def cancel_chat(req: ChatCancelRequest, access: AccessContext = Depends(get_local_access_context)):
+    """Explicit user cancellation; an SSE disconnect alone never cancels."""
+    authorize_local_api_access(access, ResourceType.CONVERSATION, str(req.session_id), PermissionOperation.UPDATE)
+    if not conversation_agent_service.registry.request_cancel(req.session_id, req.request_id):
+        raise HTTPException(status_code=404, detail="No cancellable chat operation exists for this request.")
+    return {"status": "cancel_requested", "request_id": req.request_id}
