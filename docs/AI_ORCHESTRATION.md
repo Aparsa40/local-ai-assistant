@@ -1,6 +1,6 @@
 # AI Orchestration and Conversation Processing
 
-**Status:** Accepted target design; current chat orchestration remains manual-provider oriented. The Supervisor planning/coordination layer (Phase 7) is implemented as a bounded orchestration service over the Agent Runtime; Conversation Processing and full multi-agent execution remain future phases.
+**Status:** Accepted target design; current chat orchestration remains manual-provider oriented. Phase 7 must provide catalog-routed compound-task decomposition and baseline multi-agent fan-out over the Agent Runtime. Conversation Processing and advanced multi-agent collaboration are delivered by their existing later phases; multi-agent task routing is not deferred to a new manager layer.
 
 ## 1. Purpose and boundaries
 
@@ -29,10 +29,11 @@ Online and offline inference are execution strategies available to agents throug
 - Evaluate task completion against explicit criteria.
 
 ### Supervisor Agent
-- Plan complex work and decompose it into tasks.
-- Select eligible agent roles and model capabilities.
-- Coordinate handoffs and evaluate combined results.
-- Request more evidence or report unresolved disagreement.
+- Plan complex work and decompose it into canonical, atomic task IDs from the InterfaceManager task catalog.
+- Resolve each task ID to its deterministic primary model-backed agent and explicit ordered fallbacks.
+- Fan out every independent task to its selected agent; a model may own multiple task IDs, and overlapping secondary skills must not create duplicate task execution.
+- Track dependencies and require an explicit outcome for every planned task; never silently omit an unassigned task.
+- Coordinate handoffs and evaluate combined results; request more evidence or report unresolved disagreement.
 - Never grant permissions or directly execute tools.
 
 ## 3. Deterministic baseline
@@ -69,12 +70,12 @@ If no suitable local model is available, pause or fail the affected task clearly
 2. Classify the request and determine required data, tools, and capabilities.
 3. Resolve authorized context.
 4. Select a direct-response path or create an agent run.
-5. Build a bounded plan (deterministic first; Supervisor assistance when useful).
+5. Build a bounded plan by decomposing compound goals into canonical task IDs and resolving each through the InterfaceManager task catalog.
 6. Check permissions before protected reads or tool actions.
 7. Execute through the selected online/offline strategy.
 8. Record model/provider/tool metadata, events, and failures.
 9. Evaluate completion criteria and continue, hand off, request approval, or stop.
-10. Validate and compose the candidate result.
+10. Verify that every required task node has a terminal outcome; validate and compose the aggregate result.
 11. Return the response and persist the conversation outcome.
 
 ## 6. Tool and permission boundary
@@ -83,17 +84,19 @@ A model-generated tool call is only a proposal. Permission Manager checks the ac
 
 ## 7. Multi-Agent execution
 
-Multi-Agent execution is optional and task-driven. It is not enabled merely because multiple models are configured.
+Baseline multi-agent delegation is part of Phase 7 and is task-driven. It is not enabled merely because multiple models are configured: the InterfaceManager task catalog must provide evidence-backed task IDs and explicit primary/fallback routes.
 
 When multiple agents are used:
-- assign distinct responsibilities and acceptance criteria;
+- decompose compound goals into atomic task nodes, each with one canonical task ID, scope, dependency set, and acceptance criterion;
+- assign every task node to its primary registered model-backed agent, or to an explicit eligible fallback when policy permits;
+- allow one model to own several primary task IDs; treat overlapping secondary skills as fallback eligibility unless independent review is explicitly requested;
 - pass versioned structured handoff payloads;
-- preserve source and model provenance;
+- preserve source, operator, model, task-route, and run provenance;
 - evaluate evidence rather than stylistic agreement;
-- expose unresolved disagreement;
+- expose unresolved disagreement and missing task outcomes;
 - prevent agents from inheriting permissions implicitly.
 
-Start with one bounded agent. Add a Supervisor and specialized agents only after lifecycle, state persistence, permission enforcement, cancellation, and evaluation are reliable.
+Phase 9 extends this baseline with advanced collaboration patterns, specialized agent teams, and richer coordination. It does not introduce multi-agent execution for the first time.
 
 ## 8. Failure and fallback
 
