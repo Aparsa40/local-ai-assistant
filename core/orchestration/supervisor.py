@@ -328,11 +328,13 @@ class OrchestrationService:
     async def execute_plan(self, plan_id: str) -> object:
         return await self.scheduler.run_plan(plan_id)
 
-    async def resume_plan(self, plan_id: str, *, run_id: str) -> object:
-        """Public, owner-preserving continuation after a child run is resumed."""
+    async def resume_plan(self, plan_id: str, *, run_id: str, owner_id: str) -> object:
+        """Public, owner-authorized continuation after a child run is resumed."""
         plan = self.plans.get(plan_id)
         if plan is None:
             raise OrchestrationServiceError("The plan was not found.")
+        if plan.owner_id != owner_id:
+            raise OrchestrationServiceError("The plan owner does not match the requester.")
         return await self.scheduler.resume_plan(plan_id, run_id=run_id)
 
     async def cancel_plan(self, plan_id: str, *, reason: str = "requested_by_owner") -> object:
