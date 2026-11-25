@@ -36,18 +36,4 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q core main.py
       - name: Run tests
-        run: |
-          set -o pipefail
-          python -m pytest -q -W default --tb=short -rA 2>&1 | tee pytest_out.txt
-      - name: Post pytest output as a PR comment (temporary diagnostics)
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          {
-            echo '<!-- ci-diag -->'
-            echo 'Diagnostic pytest output tail:'
-            tail -c 30000 pytest_out.txt
-          } > comment_body.md
-          gh pr comment "$PR_NUMBER" --body-file comment_body.md
+        run: python -m pytest -q -W default --tb=short -rA
