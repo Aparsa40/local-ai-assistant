@@ -3,9 +3,26 @@
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
 **Document type:** Authoritative execution and acceptance contract  
-**Status:** Implementation delivered on branch `feat/phase-8-conversation-agent` (WP-8.0 through WP-8.7); under review and not merged. Baseline discrepancy records: no provenance/operation table existed in storage, so Phase 8 uses an in-process idempotent operation registry plus message metadata instead of a speculative migration; the deterministic workflow registry ships empty, so deterministic-workflow routes are denied safely until owning services register workflows; model-assisted classification is supported but not enabled by default.  
+**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The current revision passes 462 Python tests, Python compilation, JavaScript syntax validation, and a TestClient HTTP chat smoke test. Phase 8 is **not yet complete**: operation/idempotency state is still process-local and is lost on server restart; the chat path does not yet emit an `approval_required` handoff; the deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. Do not merge or mark the phase complete until the restart/recovery and approval gaps are implemented or explicitly accepted as deferred.  
 **Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
 **Last reviewed:** 2026-11-25
+
+## Current implementation verification (2026-11-25)
+
+Latest verified branch head: `0d2af17243578e1c2e7297871223d350164c5338`.
+
+- GitHub Actions: successful.
+- Python suite: 462 passed.
+- `python -m compileall -q core main.py`: successful in CI.
+- `node --check static/app.js`: successful in CI.
+- FastAPI TestClient smoke test: direct chat SSE lifecycle and assistant-message persistence verified.
+- Focused regression coverage added for immediate SSE disconnect/retry, request-ID/message mismatch, trusted scope ownership, boolean authorization flags, classifier failure, offline readiness and cancellation.
+
+Outstanding acceptance gaps:
+1. Durable operation/event/idempotency persistence and safe restart recovery.
+2. Explicit approval handoff for operations whose permission decision requires human approval.
+3. End-to-end cancellation propagation to delegated Phase 7 plans where supported.
+4. A real loopback server smoke run in the target local environment; CI currently uses FastAPI TestClient rather than launching the user's local server.
 
 ## 1. Purpose
 
