@@ -110,6 +110,13 @@ def test_storage_manager_creates_the_current_orm_schema():
         "agent_runs",
         "agent_run_events",
         "agent_checkpoints",
+        "orchestration_goals",
+        "orchestration_plans",
+        "orchestration_nodes",
+        "orchestration_dependencies",
+        "orchestration_assignments",
+        "orchestration_handoffs",
+        "orchestration_events",
     }
     try:
         Base.metadata.create_all(bind=manager.engine)
@@ -141,6 +148,13 @@ def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
             "agent_runs",
             "agent_run_events",
             "agent_checkpoints",
+            "orchestration_goals",
+            "orchestration_plans",
+            "orchestration_nodes",
+            "orchestration_dependencies",
+            "orchestration_assignments",
+            "orchestration_handoffs",
+            "orchestration_events",
         } <= tables
 
         with manager.transaction() as session:
@@ -167,7 +181,7 @@ def test_init_db_migrates_then_bootstraps_and_uses_all_core_domains():
             assert session.query(RuntimeStatus).count() == 1
             assert session.query(RuntimeEvent).count() == 1
             revisions = session.execute(text("SELECT COUNT(*) FROM schema_migrations")).scalar_one()
-            # Ordered revisions 0001..0005, including 0005_agent_runtime.
-            assert revisions == 5
+            # Ordered revisions 0001..0006, including 0006_orchestration.
+            assert revisions == 6
     finally:
         manager.dispose()

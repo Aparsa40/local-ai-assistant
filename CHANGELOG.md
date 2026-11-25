@@ -4,6 +4,17 @@ All notable changes are documented here. The project follows Semantic Versioning
 
 ## Unreleased
 
+### Added (Phase 7 - Supervisor & Orchestrator)
+- Bounded orchestration layer in `core/orchestration/`: typed, versioned contracts (Goal, Plan, TaskNode, Dependency, Assignment, Handoff, Evidence, AggregateResult) with explicit state transition tables, and a deterministic graph validator that rejects cycles, invalid or missing task references, unknown agent versions, invalid state transitions, and malformed planning output before any plan is persisted or scheduled.
+- Deterministic sequential scheduler with persisted scheduling decisions, dependency-gated starts, duplicate-execution prevention, plan wall-clock and retry budgets, explicit failure/cancellation propagation, and restart-safe `reconcile` recovery.
+- Explainable, least-privilege capability-based assignment over registered agents only; tool evidence through the ToolRegistry catalog, model evidence through the InterfaceManager, unknown capabilities stay unknown, and scope expansion beyond the parent goal is denied.
+- Versioned `orchestration.handoff/1` handoff envelopes with size validation and bounded degradation, and deterministic result aggregation that surfaces conflicts and missing evidence.
+- The `supervisor` agent 1.0.0 (zero tool calls, zero model tokens, deterministic behavior) hosted by the Phase 6 Agent Runtime, plus the trusted `OrchestrationService` composition root and idempotent bootstrap registration.
+- WP-7.4 planning service: deterministic template plans and bounded, schema-validated LLM proposals (`orchestration.proposal/1`) requested only through the InterfaceManager, with nested plan decomposition rejected and revisions bounded.
+- Loopback-protected orchestration API (`/api/orchestration/goals`, `/api/orchestration/plans` with execute/cancel/reconcile, and read-only plan views) and a minimal orchestration panel in the agents UI tab.
+- SQLite schema migration `0006_orchestration` adding the orchestration goal, plan, node, dependency, assignment, handoff, and event tables; plans and nodes carry optimistic-concurrency versions, and assignment/handoff/event stores are append-only.
+- WP-7.6 regression suite `tests/test_orchestration_supervisor.py` covering planning, scheduling, assignment denial paths, failure injection with bounded retries, cancellation, wall-clock budgets, and restart recovery without duplicated side effects.
+
 ### Added
 - Bounded, application-owned Agent Runtime (Phase 6): versioned and validated agent definitions, a trusted application-side registry, persistent tasks/runs with checkpoints and optimistic concurrency, deterministic lifecycle transitions, restart recovery, budget-bounded execution (iterations, wall-clock deadline, tool calls, input/output bytes, model tokens), and truthful structured outcomes.
 - Permission-checked scoped context assembly and least-privilege per-run capability grants; model calls go through the InterfaceManager only with a model route allowlist and explicit task-level transmission authorization, and tool calls go through ToolRuntime and the PermissionManager only.

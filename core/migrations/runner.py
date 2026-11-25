@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
-CURRENT_SCHEMA_REVISION = "0005_agent_runtime"
+CURRENT_SCHEMA_REVISION = "0006_orchestration"
 
 
 def _legacy_additive_columns(connection) -> None:
@@ -233,12 +233,109 @@ def _agent_runtime(connection) -> None:
     ):
         connection.execute(text(statement))
 
+
+def _orchestration(connection) -> None:
+    # Supervisor orchestration schema (Phase 7); versioned, not create_all()-owned.
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_goals ("
+        "goal_id VARCHAR(32) PRIMARY KEY, owner_id VARCHAR(160) NOT NULL, "
+        "description TEXT NOT NULL, success_criteria TEXT NOT NULL, "
+        "data_scopes JSON NOT NULL DEFAULT '[]', tool_scopes JSON NOT NULL DEFAULT '[]', "
+        "budgets JSON NOT NULL DEFAULT '{}', status VARCHAR(20) NOT NULL DEFAULT 'open', "
+        "created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_plans ("
+        "plan_id VARCHAR(32) PRIMARY KEY, goal_id VARCHAR(32) NOT NULL, "
+        "parent_run_id VARCHAR(32) NOT NULL, parent_task_id VARCHAR(32) NOT NULL, "
+        "owner_id VARCHAR(160) NOT NULL, revision INTEGER NOT NULL DEFAULT 0, "
+        "status VARCHAR(20) NOT NULL DEFAULT 'draft', budgets JSON NOT NULL DEFAULT '{}', "
+        "acceptance JSON, error_code VARCHAR(80), error_message TEXT, "
+        "version INTEGER NOT NULL DEFAULT 1, "
+        "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_nodes ("
+        "node_id VARCHAR(32) PRIMARY KEY, "
+        "plan_id VARCHAR(32) NOT NULL REFERENCES orchestration_plans(plan_id) ON DELETE CASCADE, "
+        "ordinal INTEGER NOT NULL DEFAULT 0, title VARCHAR(200) NOT NULL, "
+        "required_capabilities JSON NOT NULL DEFAULT '[]', acceptance JSON NOT NULL DEFAULT '{}', "
+        "payload JSON NOT NULL DEFAULT '{}', data_scopes JSON NOT NULL DEFAULT '[]', "
+        "tool_scopes JSON NOT NULL DEFAULT '[]', "
+        "status VARCHAR(20) NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, "
+        "max_retries INTEGER NOT NULL DEFAULT 0, agent_id VARCHAR(80), agent_version VARCHAR(40), "
+        "run_id VARCHAR(32), error_code VARCHAR(80), error_message TEXT, "
+        "version INTEGER NOT NULL DEFAULT 1, "
+        "created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_dependencies ("
+        "dependency_id VARCHAR(32) PRIMARY KEY, "
+        "plan_id VARCHAR(32) NOT NULL REFERENCES orchestration_plans(plan_id) ON DELETE CASCADE, "
+        "node_id VARCHAR(32) NOT NULL, depends_on VARCHAR(32) NOT NULL, "
+        "policy VARCHAR(40) NOT NULL DEFAULT 'all_success', "
+        "status VARCHAR(20) NOT NULL DEFAULT 'pending', created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_assignments ("
+        "assignment_id VARCHAR(32) PRIMARY KEY, "
+        "plan_id VARCHAR(32) NOT NULL REFERENCES orchestration_plans(plan_id) ON DELETE CASCADE, "
+        "node_id VARCHAR(32) NOT NULL, decision VARCHAR(20) NOT NULL, "
+        "agent_id VARCHAR(80), agent_version VARCHAR(40), run_id VARCHAR(32), "
+        "reasons JSON NOT NULL DEFAULT '[]', evidence JSON NOT NULL DEFAULT '[]', "
+        "created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_handoffs ("
+        "handoff_id VARCHAR(32) PRIMARY KEY, "
+        "plan_id VARCHAR(32) NOT NULL REFERENCES orchestration_plans(plan_id) ON DELETE CASCADE, "
+        "node_id VARCHAR(32) NOT NULL, from_run_id VARCHAR(32) NOT NULL, "
+        "envelope_version VARCHAR(40) NOT NULL, payload JSON NOT NULL DEFAULT '{}', "
+        "status VARCHAR(20) NOT NULL DEFAULT 'complete', "
+        "evidence JSON NOT NULL DEFAULT '[]', size_bytes INTEGER NOT NULL DEFAULT 0, "
+        "created_at DATETIME NOT NULL)"
+    ))
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS orchestration_events ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT, event_id VARCHAR(32) NOT NULL UNIQUE, "
+        "plan_id VARCHAR(32) NOT NULL REFERENCES orchestration_plans(plan_id) ON DELETE CASCADE, "
+        "node_id VARCHAR(32), event_type VARCHAR(80) NOT NULL, "
+        "outcome VARCHAR(40) NOT NULL, metadata_json JSON NOT NULL DEFAULT '{}', "
+        "created_at DATETIME NOT NULL)"
+    ))
+    for statement in (
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_goals_owner_id ON orchestration_goals(owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_goals_status ON orchestration_goals(status)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_plans_goal_id ON orchestration_plans(goal_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_plans_parent_run_id ON orchestration_plans(parent_run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_plans_owner_id ON orchestration_plans(owner_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_plans_status ON orchestration_plans(status)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_nodes_plan_id ON orchestration_nodes(plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_nodes_status ON orchestration_nodes(status)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_nodes_run_id ON orchestration_nodes(run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_dependencies_plan_id ON orchestration_dependencies(plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_dependencies_node_id ON orchestration_dependencies(node_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_dependencies_depends_on ON orchestration_dependencies(depends_on)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_assignments_plan_id ON orchestration_assignments(plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_assignments_node_id ON orchestration_assignments(node_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_handoffs_plan_id ON orchestration_handoffs(plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_handoffs_node_id ON orchestration_handoffs(node_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_handoffs_from_run_id ON orchestration_handoffs(from_run_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_events_plan_id ON orchestration_events(plan_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_events_node_id ON orchestration_events(node_id)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_events_event_type ON orchestration_events(event_type)",
+        "CREATE INDEX IF NOT EXISTS ix_orchestration_events_created_at ON orchestration_events(created_at)",
+    ):
+        connection.execute(text(statement))
+
+
 _MIGRATIONS = (
     ("0001_legacy_additive_columns", _legacy_additive_columns),
     ("0002_knowledge_fts", _knowledge_fts),
     ("0003_knowledge_file_versions", _knowledge_file_versions),
     ("0004_knowledge_fts_trigger_fix", _knowledge_fts_trigger_fix),
     ("0005_agent_runtime", _agent_runtime),
+    ("0006_orchestration", _orchestration),
 )
 
 

@@ -650,32 +650,9 @@
                     </div>
                     <div class="space-y-2" x-show="agentRuns.length">
                         <div class="font-semibold text-slate-300 text-xs">اجراهای اخیر</div>
-                        <template x-for="run in agentRuns" :key="run.run_id">
-                            <div class="p-3 border border-slate-700 rounded space-y-1">
-                                <div class="text-xs text-slate-200" x-text="run.agent_id + ' | ' + run.status + (run.stop_reason ? ' (' + run.stop_reason + ')' : '')"></div>
-                                <div class="text-xs text-slate-500" x-text="'تکرار: ' + run.iteration + ' | فراخوانی ابزار: ' + run.tool_calls + ' | تلاش: ' + run.attempt"></div>
-                                <div x-show="run.pending_approval_id" class="text-xs text-amber-400" x-text="'تأیید در انتظار: ' + run.pending_approval_id"></div>
-                                <div x-show="run.outcome" class="text-xs text-slate-400" x-text="'نتیجه: ' + JSON.stringify(run.outcome).slice(0, 300)"></div>
-                                <div class="flex flex-wrap gap-2 text-xs">
-                                    <button @click="executeAgentRun(run.run_id)" class="rounded bg-emerald-800 hover:bg-emerald-700 px-3 py-1">اجرا</button>
-                                    <button @click="pauseAgentRun(run.run_id)" class="rounded bg-amber-800 hover:bg-amber-700 px-3 py-1">توقف</button>
-                                    <button @click="resumeAgentRun(run.run_id)" class="rounded bg-slate-800 hover:bg-slate-700 px-3 py-1">ادامه</button>
-                                    <button @click="cancelAgentRun(run.run_id)" class="rounded bg-rose-900 hover:bg-rose-800 px-3 py-1">لغو</button>
-                                    <template x-if="run.pending_approval_id">
-                                        <div class="flex flex-wrap gap-2">
-                                            <button @click="decideApproval(run.pending_approval_id, 'approve')" class="rounded bg-emerald-700 hover:bg-emerald-600 px-3 py-1">موافقم</button>
-                                            <button @click="decideApproval(run.pending_approval_id, 'reject')" class="rounded bg-rose-700 hover:bg-rose-600 px-3 py-1">رد می‌کنم</button>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </div>
-
-    <script src="/static/app.js"></script>
-</body>
-</html>
+                        <div class="mt-3 rounded-lg border border-slate-700 p-3 space-y-2 text-xs">
+                            <div class="font-semibold text-slate-300">سازمان‌دهی (Supervisor)</div>
+                            <p class="text-slate-500">ایجاد هدف محدود و برنامه سازمان‌دهی‌شده؛ همه اجراها از عامل‌های ثبت‌شده عبور می‌کنند.</p>
+                            <form @submit.prevent="createOrchestrationGoalAndPlan()" class="flex flex-wrap gap-2 items-center">
+                                <input x-model="orchestrationGoalForm.description" placeholder="شرح هدف" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" maxlength="2000">
+                                <input x-model="orchestrationGoalForm.scope_id" placeholder="شناسه محدوده دانش" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200" maxlength="160">
