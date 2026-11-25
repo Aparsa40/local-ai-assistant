@@ -450,7 +450,7 @@ _SAFE_EVENT_KEYS = frozenset({
     "mode", "status", "state", "content", "limitations", "source_refs",
     "fallback_applied", "fallback_reason", "error_code", "message",
     "goal_id", "plan_id", "orchestration_goal_id", "orchestration_plan_id",
-    "validation_state", "issues", "node_outcomes", "detail", "provenance", "deep",
+    "validation_state", "request_id", "session_id", "issues", "node_outcomes", "detail", "provenance", "deep",
 })
 
 
