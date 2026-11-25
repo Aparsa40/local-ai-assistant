@@ -107,7 +107,9 @@ def build_conversation_agent_service() -> ConversationAgentService:
     def context(conversation_service, db):
         return ContextManager(conversation_service)
 
-    gateway = OrchestrationGateway(build_orchestration_service, storage_manager.session)
+    # Resolved lazily: the orchestration factory is defined later in this module,
+    # after the eagerly-built composition root below.
+    gateway = OrchestrationGateway(lambda db: build_orchestration_service(db), storage_manager.session)
     return ConversationAgentService(
         interface_manager=interface_manager,
         conversation_builder=conversations,
