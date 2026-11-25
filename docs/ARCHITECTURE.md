@@ -1,7 +1,7 @@
 # System Architecture
 
 **Status:** Accepted target architecture plus current implementation notes  
-**Last reviewed:** 2026-11-24
+**Last reviewed:** 2026-11-25
 
 ## 1. Architectural goals
 
