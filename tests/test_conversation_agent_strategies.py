@@ -1,4 +1,5 @@
-import pytest
+import asyncio
+
 
 from core.conversation_agent.contracts import DestinationClass, ExecutionBudget, ExecutionStatus
 from core.conversation_agent.strategies.base import ExecutionRequest, ExecutionAborted
@@ -33,8 +34,11 @@ def _request(**overrides):
     return ExecutionRequest(**data)
 
 
-@pytest.mark.asyncio
-async def test_online_strategy_completes():
+def test_test_online_strategy_completes():
+    asyncio.run(_inner_test_online_strategy_completes())
+
+
+async def _inner_test_online_strategy_completes():
     im = FakeInterfaceManager()
     result = await OnlineStrategy(im).execute(_request())
     assert result.status is ExecutionStatus.COMPLETED
@@ -42,8 +46,12 @@ async def test_online_strategy_completes():
     assert im.received[0]["messages"][0]["content"] == "hi"
 
 
-@pytest.mark.asyncio
-async def test_online_strategy_never_leaks_raw_errors():
+
+def test_test_online_strategy_never_leaks_raw_errors():
+    asyncio.run(_inner_test_online_strategy_never_leaks_raw_errors())
+
+
+async def _inner_test_online_strategy_never_leaks_raw_errors():
     im = FakeInterfaceManager(fail=True)
     result = await OnlineStrategy(im).execute(_request())
     assert result.status is ExecutionStatus.FAILED
@@ -51,8 +59,12 @@ async def test_online_strategy_never_leaks_raw_errors():
     assert "boom" not in result.content
 
 
-@pytest.mark.asyncio
-async def test_offline_unready_fails_closed_without_inference():
+
+def test_test_offline_unready_fails_closed_without_inference():
+    asyncio.run(_inner_test_offline_unready_fails_closed_without_inference())
+
+
+async def _inner_test_offline_unready_fails_closed_without_inference():
     im = FakeInterfaceManager()
     result = await OfflineStrategy(im, readiness_probe=lambda p, m: False).execute(
         _request(provider_id="ollama", model="local", destination_class=DestinationClass.LOCAL)
@@ -62,8 +74,12 @@ async def test_offline_unready_fails_closed_without_inference():
     assert im.received == []
 
 
-@pytest.mark.asyncio
-async def test_offline_ready_completes():
+
+def test_test_offline_ready_completes():
+    asyncio.run(_inner_test_offline_ready_completes())
+
+
+async def _inner_test_offline_ready_completes():
     im = FakeInterfaceManager()
     result = await OfflineStrategy(im, readiness_probe=lambda p, m: True).execute(
         _request(provider_id="ollama", model="local", destination_class=DestinationClass.LOCAL)
@@ -71,15 +87,23 @@ async def test_offline_ready_completes():
     assert result.status is ExecutionStatus.COMPLETED
 
 
-@pytest.mark.asyncio
-async def test_output_budget_truncates():
+
+def test_test_output_budget_truncates():
+    asyncio.run(_inner_test_output_budget_truncates())
+
+
+async def _inner_test_output_budget_truncates():
     im = FakeInterfaceManager(chunks=["x" * 600])
     result = await OnlineStrategy(im).execute(_request(budget=ExecutionBudget(max_output_chars=500)))
     assert "[output truncated at the execution budget]" in result.content
 
 
-@pytest.mark.asyncio
-async def test_cancellation_between_chunks():
+
+def test_test_cancellation_between_chunks():
+    asyncio.run(_inner_test_cancellation_between_chunks())
+
+
+async def _inner_test_cancellation_between_chunks():
     im = FakeInterfaceManager()
     flag = {"cancel": False}
 
@@ -97,9 +121,14 @@ async def test_cancellation_between_chunks():
     assert result.error_code == "cancelled"
 
 
-@pytest.mark.asyncio
-async def test_abort_check_true_before_execution_cancels():
+
+def test_test_abort_check_true_before_execution_cancels():
+    asyncio.run(_inner_test_abort_check_true_before_execution_cancels())
+
+
+async def _inner_test_abort_check_true_before_execution_cancels():
     im = FakeInterfaceManager()
     result = await OnlineStrategy(im).execute(_request(), abort_check=lambda: True)
     assert result.status is ExecutionStatus.CANCELLED
     assert im.received == []
+
