@@ -176,7 +176,7 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 
 ## Phase 8 — Conversation Agent
 
-**Status:** Implemented on branch `feat/phase-8-conversation-agent` and under review via an open pull request; merges only after acceptance review. Depends on the merged Phase 7 baseline.
+**Status:** Implementation delivered on branch `feat/phase-8-conversation-agent` and under review in PR #23; 465 tests and CI pass. Durable request/event recovery and delegated cancellation are implemented. Approval-required streaming handoff remains an acceptance gap; do not merge until resolved or explicitly deferred. Depends on the merged Phase 7 baseline.
 
 **Goal:** Build the user-facing conversational workflow on top of the completed storage, context, permission, tool, and agent foundations.
 
@@ -186,8 +186,10 @@ Phase 4 WP-4.1–WP-4.7 is implemented and merged via PR #16 (`923ad244d91425cca
 - Conversation history and authorized context retrieval.
 - Online and offline execution strategies through Interface Manager.
 - Direct-response versus agent-task handoff.
-- Response validation/composition and conversation event recording.
+- Response validation/composition and durable conversation event recording.
+- Idempotent retry, disconnect-safe execution, explicit cancellation and restart recovery.
 - Explicit fallback behavior that never leaks private local context to cloud providers.
+- Approval-required handoff through the existing approval mechanism.
 
 **Exit criteria:** the conversational workflow supports direct answers and bounded agent delegation through one auditable lifecycle, with safe online/offline behavior.
 
