@@ -16,7 +16,12 @@ class OnlineStrategy:
     async def execute(self, request: ExecutionRequest, *, abort_check: Optional[Callable[[], bool]] = None) -> ExecutionResult:
         chunks: list[str] = []
         if abort_check is not None and abort_check():
-            raise ExecutionAborted()
+            return ExecutionResult(
+                status=ExecutionStatus.CANCELLED,
+                provider_id=request.provider_id,
+                model_used=request.model,
+                error_code="cancelled",
+            )
         try:
             async for chunk in self._interface_manager.stream_chat(
                 request.provider_id,
