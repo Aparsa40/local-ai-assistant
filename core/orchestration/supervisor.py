@@ -328,6 +328,15 @@ class OrchestrationService:
     async def execute_plan(self, plan_id: str) -> object:
         return await self.scheduler.run_plan(plan_id)
 
+    async def resume_plan(self, plan_id: str, *, run_id: str, owner_id: str) -> object:
+        """Public, owner-authorized continuation after a child run is resumed."""
+        plan = self.plans.get(plan_id)
+        if plan is None:
+            raise OrchestrationServiceError("The plan was not found.")
+        if plan.owner_id != owner_id:
+            raise OrchestrationServiceError("The plan owner does not match the requester.")
+        return await self.scheduler.resume_plan(plan_id, run_id=run_id)
+
     async def cancel_plan(self, plan_id: str, *, reason: str = "requested_by_owner") -> object:
         return await self.scheduler.cancel_plan(plan_id, reason=reason)
 
@@ -356,6 +365,16 @@ class OrchestrationService:
                     "agent_id": node.agent_id,
                     "agent_version": node.agent_version,
                     "run_id": node.run_id,
+                    "run_status": (
+                        self._agent_services.lifecycle.get_run(node.run_id).status.value
+                        if node.run_id and self._agent_services.lifecycle.runs.get(node.run_id) is not None
+                        else None
+                    ),
+                    "pending_approval_id": (
+                        self._agent_services.lifecycle.get_run(node.run_id).pending_approval_id
+                        if node.run_id and self._agent_services.lifecycle.runs.get(node.run_id) is not None
+                        else None
+                    ),
                     "attempts": node.attempts,
                     "max_retries": node.max_retries,
                     "error_code": node.error_code,

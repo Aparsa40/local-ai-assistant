@@ -178,6 +178,49 @@ class OrchestrationScheduler:
                     )
                 return self._finalize(plan_id, plan)
 
+    async def resume_plan(self, plan_id: str, *, run_id: str) -> object:
+        """Resume scheduling after an explicitly resumed child run reaches a terminal state.
+
+        The caller must first authorize/decide any approval, clear the run's
+        pending approval pointer, and execute that exact child run through the
+        Agent Runtime. This method only reconciles its persisted outcome and
+        continues the existing plan; it never starts or re-executes a child run.
+        """
+        plan = self._require(plan_id)
+        node = next((item for item in plan.nodes if item.run_id == run_id), None)
+        if plan.status is not PlanStatus.RUNNING:
+            if (
+                node is not None
+                and node.status in {NodeStatus.COMPLETED, NodeStatus.FAILED, NodeStatus.CANCELLED}
+                and plan.status in {PlanStatus.COMPLETED, PlanStatus.FAILED, PlanStatus.CANCELLED}
+            ):
+                return plan
+            raise OrchestrationSchedulerError(
+                "Only a running plan can resume a child run."
+            )
+        if node is None:
+            raise OrchestrationSchedulerError(
+                "The child run does not belong to this plan."
+            )
+        if node.status not in {NodeStatus.RUNNING, NodeStatus.COMPLETED, NodeStatus.FAILED, NodeStatus.CANCELLED}:
+            raise OrchestrationSchedulerError(
+                "The plan node is not in a resumable state."
+            )
+        run = self.lifecycle.get_run(run_id)
+        if run.owner_id != plan.owner_id:
+            raise OrchestrationSchedulerError(
+                "The child run owner does not match the plan owner."
+            )
+        if run.status in {AgentRunStatus.PAUSED, AgentRunStatus.PENDING, AgentRunStatus.RUNNING}:
+            raise OrchestrationSchedulerError(
+                "The child run must be explicitly resumed and reach a terminal state first."
+            )
+        if node.status is NodeStatus.RUNNING:
+            self._map_run_outcome(plan, node.node_id, run, allow_retry=False)
+        # A repeated call for an already-reconciled run is idempotent: the
+        # terminal node is not mapped again, and only still-pending nodes run.
+        return await self.run_plan(plan_id)
+
     async def _step_plan(self, plan_id: str):
         """Run one deterministic sequential scheduling step.
 
@@ -358,7 +401,7 @@ class OrchestrationScheduler:
 
     # -- terminal mapping ---------------------------------------------------------
 
-    def _map_run_outcome(self, plan, node_id: str, run):
+    def _map_run_outcome(self, plan, node_id: str, run, *, allow_retry: bool = True):
         node = self.nodes.get(node_id, plan.owner_id)
         if run.status is AgentRunStatus.SUCCEEDED:
             self.handoff_manager.record_outcome(plan, node, run)
@@ -404,7 +447,7 @@ class OrchestrationScheduler:
             return node
         # Failure with bounded retries.
         attempts = node.attempts
-        if attempts <= node.max_retries and attempts < 3:
+        if allow_retry and attempts <= node.max_retries and attempts < 3:
             retried = self.nodes.transition(
                 node_id,
                 expected_version=self._read_node_version(node_id),

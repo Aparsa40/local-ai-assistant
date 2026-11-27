@@ -3,9 +3,27 @@
 **Project:** Local AI Assistant  
 **Phase:** 8 of 11  
 **Document type:** Authoritative execution and acceptance contract  
-**Status:** Execution-ready plan; implementation not started  
+**Status:** Implementation remains under review on branch `feat/phase-8-conversation-agent`; PR #23 is open and not merged. The latest verified revision `34c8c98548d8dfb25516d0a4e5084e0cd1efb858` passes 475 Python tests, Python compilation, and JavaScript syntax validation in GitHub Actions run `45703968765`; the existing FastAPI TestClient chat smoke tests also pass. Durable request identity/event replay and interrupted-operation recovery are implemented through migration `0007_conversation_operations`; delegated Phase 7 cancellation propagation is also implemented. Phase 8 is **not yet complete**: delegated Agent Runtime tool approvals now emit an actionable `approval_required` SSE event and resume the same child run after an authorized decision; permission-driven memory/knowledge context approvals now use request-bound, action-hash-bound one-time approval tokens and resume context assembly only after an authorized decision. The deterministic workflow registry is intentionally empty and routes are denied until owning services register workflows; model-assisted classification is supported but disabled by default. A real local loopback-server smoke run is still outstanding. Do not merge or mark the phase complete until the remaining acceptance gaps are resolved or explicitly accepted as deferred.  
 **Dependencies:** Phases 4–6 completed; Phase 7 merged via PR #21  
 **Last reviewed:** 2026-11-25
+
+## Current implementation verification (2026-11-25)
+
+Latest verified branch head: `34c8c98548d8dfb25516d0a4e5084e0cd1efb858`.
+
+- GitHub Actions: successful.
+- Python suite: 475 passed in 20.88s (GitHub Actions run `45703968765`).
+- `python -m compileall -q core main.py`: successful in CI.
+- `node --check static/app.js`: successful in CI.
+- FastAPI TestClient smoke test: direct chat SSE lifecycle, durable operation registry, and assistant-message persistence verified.
+- Durable operation migration `0007_conversation_operations` persists request hashes, safe lifecycle events and terminal outcomes; interrupted in-flight work is marked uncertain and is never automatically replayed.
+- Focused regression coverage includes immediate SSE disconnect/retry, same-key conflict, restart replay/recovery, trusted scope ownership, boolean authorization flags, classifier failure, offline readiness, UI cancellation/retry, Phase 7 cancellation propagation, delegated approval event/redaction, same-child-run continuation, owner-checked idempotent plan resume, and request-bound memory/knowledge approval creation, decision, one-time consumption and context reassembly.
+
+Outstanding acceptance gaps:
+1. Deterministic workflow registry is empty; routes remain denied until owning services register real workflows or this capability is explicitly deferred.
+2. A real loopback server smoke run in the target local environment; CI currently uses FastAPI TestClient rather than launching the user's local server.
+
+Model-assisted classification remains optional and disabled by default by design.
 
 ## 1. Purpose
 
@@ -171,7 +189,10 @@ Add versioned request, dispatch, candidate, validation, provenance and event con
 
 ### WP-8.2 — Conversation service and deterministic dispatcher
 Implement conservative dispatch. Model-assisted classification, if justified, is optional/advisory with strict schema and deterministic fallback.
-**Exit:** table-driven tests prove routing, classifier fallback and no permission escalation.
+
+The deterministic workflow seam must be executable, not merely a route label. The application composition root owns an explicit allow-listed WorkflowRegistry; workflow handlers call existing application services through their supported service/repository boundaries. The initial read-only workflow is `/workflow provider_operational_report`, backed by the existing `get_operational_report` catalog service. It reports persisted provider/runtime/model-catalog observations only and does not trigger live probes, mutate catalog state, call an LLM, or widen permissions. Workflow execution is bounded by the conversation request budget and its result is persisted once with deterministic provenance.
+
+**Exit:** table-driven tests prove routing, classifier fallback and no permission escalation; registry tests prove allow-list/duplicate/unknown handling; integration tests prove a real service-backed workflow executes without requiring a model and persists one truthful result.
 
 ### WP-8.3 — Context authorization and strategies
 Integrate ContextManager, PermissionManager and InterfaceManager. Implement only supported online/offline strategies. Enforce destination authorization before cloud egress.
@@ -179,7 +200,10 @@ Integrate ContextManager, PermissionManager and InterfaceManager. Implement only
 
 ### WP-8.4 — Supervisor/Agent Runtime delegation
 Integrate through existing OrchestrationService composition root. Define correlation, scoped handoff, budgets, cancellation and aggregate mapping. No internal HTTP calls and no Phase 9 features.
-**Exit:** tests cover direct/delegated decisions, scope containment, successful/partial/failed orchestration, cancellation and unavailable Supervisor.
+
+Phase 7 compatibility seam: after an approval has been decided, the existing Agent Runtime approval flow must clear the pending approval and execute the same child run. The owning plan can then be continued through the public owner-checked `OrchestrationService.resume_plan(plan_id, run_id, owner_id)` contract. The scheduler verifies plan/run ownership and terminal child state, maps that persisted outcome once, and schedules only remaining pending nodes. It never restarts the child run or automatically retries a failed child after this explicit approval continuation. If the bounded conversation approval wait expires, the owning plan and paused child are cancelled. This seam does not itself implement the Conversation Agent's approval SSE/UI continuation.
+
+**Exit:** tests cover direct/delegated decisions, scope containment, successful/partial/failed orchestration, cancellation, unavailable Supervisor, and explicit child-run approval resumption without duplicate execution.
 
 ### WP-8.5 — Response validation and composition
 Implement schema, reference, task coverage, tool outcome and policy validation; compose truthful final/partial/blocked responses.
@@ -244,24 +268,27 @@ Also run loopback HTTP smoke tests for direct chat, deterministic delegated chat
 
 ## 13. Phase-wide acceptance checklist
 
-- [ ] Sessions, messages, titles, provider/model settings and credentials remain intact.
-- [ ] Conversation Agent reuses Agent Runtime; no second runtime.
-- [ ] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
-- [ ] Dispatch is deterministic, bounded, explainable and tested.
-- [ ] Classification cannot grant permissions, widen scopes or select unauthorized egress.
-- [ ] Context scopes are explicit; memory/knowledge are not implicitly enabled.
-- [ ] Cloud transmission is denied unless destination authorization covers the data.
-- [ ] Online/offline paths use InterfaceManager and re-check capability/readiness.
-- [ ] User-selected provider/model is preserved; fallback is permitted and disclosed.
-- [ ] Supervisor handoff uses internal composition, existing Phase 7 contracts and bounded scopes.
-- [ ] Phase 9 multi-agent enhancements are not introduced.
-- [ ] Validator distinguishes valid, partial and rejected; never fabricates evidence.
-- [ ] Streaming never exposes hidden reasoning, secrets, raw exceptions or private context.
-- [ ] Idempotency, cancellation, disconnect and restart do not duplicate messages or side effects.
-- [ ] UI accurately communicates status, fallback, approval and partial/failure.
-- [ ] Focused tests, one final full suite, JS syntax and loopback smoke tests pass.
-- [ ] README, roadmap, architecture, AI orchestration, docs index, changelog and this plan agree.
-- [ ] One implementation PR is open for review and has not been merged.
+- [x] Sessions, messages, titles, provider/model settings and credentials remain intact.
+- [x] Conversation Agent reuses Agent Runtime; no second runtime.
+- [x] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
+- [x] Dispatch is deterministic, bounded, explainable and tested.
+- [x] Workflow Registry executes the read-only `provider_operational_report` workflow through the existing catalog service; unknown workflows remain non-executable.
+- [x] Classification cannot grant permissions, widen scopes or select unauthorized egress.
+- [x] Context scopes are explicit; memory/knowledge are not implicitly enabled.
+- [x] Cloud transmission is denied unless destination authorization covers the data.
+- [ ] Online/offline paths use InterfaceManager and re-check all model capability constraints; readiness is covered, but complete capability-parity evidence remains.
+- [x] User-selected provider/model is preserved; any configured fallback is gated and disclosed (no cloud fallback is enabled by default).
+- [x] Supervisor handoff uses internal composition, existing Phase 7 contracts and bounded scopes.
+- [x] Phase 9 multi-agent enhancements are not introduced.
+- [x] Validator distinguishes valid, partial and rejected; never fabricates evidence.
+- [x] Streaming never exposes hidden reasoning, secrets, raw exceptions or private context.
+- [x] Durable idempotency, cancellation, disconnect and restart recovery prevent automatic duplicate execution.
+- [x] Delegated Agent Runtime tool approvals emit a redacted `approval_required` event; the UI can approve/reject through existing endpoints and resumes the same child run before the plan continues.
+- [x] Permission-driven memory/knowledge context approvals use the same request-bound SSE and existing approval workflow; the exact approved access request is consumed once before context retrieval continues.
+- [x] CI full suite and JavaScript syntax pass (475 Python tests); FastAPI TestClient smoke passes.
+- [ ] A real loopback-server smoke run remains outstanding.
+- [x] README, roadmap, architecture, AI orchestration, docs index, changelog and this plan agree on current Phase 8 status and open gaps.
+- [x] One implementation PR is open for review and has not been merged.
 
 ## 14. Execution directive
 

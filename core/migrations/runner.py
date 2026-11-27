@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
-CURRENT_SCHEMA_REVISION = "0006_orchestration"
+CURRENT_SCHEMA_REVISION = "0007_conversation_operations"
 
 
 def _legacy_additive_columns(connection) -> None:
@@ -329,6 +329,23 @@ def _orchestration(connection) -> None:
         connection.execute(text(statement))
 
 
+def _conversation_operations(connection) -> None:
+    """Persist idempotency identity and safe lifecycle events across restarts."""
+    connection.execute(text(
+        "CREATE TABLE IF NOT EXISTS conversation_operations ("
+        "session_id INTEGER NOT NULL, request_id VARCHAR(64) NOT NULL, "
+        "message_hash VARCHAR(64) NOT NULL, state VARCHAR(20) NOT NULL, "
+        "events JSON NOT NULL DEFAULT '[]', created_at VARCHAR(40) NOT NULL, "
+        "updated_at VARCHAR(40) NOT NULL, "
+        "PRIMARY KEY (session_id, request_id), "
+        "FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE)"
+    ))
+    connection.execute(text(
+        "CREATE INDEX IF NOT EXISTS ix_conversation_operations_updated_at "
+        "ON conversation_operations(updated_at)"
+    ))
+
+
 _MIGRATIONS = (
     ("0001_legacy_additive_columns", _legacy_additive_columns),
     ("0002_knowledge_fts", _knowledge_fts),
@@ -336,6 +353,7 @@ _MIGRATIONS = (
     ("0004_knowledge_fts_trigger_fix", _knowledge_fts_trigger_fix),
     ("0005_agent_runtime", _agent_runtime),
     ("0006_orchestration", _orchestration),
+    ("0007_conversation_operations", _conversation_operations),
 )
 
 

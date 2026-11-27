@@ -1,6 +1,6 @@
 # Agent Runtime
 
-**Status:** Phase 6 Agent Runtime and Phase 7 Supervisor/Orchestrator are implemented and merged (PR #19 and PR #21). Conversation Agent is Phase 8 planned work; broader multi-agent collaboration is Phase 9 planned work.
+**Status:** Phase 6 Agent Runtime and Phase 7 Supervisor/Orchestrator are implemented and merged (PR #19 and PR #21). The Phase 8 Conversation Agent is implemented on branch `feat/phase-8-conversation-agent`: it is a user-facing workflow hosted by the existing runtime, reusing ConversationService, ContextManager, PermissionManager, the InterfaceManager, and the Phase 7 OrchestrationService composition root; delegation creates one bounded goal whose child scopes are subsets of the authorized request scope, and it introduces no second runtime or scheduler. Broader multi-agent collaboration remains Phase 9 planned work.
 
 ## 1. Purpose
 

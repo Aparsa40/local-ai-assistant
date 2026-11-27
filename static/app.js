@@ -6,6 +6,8 @@ function chatApp() {
         inputMessage: '',
         isLoading: false,
         streamingSessionId: null,
+        activeRequestId: null,
+        pendingRetry: null,
         showSettings: false,
         activeTab: 'persona',
         sidebarCollapsed: localStorage.getItem('wiz-sidebar-collapsed') === 'true',
@@ -774,23 +776,45 @@ function chatApp() {
             }
         },
 
-        async sendMessage() {
-            if (!this.inputMessage.trim() || this.isLoading) return;
-            const userText = this.inputMessage;
-            this.inputMessage = '';
+        async sendMessage(retry = null) {
+            if (this.isLoading) return;
+
+            const isRetry = Boolean(retry);
+            if (!isRetry && !this.inputMessage.trim()) return;
+            const userText = isRetry ? retry.message : this.inputMessage;
+            const sessionId = isRetry ? retry.sessionId : this.currentSessionId;
+            const request_id = isRetry
+                ? retry.requestId
+                : 'req_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '') : Date.now().toString(36) + Math.random().toString(36).slice(2));
+            let aiMsgIndex;
+
+            if (isRetry) {
+                if (!this.pendingRetry || this.pendingRetry.requestId !== request_id || sessionId !== this.currentSessionId) return;
+                aiMsgIndex = retry.assistantIndex;
+                this.messages[aiMsgIndex].content = 'در حال بازیابی پاسخ قبلی...';
+                this.messages[aiMsgIndex].model = 'در حال اتصال مجدد...';
+                this.pendingRetry = null;
+            } else {
+                this.inputMessage = '';
+                this.messages.push({ role: 'user', content: userText });
+                aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: '' }) - 1;
+            }
+
             this.isLoading = true;
-            this.streamingSessionId = this.currentSessionId;
-            this.messages.push({ role: 'user', content: userText });
-            const aiMsgIndex = this.messages.push({ role: 'assistant', content: '', model: 'در حال انتخاب مدل...' }) - 1;
+            this.streamingSessionId = sessionId;
+            this.activeRequestId = request_id;
             this.scrollToBottom();
+            let terminalReceived = false;
+            let retryableFailure = true;
 
             try {
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: this.currentSessionId, message: userText })
+                    body: JSON.stringify({ session_id: sessionId, message: userText, request_id })
                 });
                 if (!response.ok) {
+                    retryableFailure = false;
                     const error = await response.json();
                     throw new Error(error.detail || 'درخواست چت ناموفق بود.');
                 }
@@ -801,33 +825,188 @@ function chatApp() {
                     const { done, value } = await reader.read();
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
-                    const events = buffer.split('\n\n');
+                    const events = buffer.split('\\n\\n');
                     buffer = events.pop() || '';
                     for (const event of events) {
-                        const line = event.split('\n').find(part => part.startsWith('data:'));
+                        const line = event.split('\\n').find(part => part.startsWith('data:'));
                         if (!line) continue;
                         const data = JSON.parse(line.slice(5).trim());
+                        // Legacy protocol events and versioned Phase 8 events share one parser.
                         if (data.type === 'meta') this.messages[aiMsgIndex].model = data.model;
                         else if (data.type === 'chunk') {
                             this.messages[aiMsgIndex].content += data.content;
                             this.scrollToBottom();
+                        } else if (data.type === 'accepted' || data.type === 'progress') {
+                            if (!this.messages[aiMsgIndex].content) this.messages[aiMsgIndex].model = 'در حال پردازش...';
+                        } else if (data.type === 'status') {
+                            const detail = data.data || {};
+                            if (detail.provider_id && detail.model) {
+                                this.messages[aiMsgIndex].model = detail.provider_id + ' / ' + detail.model;
+                            }
+                        } else if (data.type === 'validation') {
+                            const state = (data.data || {}).state;
+                            if (state === 'partial') this.messages[aiMsgIndex].model = 'پاسخ بخشی تأیید شد';
+                        } else if (data.type === 'approval_required') {
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].approval = detail;
+                            this.loadConversationApprovalDetails(this.messages[aiMsgIndex], detail.approval_id);
+                            this.messages[aiMsgIndex].model = 'در انتظار تأیید شما';
+                            this.messages[aiMsgIndex].content += '\\n\\n🔐 برای ادامهٔ اجرای این کار، تأیید شما لازم است.';
+                            this.scrollToBottom();
+                        } else if (data.type === 'final') {
+                            terminalReceived = true;
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].content = detail.content !== undefined ? detail.content : this.messages[aiMsgIndex].content;
+                            this.messages[aiMsgIndex].approval = null;
+                            if (detail.provenance && detail.provenance.provider_id) {
+                                this.messages[aiMsgIndex].model = detail.provenance.provider_id + ' / ' + (detail.provenance.model_used || '');
+                            }
+                            if (detail.status && detail.status !== 'completed') {
+                                this.messages[aiMsgIndex].content += '\\n\\n⚠️ وضعیت اجرا: ' + detail.status;
+                            }
+                        } else if (data.type === 'cancelled') {
+                            terminalReceived = true;
+                            this.messages[aiMsgIndex].approval = null;
+                            this.messages[aiMsgIndex].content += '\\n\\n⏹ اجرا لغو شد.';
                         } else if (data.type === 'error') {
-                            this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                            terminalReceived = true;
+                            this.messages[aiMsgIndex].approval = null;
+                            const detail = data.data || {};
+                            this.messages[aiMsgIndex].content += '\\n\\n❌ خطا: ' + (detail.message || detail.content || 'نامشخص');
                         }
                     }
                 }
-                if (buffer.trim().startsWith('data:')) {
-                    const data = JSON.parse(buffer.trim().slice(5).trim());
-                    if (data.type === 'error') this.messages[aiMsgIndex].content += `\n\n❌ خطا: ${data.content}`;
+                if (!terminalReceived && retryableFailure) {
+                    this.pendingRetry = { sessionId, message: userText, requestId: request_id, assistantIndex: aiMsgIndex };
+                    this.messages[aiMsgIndex].content += '\\n\\n⚠️ ارتباط پیش از دریافت نتیجه نهایی قطع شد. می‌توانی با همان شناسه درخواست دوباره تلاش کنی.';
+                } else {
+                    this.pendingRetry = null;
+                    await this.loadSessions();
+                    // This endpoint serves local metadata only; it does not call provider model catalogs.
+                    await this.loadProviderCapabilities();
                 }
-                await this.loadSessions();
-                // This endpoint serves local metadata only; it does not call provider model catalogs.
-                await this.loadProviderCapabilities();
             } catch (error) {
-                this.messages[aiMsgIndex].content = `خطا در ارتباط با سرور: ${error.message}`;
+                if (retryableFailure) {
+                    this.pendingRetry = { sessionId, message: userText, requestId: request_id, assistantIndex: aiMsgIndex };
+                    this.messages[aiMsgIndex].content = 'ارتباط قطع شد: ' + error.message + '\\n\\nمی‌توانی با همان شناسه درخواست دوباره تلاش کنی.';
+                } else {
+                    this.messages[aiMsgIndex].content = 'خطا در درخواست: ' + error.message;
+                    this.pendingRetry = null;
+                }
             } finally {
                 this.isLoading = false;
                 this.streamingSessionId = null;
+                this.activeRequestId = null;
+            }
+        },
+
+        async retryPendingMessage() {
+            if (!this.pendingRetry || this.isLoading) return;
+            return this.sendMessage(this.pendingRetry);
+        },
+
+        async loadConversationApprovalDetails(message, approvalId) {
+            try {
+                const response = await fetch('/api/permissions/approvals?limit=500');
+                if (!response.ok) return;
+                const data = await response.json();
+                const approval = (data.approvals || []).find(item => item.approval_id === approvalId);
+                if (!approval) return;
+                const resource = approval.resource || {};
+                const scope = approval.scope || {};
+                message.approvalSummary = [
+                    approval.operation || 'operation',
+                    (resource.type || 'resource') + ':' + (resource.id || 'unknown'),
+                    (scope.type || 'scope') + ':' + (scope.id || 'unknown')
+                ].join(' · ');
+            } catch (error) {
+                // The approval action remains available even if its summary cannot be loaded.
+            }
+        },
+
+        async decideConversationApproval(message, approve) {
+            const approval = message && message.approval;
+            if (!approval || message.approvalBusy) return;
+            message.approvalBusy = true;
+            message.approvalError = '';
+            try {
+                const action = approve ? 'approve' : 'reject';
+                const decision = await fetch(
+                    '/api/permissions/approvals/' + encodeURIComponent(approval.approval_id) + '/' + action,
+                    { method: 'POST' }
+                );
+                const decisionBody = await decision.json().catch(() => ({}));
+                if (!decision.ok) {
+                    // Replayed approval events may outlive the first successful click.
+                    // Accept only the exact already-recorded decision, never a different one.
+                    const listResponse = await fetch('/api/permissions/approvals?limit=100');
+                    const listBody = await listResponse.json().catch(() => ({}));
+                    const recorded = (listBody.approvals || []).find(item => item.approval_id === approval.approval_id);
+                    const expectedStatuses = approve ? ['approved', 'consumed'] : ['rejected'];
+                    if (!expectedStatuses.includes(recorded?.status)) {
+                        throw new Error(decisionBody.detail || 'ثبت تصمیم تأیید ناموفق بود.');
+                    }
+                }
+
+                if (approval.kind === 'context') {
+                    message.content += approve
+                        ? '\\n\\n✅ تأیید دسترسی ثبت شد؛ بازیابی مجاز زمینه ادامه می‌یابد.'
+                        : '\\n\\n⛔ درخواست دسترسی رد شد؛ داده‌ای از آن محدوده بازیابی نشد.';
+                    message.approval = null;
+                    this.scrollToBottom();
+                    return;
+                }
+
+                const resume = await fetch(
+                    '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/resume',
+                    { method: 'POST' }
+                );
+                const resumeBody = await resume.json().catch(() => ({}));
+                if (!resume.ok) throw new Error(resumeBody.detail || 'آماده‌سازی ادامهٔ اجرا ناموفق بود.');
+
+                if (approve) {
+                    const runStatus = resumeBody.run?.status;
+                    if (runStatus === 'paused') {
+                        const execute = await fetch(
+                            '/api/agents/runs/' + encodeURIComponent(approval.run_id) + '/execute',
+                            { method: 'POST' }
+                        );
+                        const executeBody = await execute.json().catch(() => ({}));
+                        if (!execute.ok) throw new Error(executeBody.detail || 'ادامهٔ اجرای عامل ناموفق بود.');
+                    }
+                    message.content += '\\n\\n✅ تأیید ثبت شد؛ اجرای همان عامل از نقطهٔ توقف ادامه یافت.';
+                } else {
+                    message.content += '\\n\\n⛔ درخواست رد شد و اجرای وابسته لغو شد.';
+                }
+                message.approval = null;
+                this.scrollToBottom();
+            } catch (error) {
+                message.approvalError = error.message;
+            } finally {
+                message.approvalBusy = false;
+            }
+        },
+
+        async cancelMessage() {
+            if (!this.streamingSessionId || !this.activeRequestId) return;
+            try {
+                const response = await fetch('/api/chat/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: this.streamingSessionId,
+                        request_id: this.activeRequestId
+                    })
+                });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.detail || 'لغو درخواست ناموفق بود.');
+                }
+            } catch (error) {
+                const active = this.messages[this.messages.length - 1];
+                if (active && active.role === 'assistant') {
+                    active.content += '\\n\\n⚠️ ' + error.message;
+                }
             }
         }
     };

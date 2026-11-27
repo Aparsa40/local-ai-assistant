@@ -1,0 +1,487 @@
+import asyncio
+import contextlib
+import json
+from types import SimpleNamespace
+
+from core.conversation_agent.contracts import ExecutionStatus
+from core.conversation_agent.operations import OperationRegistry
+from core.conversation_agent.orchestration_gateway import DelegatedOutcome
+from core.conversation_agent.service import ConversationAgentService
+from core.conversation_agent.dispatcher import DeterministicDispatcher
+from core.conversation_agent.workflows import WorkflowRegistry
+
+
+class FakeConversationService:
+    def __init__(self):
+        self.prepared = []
+        self.assistant = []
+
+    def _authorize(self, *args, **kwargs):
+        return None
+
+    def prepare_chat(self, session_id, message):
+        self.prepared.append((session_id, message))
+
+    def append_assistant_message(self, session_id, content, model):
+        self.assistant.append((session_id, content, model))
+
+
+class FakeContextManager:
+    def __init__(self, items):
+        self.items = items
+
+    def assemble(self, request):
+        return SimpleNamespace(items=tuple(self.items))
+
+
+def context_item(source_type, ref, content="piece", role="user"):
+    return SimpleNamespace(source_type=source_type, source_ref=ref, content=content, role=role)
+
+
+class FakeInterfaceManager:
+    def __init__(self, chunks=("answer part 1 ", "part 2"), fail=False):
+        self.chunks = list(chunks)
+        self.fail = fail
+        self.received = []
+
+    async def stream_chat(self, provider_id, messages, model=None, temperature=None):
+        self.received.append({"provider_id": provider_id, "messages": [dict(m) for m in messages], "model": model})
+        if self.fail:
+            raise RuntimeError("raw internal failure that must never leak")
+        for chunk in self.chunks:
+            yield chunk
+
+
+def build_service(items=(), im=None, gateway=None, registry=None, workflow_registry=None):
+    conversation = FakeConversationService()
+    im = im or FakeInterfaceManager()
+    registry = registry or OperationRegistry()
+    dispatcher = DeterministicDispatcher(
+        workflows={name: name for name in workflow_registry.names()}
+    ) if workflow_registry is not None else None
+    service = ConversationAgentService(
+        interface_manager=im,
+        conversation_builder=lambda db, access, pm: conversation,
+        context_builder=lambda conv, db, access: FakeContextManager(items),
+        session_factory=lambda: contextlib.nullcontext(None),
+        orchestration_gateway=gateway,
+        registry=registry,
+        workflow_registry=workflow_registry,
+        dispatcher=dispatcher,
+        readiness_probe=lambda p, m: True,
+    )
+    return service, conversation, im, registry
+
+
+def run(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+async def _collect(service, payload):
+    return [chunk async for chunk in service.stream(None, None, None, payload)]
+
+
+def _payload(**overrides):
+    payload = {
+        "session_id": 1,
+        "message": "a question",
+        "request_id": "req_" + "a" * 24,
+        "provider_id": "openrouter",
+        "model": "test/model",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _parse(chunks):
+    return [json.loads(chunk[len("data: "):].strip()) for chunk in chunks]
+
+
+def test_registered_workflow_executes_and_persists_without_model():
+    workflows = WorkflowRegistry()
+    calls = []
+    workflows.register(
+        "provider_operational_report",
+        "Read-only provider status report",
+        lambda: calls.append("called") or "Provider report: 2 providers",
+    )
+    service, conversation, im, _ = build_service(workflow_registry=workflows)
+    parsed = _parse(run(_collect(service, _payload(
+        message="/workflow provider_operational_report",
+        provider_id=None,
+        model=None,
+    ))))
+    final = parsed[-1]
+    assert final["type"] == "final"
+    assert final["data"]["status"] == "completed"
+    assert final["data"]["content"] == "Provider report: 2 providers"
+    assert final["data"]["provenance"]["mode"] == "deterministic"
+    assert calls == ["called"]
+    assert conversation.prepared == [(1, "/workflow provider_operational_report")]
+    assert conversation.assistant == [(1, "Provider report: 2 providers", "workflow:provider_operational_report")]
+    assert im.received == []
+
+
+def test_workflow_cancellation_does_not_persist_assistant_result():
+    import time
+
+    workflows = WorkflowRegistry()
+    workflows.register(
+        "slow_report",
+        "Slow read-only test workflow",
+        lambda: time.sleep(0.2) or "should not be persisted",
+    )
+    operation_registry = OperationRegistry()
+    service, conversation, im, _ = build_service(
+        workflow_registry=workflows,
+        registry=operation_registry,
+    )
+
+    async def scenario():
+        iterator = service.stream(None, None, None, _payload(
+            message="/workflow slow_report",
+            provider_id=None,
+            model=None,
+        )).__aiter__()
+        first = await iterator.__anext__()
+        assert json.loads(first[len("data: "):])["type"] == "accepted"
+        assert operation_registry.request_cancel(1, "req_" + "a" * 24)
+        return [chunk async for chunk in iterator]
+
+    parsed = _parse(run(scenario()))
+    assert parsed[-1]["type"] == "cancelled"
+    assert conversation.prepared == [(1, "/workflow slow_report")]
+    assert conversation.assistant == []
+    assert im.received == []
+
+
+def test_event_ordering_and_final():
+    service, conversation, im, _ = build_service(items=[context_item("conversation", "message:1")])
+    parsed = _parse(run(_collect(service, _payload())))
+    types = [event["type"] for event in parsed]
+    assert types[0] == "accepted"
+    assert types.index("status") < types.index("progress") < types.index("validation") < types.index("final")
+    final = parsed[-1]
+    assert final["type"] == "final"
+    assert final["data"]["status"] == "completed"
+    assert final["data"]["validation_state"] == "valid"
+    assert final["data"]["provenance"]["request_id"] == "req_" + "a" * 24
+    assert len(conversation.assistant) == 1
+    assert len(conversation.prepared) == 1
+
+
+def test_duplicate_submission_has_no_duplicate_side_effects():
+    registry = OperationRegistry()
+    service, conversation, im, _ = build_service(registry=registry)
+    payload = _payload()
+    run(_collect(service, dict(payload)))
+    replay = _parse(run(_collect(service, dict(payload))))
+    assert replay[-1]["type"] == "final"
+    assert len(conversation.prepared) == 1
+    assert len(conversation.assistant) == 1
+    assert len(im.received) == 1
+
+
+def test_disconnect_immediately_after_acceptance_is_recoverable():
+    service, conversation, im, registry = build_service(items=[context_item("conversation", "message:1")])
+    payload = _payload()
+
+    async def scenario():
+        stream = service.stream(None, None, None, payload).__aiter__()
+        first = await stream.__anext__()
+        await stream.aclose()
+        # Let the detached leader make progress after its subscriber disconnects.
+        await asyncio.sleep(0)
+        replay = await _collect(service, dict(payload))
+        return first, replay
+
+    first, replay = run(scenario())
+    assert json.loads(first[len("data: "):])["type"] == "accepted"
+    parsed = _parse(replay)
+    assert parsed[-1]["type"] == "final"
+    assert len(conversation.prepared) == 1
+    assert len(conversation.assistant) == 1
+    assert len(im.received) == 1
+
+
+def test_idempotency_key_cannot_be_reused_for_a_different_message():
+    service, conversation, im, _ = build_service()
+    payload = _payload()
+    run(_collect(service, dict(payload)))
+    conflict = dict(payload, message="a different message")
+    parsed = _parse(run(_collect(service, conflict)))
+    assert len(parsed) == 1
+    assert parsed[0]["type"] == "error"
+    assert parsed[0]["data"]["error_code"] == "idempotency_conflict"
+    assert len(conversation.prepared) == 1
+    assert len(conversation.assistant) == 1
+    assert len(im.received) == 1
+
+
+def test_private_context_never_reaches_cloud_provider():
+    items = [context_item("conversation", "message:1"), context_item("memory", "memory:9", "PRIVATE-MEMORY")]
+    service, conversation, im, _ = build_service(items=items)
+    parsed = _parse(run(_collect(service, _payload())))
+    flattened = json.dumps(im.received[0]["messages"])
+    assert "PRIVATE-MEMORY" not in flattened
+    assert any(
+        event["type"] == "status" and "private_context_excluded" in event["data"].get("reason_codes", [])
+        for event in parsed
+    )
+
+
+def test_private_context_only_cloud_request_fails_closed():
+    service, conversation, im, _ = build_service(items=[context_item("memory", "memory:9", "PRIVATE-MEMORY")])
+    parsed = _parse(run(_collect(service, _payload())))
+    assert parsed[-1]["type"] == "final"
+    assert parsed[-1]["data"]["status"] == "blocked"
+    assert "private_context_egress_denied" in parsed[-1]["data"]["reason_codes"]
+    assert im.received == []
+    assert conversation.assistant == []
+
+
+def test_explicit_private_context_authorization_transmits():
+    items = [context_item("memory", "memory:9", "PRIVATE-MEMORY")]
+    service, conversation, im, _ = build_service(items=items)
+    parsed = _parse(run(_collect(service, _payload(authorize_private_context_egress=True))))
+    assert "PRIVATE-MEMORY" in json.dumps(im.received[0]["messages"])
+    assert parsed[-1]["data"]["status"] == "completed"
+
+
+def test_inference_failure_is_truthful_not_success():
+    im = FakeInterfaceManager(fail=True)
+    service, conversation, im, _ = build_service(items=[context_item("conversation", "message:1")], im=im)
+    parsed = _parse(run(_collect(service, _payload())))
+    last = parsed[-1]
+    assert last["type"] == "final"
+    assert last["data"]["status"] == "failed"
+    assert "raw internal failure" not in json.dumps(parsed)
+    assert conversation.assistant == []
+
+
+def test_cancellation_prevents_persistence():
+    registry = OperationRegistry()
+    service, conversation, im, _ = build_service(items=[context_item("conversation", "message:1")], registry=registry)
+    im.cancel_flag = True
+
+    async def scenario():
+        iterator = service.stream(None, None, None, _payload()).__aiter__()
+        first = await iterator.__anext__()
+        request_id = json.loads(first[len("data: "):])["request_id"]
+        assert registry.request_cancel(1, request_id)
+        return [chunk async for chunk in iterator]
+
+    parsed = _parse(run(scenario()))
+    assert any(event["type"] == "cancelled" for event in parsed)
+    assert conversation.assistant == []
+
+
+def test_delegation_blocked_without_gateway():
+    service, conversation, im, _ = build_service()
+    parsed = _parse(run(_collect(service, _payload(force_delegation=True))))
+    assert parsed[-1]["data"]["status"] == "blocked"
+    assert "delegation_unavailable" in parsed[-1]["data"]["reason_codes"]
+
+
+def test_delegation_partial_outcome_preserved():
+    outcomes = (
+        {"node_id": "n1", "title": "t1", "status": "completed", "handoff_status": "complete"},
+        {"node_id": "n2", "title": "t2", "status": "failed", "handoff_status": "failed"},
+    )
+    gateway = SimpleNamespace(delegate=lambda request, authorized_scopes, cancel_check=None, **kwargs: _resolved(DelegatedOutcome(
+        status=ExecutionStatus.PARTIAL,
+        content="partial summary",
+        goal_id="g" * 32,
+        plan_id="p" * 32,
+        node_outcomes=outcomes,
+        limitations=("Task t2 did not complete.",),
+    )))
+    service, conversation, im, _ = build_service(gateway=gateway)
+    parsed = _parse(run(_collect(service, _payload(force_delegation=True))))
+    final = parsed[-1]
+    assert final["data"]["status"] == "partial"
+    assert final["data"]["content"].startswith("partial summary")
+    assert final["data"]["provenance"]["orchestration_plan_id"] == "p" * 32
+
+
+async def _resolved(value):
+    return value
+
+
+def test_scope_owner_mismatch_is_rejected_before_side_effects():
+    service, conversation, im, _ = build_service(items=[context_item("memory", "memory:1", "PRIVATE")])
+    payload = _payload(memory_scopes=[{
+        "domain": "memory",
+        "scope_type": "user",
+        "scope_id": "1",
+        "owner_id": "attacker",
+    }])
+    parsed = _parse(run(_collect(service, payload)))
+    assert len(parsed) == 1
+    assert parsed[0]["type"] == "error"
+    assert parsed[0]["data"]["error_code"] == "scope_owner_mismatch"
+    assert conversation.prepared == []
+    assert im.received == []
+
+
+def test_invalid_payload_single_error_event_no_side_effects():
+    service, conversation, im, _ = build_service()
+    parsed = _parse(run(_collect(service, {"session_id": 1, "message": "x" * 999999, "request_id": "req_" + "a" * 24})))
+    assert len(parsed) == 1
+    assert parsed[0]["type"] == "error"
+    assert parsed[0]["data"]["error_code"] == "invalid_request"
+    assert im.received == []
+    assert conversation.prepared == []
+
+
+def test_offline_not_ready_cloud_fallback_is_disclosed_as_partial():
+    class FailingLocalIM:
+        async def stream_chat(self, provider_id, messages, model=None, temperature=None):
+            raise RuntimeError("local unavailable")
+            yield ""  # pragma: no cover
+
+    items = [context_item("conversation", "message:1")]
+    conversation = FakeConversationService()
+    received = []
+
+    class CloudIM:
+        async def stream_chat(self, provider_id, messages, model=None, temperature=None):
+            received.append(provider_id)
+            yield "cloud answer"
+
+    class SwitchingIM:
+        def __init__(self):
+            self.cloud = CloudIM()
+            self.local = FailingLocalIM()
+
+        async def stream_chat(self, provider_id, messages, model=None, temperature=None):
+            target = self.local if provider_id == "ollama" else self.cloud
+            async for chunk in target.stream_chat(provider_id, messages, model=model):
+                yield chunk
+
+    async def probe(provider_id, model):
+        return False  # local runtime never ready
+
+    service = ConversationAgentService(
+        interface_manager=SwitchingIM(),
+        conversation_builder=lambda db, access, pm: conversation,
+        context_builder=lambda conv, db, access: FakeContextManager(items),
+        session_factory=lambda: contextlib.nullcontext(None),
+        registry=OperationRegistry(),
+        readiness_probe=probe,
+        fallback_order=("openrouter",),  # cloud fallback is not authorized with private? none present, allowed test below instead
+    )
+    parsed = _parse(run(_collect(service, _payload(provider_id="ollama", model="local-model"))))
+    final = parsed[-1]
+    # The local provider was not ready; the configured, authorized cloud
+    # fallback completed the turn and the fallback is disclosed.
+    assert final["data"]["status"] == "partial"
+    assert final["data"]["provenance"]["fallback_applied"] is True
+    assert final["data"]["provenance"]["fallback_reason"]
+
+
+def test_delegated_approval_callback_is_published_as_sse_event():
+    async def delegate(request, authorized_scopes, cancel_check=None, **kwargs):
+        await kwargs["approval_callback"]({
+            "approval_id": "approval-chat-1",
+            "run_id": "run-chat-1",
+            "node_id": "node-chat-1",
+            "plan_id": "plan-chat-1",
+        })
+        return DelegatedOutcome(
+            status=ExecutionStatus.COMPLETED,
+            content="Approved delegated result.",
+            goal_id="goal-chat-1",
+            plan_id="plan-chat-1",
+        )
+
+    gateway = SimpleNamespace(delegate=delegate)
+    service, conversation, im, _ = build_service(gateway=gateway)
+    parsed = _parse(run(_collect(service, _payload(force_delegation=True))))
+    approval = next(event for event in parsed if event["type"] == "approval_required")
+    assert approval["data"]["approval_id"] == "approval-chat-1"
+    assert approval["data"]["run_id"] == "run-chat-1"
+    assert approval["data"]["plan_id"] == "plan-chat-1"
+    assert parsed[-1]["type"] == "final"
+    assert parsed[-1]["data"]["content"] == "Approved delegated result."
+
+
+def test_context_approval_is_streamed_then_context_assembly_retries_after_approval():
+    from core.conversation_agent.context_approvals import ContextApprovalRequired
+    from core.permissions.types import (
+        AccessRequest,
+        ApprovalStatus,
+        PermissionOperation,
+        PermissionResource,
+        PermissionScope,
+        PermissionSubject,
+        ResourceType,
+        ScopeType,
+        SubjectType,
+    )
+
+    access_request = AccessRequest(
+        subject=PermissionSubject(SubjectType.SERVICE, "local-api"),
+        resource=PermissionResource(ResourceType.MEMORY_SCOPE, "profile-1"),
+        operation=PermissionOperation.READ,
+        scope=PermissionScope(ScopeType.USER, "profile-1", "local-user"),
+        request_id="context-request-1",
+    )
+    pending = ContextApprovalRequired(
+        access_request,
+        {
+            "domain": "memory",
+            "action": "read",
+            "scope_type": "user",
+            "scope_id": "profile-1",
+            "owner_id": "local-user",
+        },
+        "memory",
+    )
+
+    class ApprovedContextCoordinator:
+        def __init__(self):
+            self.accepted = []
+
+        def request(self, request):
+            assert request is pending
+            return SimpleNamespace(approval_id="approval-context-1")
+
+        def status(self, approval_id):
+            assert approval_id == "approval-context-1"
+            return SimpleNamespace(status=ApprovalStatus.APPROVED)
+
+        def accept(self, request, approval_id):
+            self.accepted.append((request, approval_id))
+
+    class ApprovalAwareContext:
+        def __init__(self):
+            self.approval_coordinator = ApprovedContextCoordinator()
+            self.calls = 0
+
+        def assemble(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                raise pending
+            return SimpleNamespace(items=(context_item("memory", "memory:1", "approved memory"),))
+
+    context = ApprovalAwareContext()
+    service, conversation, im, _ = build_service()
+    service._context_builder = lambda conv, db, access: context
+    parsed = _parse(run(_collect(service, _payload(
+        authorize_private_context_egress=True,
+    ))))
+
+    approval = next(event for event in parsed if event["type"] == "approval_required")
+    assert approval["data"]["kind"] == "context"
+    assert approval["data"]["approval_id"] == "approval-context-1"
+    assert approval["data"]["resource_type"] == "memory_scope"
+    assert context.calls == 2
+    assert len(context.approval_coordinator.accepted) == 1
+    assert parsed[-1]["type"] == "final"
+    assert parsed[-1]["data"]["status"] == "completed"
+    assert len(conversation.assistant) == 1

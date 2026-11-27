@@ -159,6 +159,18 @@
                             <span x-show="msg.model" class="bg-slate-950 px-2 py-0.5 rounded text-[10px] text-sky-400" x-text="msg.model"></span>
                         </div>
                         <div class="prose prose-invert text-sm leading-relaxed" x-html="renderMarkdown(msg.content)"></div>
+                        <div x-show="msg.approval" class="mt-4 rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-sm">
+                            <p class="mb-2 text-amber-200" x-text="msg.approval.kind === 'context' ? 'دسترسی به این محدوده برای بازیابی زمینه نیازمند تأیید است.' : 'این اجرای واگذارشده برای ادامه به تأیید نیاز دارد.'"></p>
+                            <p x-show="msg.approvalSummary" class="mb-3 text-xs text-slate-300" x-text="msg.approvalSummary"></p>
+                            <div x-show="msg.approvalError" class="mb-2 text-rose-300" x-text="msg.approvalError"></div>
+                            <div x-show="msg.approvalBusy" class="mb-2 text-slate-300">در حال ثبت تصمیم و ادامهٔ اجرا...</div>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" @click="decideConversationApproval(msg, true)" :disabled="msg.approvalBusy"
+                                        class="rounded bg-emerald-700 px-3 py-2 text-xs font-bold hover:bg-emerald-600 disabled:opacity-50">تأیید و ادامه</button>
+                                <button type="button" @click="decideConversationApproval(msg, false)" :disabled="msg.approvalBusy"
+                                        class="rounded bg-rose-800 px-3 py-2 text-xs font-bold hover:bg-rose-700 disabled:opacity-50">رد درخواست</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </template>
@@ -174,6 +186,15 @@
                               class="w-full min-w-0 resize-y max-h-48 overflow-y-auto bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-sky-500"></textarea>
                     <p class="mt-1 text-[11px] text-slate-500">Enter: ارسال <span class="mx-1">·</span> Shift + Enter: خط جدید <span class="mx-1">·</span> Ctrl + Enter: ارسال</p>
                 </div>
+                <button x-show="isLoading" type="button" @click="cancelMessage()"
+                        :disabled="!activeRequestId"
+                        class="shrink-0 bg-rose-700 hover:bg-rose-600 disabled:opacity-50 px-4 py-3 rounded-lg text-sm font-bold">
+                    توقف
+                </button>
+                <button x-show="pendingRetry && !isLoading && pendingRetry.sessionId === currentSessionId" type="button" @click="retryPendingMessage()"
+                        class="shrink-0 bg-amber-700 hover:bg-amber-600 px-4 py-3 rounded-lg text-sm font-bold">
+                    تلاش مجدد
+                </button>
                 <button type="submit" :disabled="isLoading || !inputMessage.trim()"
                         class="shrink-0 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 px-6 py-3 rounded-lg text-sm font-bold">
                     <span x-text="isLoading ? 'در حال پردازش...' : 'ارسال'"></span>

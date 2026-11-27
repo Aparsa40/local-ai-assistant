@@ -89,7 +89,7 @@ The current credential file is local and ignored by Git, but credentials are not
   Backup & Maintenance ---- Snapshot APIs / Cache Policies
 ```
 
-This is a logical architecture. It does not require a separate process or database for every box. Phase 7 Supervisor/Orchestrator is implemented and merged via PR #21. Phase 8 Conversation Processing integration and Phase 9 broader multi-agent orchestration remain planned work.
+This is a logical architecture. It does not require a separate process or database for every box. Phase 7 Supervisor/Orchestrator is implemented and merged via PR #21. Phase 8 Conversation Processing is implemented on branch `feat/phase-8-conversation-agent` as `core/conversation_agent/`; Phase 9 broader multi-agent orchestration remains planned work.
 
 ## 4. Core module responsibilities
 
@@ -119,7 +119,7 @@ Refreshes provider and model metadata on a schedule or on user request. It detec
 
 Owns the user-facing conversation lifecycle: request intake, conversation history, authorized context assembly, task handoff, event recording, and delivery of the validated result. The current chat API persists the user turn through ConversationService and assembles bounded conversation history through ContextManager. Memory scopes are not implicitly attached; retrieval requires explicit scope input.
 
-It decides whether a request can be answered directly, handled by a deterministic workflow, or delegated to Agent Runtime. It does not own the lifecycle of specialized agent runs.
+Implemented in Phase 8 (`core/conversation_agent/`): versioned contracts, a deterministic dispatcher (advisory model classification may only downgrade to needs-user-input), separate retrieval and destination/egress authorization, normalized online/offline strategies through the InterfaceManager, bounded delegation through the Phase 7 OrchestrationService composition root, a response validator/composer with valid/partial/rejected states, and an idempotent in-process operation registry feeding a versioned SSE protocol. It does not own the lifecycle of specialized agent runs and never calls provider SDKs or the application's own HTTP endpoints.
 
 ### Supervisor Agent
 
@@ -131,7 +131,7 @@ It is not a separate infrastructure manager and cannot grant permissions or exec
 
 An independent quality and policy boundary. It checks output structure, completeness, references, tool outcomes, and applicable safety rules, then prepares the response for the UI. It is used for both online and offline results.
 
-It must not be folded into a provider adapter. It is not implemented yet; Phase 6 outcomes are structured and reported truthfully but are not composed user-facing answers.
+It must not be folded into a provider adapter. Phase 8 implements the first version of this boundary in `core/conversation_agent/validator.py` and `composer.py`: schema, reference-existence, delegated-task-coverage, and policy checks with valid/partial/rejected states, plus truthful limitation text and mandatory fallback disclosure.
 
 ### Tool & Permission Manager (Phase 5 implemented; first Phase 6 handler)
 

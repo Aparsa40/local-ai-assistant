@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
+  issues: write
 
 jobs:
   test:
@@ -34,4 +36,4 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q core main.py
       - name: Run tests
-        run: python -m pytest -q -W default
+        run: python -m pytest -q -W default --tb=short -rA

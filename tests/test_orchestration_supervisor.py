@@ -587,3 +587,164 @@ def test_assignment_requires_one_candidate_to_cover_all_capabilities(tmp_path):
         )
     finally:
         env.dispose()
+
+
+def test_resume_plan_reconciles_approved_child_without_recreating_it(tmp_path):
+    """A resumed child run is reconciled once, then pending work may continue."""
+    env = make_agent_env(tmp_path)
+    try:
+        orch = make_orch(env)
+        goal = make_goal(orch)
+        result = asyncio.run(orch.plan_goal(
+            goal.goal_id,
+            owner_id=OWNER_ID,
+            strategy="validated_model_proposal",
+            proposal_text=proposal_for(goal, node_count=1),
+        ))
+        plan_id = result["plan_id"]
+        plan = orch.plans.get(plan_id)
+        node = plan.nodes[0]
+
+        # Put the accepted plan/node into the same persisted state produced
+        # when the scheduler's child run pauses for an approval decision.
+        orch.scheduler._mark_plan_status(plan_id, plan, PlanStatus.RUNNING)
+        task = env.services.lifecycle.create_task(
+            agent_id="knowledge-analyzer",
+            agent_version="1.0.0",
+            owner_id=OWNER_ID,
+            title="Approval-resume test",
+            payload={"query": "approved test"},
+            data_scopes=goal.data_scopes,
+        )
+        run = env.services.lifecycle.create_run(task.task_id)
+        run = env.services.lifecycle.start(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.pause_for_approval(
+            run.run_id,
+            expected_version=run.version,
+            approval_id="approval-test",
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.SCHEDULED,
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.RUNNING,
+            run_id=run.run_id,
+            attempts=1,
+        )
+
+        plan_view = orch.plan_view(plan_id)
+        approval_node = plan_view["nodes"][0]
+        assert approval_node["run_status"] == "paused"
+        assert approval_node["pending_approval_id"] == "approval-test"
+
+        with pytest.raises(OrchestrationServiceError, match="owner"):
+            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id="another-owner"))
+        with pytest.raises(OrchestrationSchedulerError, match="explicitly resumed"):
+            asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
+
+        # Model the existing authorized approval-resume flow: the approval
+        # decision has already happened before this lifecycle transition.
+        run = env.services.lifecycle.clear_pending_approval(
+            run.run_id, expected_version=run.version,
+        )
+        run = env.services.lifecycle.resume(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.complete(
+            run.run_id,
+            expected_version=run.version,
+            outcome={
+                "status": "complete",
+                "summary": "Approved child result",
+                "results": [{
+                    "source_id": "approved-source",
+                    "title": "Approved result",
+                    "content": "Verified result from the resumed child run.",
+                    "uri": "local://approved-source",
+                }],
+            },
+        )
+
+        finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
+        assert finished.status is PlanStatus.COMPLETED
+        assert finished.nodes[0].status is NodeStatus.COMPLETED
+        assert finished.nodes[0].run_id == run.run_id
+        assert finished.nodes[0].attempts == 1
+        assert len(orch.assignments.list_for_plan(plan_id)) == 0
+
+        # A duplicate reconciliation must not remap the node or create work.
+        again = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
+        assert again.status is PlanStatus.COMPLETED
+        assert again.nodes[0].run_id == run.run_id
+        assert again.nodes[0].attempts == 1
+    finally:
+        env.dispose()
+
+
+def test_resume_plan_does_not_retry_failed_approved_child_run(tmp_path):
+    from core.agents.contracts import StopReason
+
+    env = make_agent_env(tmp_path)
+    try:
+        orch = make_orch(env)
+        goal = make_goal(orch)
+        result = asyncio.run(orch.plan_goal(
+            goal.goal_id,
+            owner_id=OWNER_ID,
+            strategy="validated_model_proposal",
+            proposal_text=proposal_for(goal, node_count=1),
+        ))
+        plan_id = result["plan_id"]
+        plan = orch.plans.get(plan_id)
+        node = plan.nodes[0]
+        orch.scheduler._mark_plan_status(plan_id, plan, PlanStatus.RUNNING)
+
+        task = env.services.lifecycle.create_task(
+            agent_id="knowledge-analyzer",
+            agent_version="1.0.0",
+            owner_id=OWNER_ID,
+            title="Failed approval-resume test",
+            payload={"query": "approved test that fails"},
+            data_scopes=goal.data_scopes,
+        )
+        run = env.services.lifecycle.create_run(task.task_id)
+        run = env.services.lifecycle.start(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.pause_for_approval(
+            run.run_id,
+            expected_version=run.version,
+            approval_id="approval-failed-test",
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.SCHEDULED,
+        )
+        orch.nodes.transition(
+            node.node_id,
+            expected_version=orch.scheduler._read_node_version(node.node_id),
+            status=NodeStatus.RUNNING,
+            run_id=run.run_id,
+            attempts=1,
+        )
+        run = env.services.lifecycle.clear_pending_approval(
+            run.run_id, expected_version=run.version,
+        )
+        run = env.services.lifecycle.resume(run.run_id, expected_version=run.version)
+        run = env.services.lifecycle.fail(
+            run.run_id,
+            expected_version=run.version,
+            error_code="approved_action_failed",
+            error_message="The resumed action failed.",
+            stop_reason=StopReason.FAILED,
+        )
+
+        finished = asyncio.run(orch.resume_plan(plan_id, run_id=run.run_id, owner_id=OWNER_ID))
+        assert finished.status is PlanStatus.FAILED
+        assert finished.nodes[0].status is NodeStatus.FAILED
+        assert finished.nodes[0].run_id == run.run_id
+        assert finished.nodes[0].attempts == 1
+        assert len(orch.assignments.list_for_plan(plan_id)) == 0
+    finally:
+        env.dispose()
