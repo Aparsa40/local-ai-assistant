@@ -367,7 +367,7 @@ class ConversationAgentService:
             except asyncio.TimeoutError:
                 await operation.publish(self._event(operation, "final", {
                     "status": "unavailable",
-                    "content": "اجرای Workflow از مهلت مجاز عبور کرد؛ نتیجه‌ای ثبت نشد.",
+                    "content": "اجرای Workflow از مهلت مجاز عبور کرد و نتیجه‌ای برای دستیار ثبت نشد.",
                     "reason_codes": ["workflow_budget_exceeded"],
                 }))
                 return
@@ -385,7 +385,7 @@ class ConversationAgentService:
                 })
                 await operation.publish(self._event(operation, "final", {
                     "status": "failed",
-                    "content": "اجرای Workflow با خطا مواجه شد؛ نتیجه‌ای تولید یا ذخیره نشد.",
+                    "content": "اجرای Workflow با خطا مواجه شد؛ نتیجه‌ای برای دستیار ثبت نشد.",
                     "reason_codes": ["workflow_execution_failed"],
                 }))
                 return
@@ -394,7 +394,7 @@ class ConversationAgentService:
                 session_id=request.session_id,
                 request_id=request.request_id,
                 route=decision.route.value,
-                mode="deterministic_workflow",
+                mode=ExecutionMode.DETERMINISTIC.value,
                 provider_id=None,
                 model_used="workflow:" + workflow_name,
                 execution_status=ExecutionStatus.COMPLETED.value,
