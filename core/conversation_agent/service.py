@@ -99,6 +99,7 @@ class ConversationAgentService:
         validator: ResponseValidator | None = None,
         composer: ResponseComposer | None = None,
         registry: OperationRegistry | None = None,
+        workflow_registry=None,
         readiness_probe=None,
         fallback_order: tuple[str, ...] = (),
     ) -> None:
@@ -111,6 +112,7 @@ class ConversationAgentService:
         self._validator = validator or ResponseValidator()
         self._composer = composer or ResponseComposer()
         self._registry = registry or OperationRegistry()
+        self._workflow_registry = workflow_registry
         self._readiness_probe = readiness_probe or _always_unready
         self._fallback_order = tuple(fallback_order)
 
@@ -328,17 +330,86 @@ class ConversationAgentService:
             "destination_class": decision.destination_class.value,
         }))
 
-        if decision.route in {Route.BLOCKED, Route.NEEDS_USER_INPUT, Route.DETERMINISTIC_WORKFLOW}:
+        if decision.route in {Route.BLOCKED, Route.NEEDS_USER_INPUT}:
             if decision.route is Route.NEEDS_USER_INPUT:
                 final = {"status": "needs_input", "content": _TERMINAL_LANGUAGE["needs_input"],
                          "reason_codes": list(decision.reason_codes)}
             else:
-                reason_codes = list(decision.reason_codes)
-                if decision.route is Route.DETERMINISTIC_WORKFLOW:
-                    reason_codes.append("workflow_runner_unregistered")
                 final = {"status": "blocked", "content": _TERMINAL_LANGUAGE["blocked"],
-                         "reason_codes": reason_codes}
+                         "reason_codes": list(decision.reason_codes)}
             await operation.publish(self._event(operation, "final", final))
+            return
+
+        if decision.route is Route.DETERMINISTIC_WORKFLOW:
+            workflow_name = decision.reason_codes[1] if len(decision.reason_codes) > 1 else ""
+            if self._workflow_registry is None:
+                await operation.publish(self._event(operation, "final", {
+                    "status": "blocked",
+                    "content": _TERMINAL_LANGUAGE["blocked"],
+                    "reason_codes": ["workflow_runner_unregistered"],
+                }))
+                return
+            try:
+                # Persist the user command once, then run the allow-listed
+                # application workflow under the request's wall-clock budget.
+                with self._session_factory() as db:
+                    conversation_service = self._conversation_builder(db, access, permission_manager)
+                    conversation_service.prepare_chat(request.session_id, request.message)
+                content = await asyncio.wait_for(
+                    asyncio.to_thread(self._workflow_registry.execute, workflow_name),
+                    timeout=request.budget.wall_clock_seconds,
+                )
+                with self._session_factory() as db:
+                    conversation_service = self._conversation_builder(db, access, permission_manager)
+                    conversation_service.append_assistant_message(
+                        request.session_id, content, "workflow:" + workflow_name,
+                    )
+            except asyncio.TimeoutError:
+                await operation.publish(self._event(operation, "final", {
+                    "status": "unavailable",
+                    "content": "اجرای Workflow از مهلت مجاز عبور کرد؛ نتیجه‌ای ثبت نشد.",
+                    "reason_codes": ["workflow_budget_exceeded"],
+                }))
+                return
+            except LookupError:
+                await operation.publish(self._event(operation, "final", {
+                    "status": "needs_input",
+                    "content": _TERMINAL_LANGUAGE["needs_input"],
+                    "reason_codes": ["unknown_workflow"],
+                }))
+                return
+            except Exception:
+                logger.exception("Deterministic workflow failed", extra={
+                    "request_id": operation.request_id,
+                    "workflow": workflow_name,
+                })
+                await operation.publish(self._event(operation, "final", {
+                    "status": "failed",
+                    "content": "اجرای Workflow با خطا مواجه شد؛ نتیجه‌ای تولید یا ذخیره نشد.",
+                    "reason_codes": ["workflow_execution_failed"],
+                }))
+                return
+
+            provenance = Provenance(
+                session_id=request.session_id,
+                request_id=request.request_id,
+                route=decision.route.value,
+                mode="deterministic_workflow",
+                provider_id=None,
+                model_used="workflow:" + workflow_name,
+                execution_status=ExecutionStatus.COMPLETED.value,
+            )
+            await operation.publish(self._event(operation, "validation", {
+                "status": "validated",
+                "state": ValidationState.VALID.value,
+                "issues": [],
+            }))
+            await operation.publish(self._event(operation, "final", {
+                "status": ExecutionStatus.COMPLETED.value,
+                "content": content,
+                "validation_state": ValidationState.VALID.value,
+                "provenance": provenance.to_dict(),
+            }))
             return
 
         # Persist the user turn exactly once, before inference.
