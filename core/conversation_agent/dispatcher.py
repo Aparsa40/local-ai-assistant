@@ -45,6 +45,23 @@ class DeterministicDispatcher:
         return provider_id, model
 
     def dispatch(self, request: ConversationRequest) -> DispatchDecision:
+        # Deterministic workflows use application services, not an LLM provider.
+        stripped = request.message.lstrip()
+        if stripped.startswith(WORKFLOW_PREFIX):
+            name = stripped[len(WORKFLOW_PREFIX):].split(" ", 1)[0].strip()
+            if name in self._workflows:
+                return DispatchDecision(
+                    route=Route.DETERMINISTIC_WORKFLOW,
+                    reason_codes=("registered_workflow", name),
+                    destination_class=DestinationClass.NONE,
+                    budget=request.budget,
+                )
+            return DispatchDecision(
+                route=Route.NEEDS_USER_INPUT,
+                reason_codes=("unknown_workflow",),
+                destination_class=DestinationClass.NONE,
+            )
+
         provider_id, model = self.resolve_provider_selection(request)
         if provider_id is None or not model:
             return DispatchDecision(
@@ -60,22 +77,6 @@ class DeterministicDispatcher:
         )
 
         message = request.message
-        stripped = message.lstrip()
-
-        if stripped.startswith(WORKFLOW_PREFIX):
-            name = stripped[len(WORKFLOW_PREFIX):].split(" ", 1)[0].strip()
-            if name in self._workflows:
-                return DispatchDecision(
-                    route=Route.DETERMINISTIC_WORKFLOW,
-                    reason_codes=("registered_workflow", name),
-                    destination_class=DestinationClass.NONE,
-                    budget=request.budget,
-                )
-            return DispatchDecision(
-                route=Route.NEEDS_USER_INPUT,
-                reason_codes=("unknown_workflow",),
-                destination_class=DestinationClass.NONE,
-            )
 
         if request.force_delegation or stripped.startswith(DELEGATION_PREFIX):
             if not self._orchestration_available:
