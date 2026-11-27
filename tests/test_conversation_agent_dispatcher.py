@@ -64,6 +64,17 @@ def test_dispatch_registered_workflow():
     assert decision.route is Route.DETERMINISTIC_WORKFLOW
 
 
+def test_dispatch_workflow_does_not_require_a_model():
+    dispatcher = DeterministicDispatcher(workflows={"provider_operational_report": "provider_operational_report"})
+    decision = dispatcher.dispatch(_request(
+        message=WORKFLOW_PREFIX + "provider_operational_report",
+        provider_id=None,
+        model=None,
+    ))
+    assert decision.route is Route.DETERMINISTIC_WORKFLOW
+    assert decision.reason_codes == ("registered_workflow", "provider_operational_report")
+
+
 def test_dispatch_explicit_delegation():
     decision = DeterministicDispatcher().dispatch(_request(message=DELEGATION_PREFIX + "do the research task"))
     assert decision.route is Route.AGENT_DELEGATION
