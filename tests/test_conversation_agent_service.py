@@ -119,7 +119,7 @@ def test_registered_workflow_executes_and_persists_without_model():
     assert final["type"] == "final"
     assert final["data"]["status"] == "completed"
     assert final["data"]["content"] == "Provider report: 2 providers"
-    assert final["data"]["provenance"]["mode"] == "deterministic_workflow"
+    assert final["data"]["provenance"]["mode"] == "deterministic"
     assert calls == ["called"]
     assert conversation.prepared == [(1, "/workflow provider_operational_report")]
     assert conversation.assistant == [(1, "Provider report: 2 providers", "workflow:provider_operational_report")]
