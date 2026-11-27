@@ -16,7 +16,7 @@ All notable changes are documented here. The project follows Semantic Versioning
 - POST /api/chat migrated to the new lifecycle with a backward-compatible request schema (extended with optional idempotency and scope fields). Memory and Knowledge context services are wired through the existing PermissionManager adapters, scope ownership comes from trusted AccessContext, and the Alpine.js UI supports explicit cancellation and same-request retry.
 
 ### Phase 8 acceptance status
-- Workflow Registry revision: **480 Python tests passed in 24.00s**; frontend JavaScript validation and Python compile steps passed in CI run `46084567557` (commit `6634525180b8c2d4ac1870acc46a629bd758fab1`). A follow-up run for the cancellation-hardening commit `ece96a96d1b74314bccbbb3228de7bb1cf33393d` is in progress; the final count is pending.
+- Final Workflow Registry revision: **481 Python tests passed in 16.99s**; frontend JavaScript validation and Python compile steps passed in CI run `46084674125` (commit `ece96a96d1b74314bccbbb3228de7bb1cf33393d`). This includes registry, catalog-service, model-independent dispatch, lifecycle persistence and cancellation coverage.
 - Delegated Agent Runtime tool approvals now flow through `approval_required` SSE events and actionable chat UI controls; approval decisions resume the same child run and reconcile the existing plan without re-execution.
 - Memory/knowledge context approvals now create request-bound approval requests, emit actionable SSE events, and consume the approved action exactly once before retrieval resumes. The current revision registers the read-only provider operational report workflow; model-assisted classification remains optional/off by default; real local loopback smoke remains outstanding.
 
