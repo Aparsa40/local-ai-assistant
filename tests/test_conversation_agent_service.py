@@ -126,6 +126,39 @@ def test_registered_workflow_executes_and_persists_without_model():
     assert im.received == []
 
 
+def test_workflow_cancellation_does_not_persist_assistant_result():
+    import time
+
+    workflows = WorkflowRegistry()
+    workflows.register(
+        "slow_report",
+        "Slow read-only test workflow",
+        lambda: time.sleep(0.2) or "should not be persisted",
+    )
+    operation_registry = OperationRegistry()
+    service, conversation, im, _ = build_service(
+        workflow_registry=workflows,
+        registry=operation_registry,
+    )
+
+    async def scenario():
+        iterator = service.stream(None, None, None, _payload(
+            message="/workflow slow_report",
+            provider_id=None,
+            model=None,
+        )).__aiter__()
+        first = await iterator.__anext__()
+        assert json.loads(first[len("data: "):])["type"] == "accepted"
+        assert operation_registry.request_cancel(1, "req_" + "a" * 24)
+        return [chunk async for chunk in iterator]
+
+    parsed = _parse(run(scenario()))
+    assert parsed[-1]["type"] == "cancelled"
+    assert conversation.prepared == [(1, "/workflow slow_report")]
+    assert conversation.assistant == []
+    assert im.received == []
+
+
 def test_event_ordering_and_final():
     service, conversation, im, _ = build_service(items=[context_item("conversation", "message:1")])
     parsed = _parse(run(_collect(service, _payload())))
