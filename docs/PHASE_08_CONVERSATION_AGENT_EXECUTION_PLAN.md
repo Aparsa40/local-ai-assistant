@@ -189,7 +189,10 @@ Add versioned request, dispatch, candidate, validation, provenance and event con
 
 ### WP-8.2 — Conversation service and deterministic dispatcher
 Implement conservative dispatch. Model-assisted classification, if justified, is optional/advisory with strict schema and deterministic fallback.
-**Exit:** table-driven tests prove routing, classifier fallback and no permission escalation.
+
+The deterministic workflow seam must be executable, not merely a route label. The application composition root owns an explicit allow-listed WorkflowRegistry; workflow handlers call existing application services through their supported service/repository boundaries. The initial read-only workflow is `/workflow provider_operational_report`, backed by the existing `get_operational_report` catalog service. It reports persisted provider/runtime/model-catalog observations only and does not trigger live probes, mutate catalog state, call an LLM, or widen permissions. Workflow execution is bounded by the conversation request budget and its result is persisted once with deterministic provenance.
+
+**Exit:** table-driven tests prove routing, classifier fallback and no permission escalation; registry tests prove allow-list/duplicate/unknown handling; integration tests prove a real service-backed workflow executes without requiring a model and persists one truthful result.
 
 ### WP-8.3 — Context authorization and strategies
 Integrate ContextManager, PermissionManager and InterfaceManager. Implement only supported online/offline strategies. Enforce destination authorization before cloud egress.
@@ -269,6 +272,7 @@ Also run loopback HTTP smoke tests for direct chat, deterministic delegated chat
 - [x] Conversation Agent reuses Agent Runtime; no second runtime.
 - [x] Direct, deterministic and delegated paths share normalized request/result/provenance contracts.
 - [x] Dispatch is deterministic, bounded, explainable and tested.
+- [x] Workflow Registry executes the read-only `provider_operational_report` workflow through the existing catalog service; unknown workflows remain non-executable.
 - [x] Classification cannot grant permissions, widen scopes or select unauthorized egress.
 - [x] Context scopes are explicit; memory/knowledge are not implicitly enabled.
 - [x] Cloud transmission is denied unless destination authorization covers the data.
