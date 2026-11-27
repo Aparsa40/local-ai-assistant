@@ -355,10 +355,29 @@ class ConversationAgentService:
                 with self._session_factory() as db:
                     conversation_service = self._conversation_builder(db, access, permission_manager)
                     conversation_service.prepare_chat(request.session_id, request.message)
-                content = await asyncio.wait_for(
-                    asyncio.to_thread(self._workflow_registry.execute, workflow_name),
-                    timeout=request.budget.wall_clock_seconds,
+                workflow_task = asyncio.create_task(
+                    asyncio.to_thread(self._workflow_registry.execute, workflow_name)
                 )
+                deadline = asyncio.get_running_loop().time() + request.budget.wall_clock_seconds
+                while not workflow_task.done():
+                    if operation.cancel_requested:
+                        workflow_task.cancel()
+                        await operation.publish(self._event(operation, "cancelled", {
+                            "status": "cancelled",
+                            "message": "درخواست هنگام اجرای Workflow لغو شد.",
+                        }))
+                        return
+                    if asyncio.get_running_loop().time() >= deadline:
+                        workflow_task.cancel()
+                        raise asyncio.TimeoutError
+                    await asyncio.sleep(0.05)
+                content = await workflow_task
+                if operation.cancel_requested:
+                    await operation.publish(self._event(operation, "cancelled", {
+                        "status": "cancelled",
+                        "message": "درخواست پیش از ثبت نتیجهٔ Workflow لغو شد.",
+                    }))
+                    return
                 with self._session_factory() as db:
                     conversation_service = self._conversation_builder(db, access, permission_manager)
                     conversation_service.append_assistant_message(
