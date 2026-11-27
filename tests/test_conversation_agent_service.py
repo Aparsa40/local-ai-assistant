@@ -7,6 +7,8 @@ from core.conversation_agent.contracts import ExecutionStatus
 from core.conversation_agent.operations import OperationRegistry
 from core.conversation_agent.orchestration_gateway import DelegatedOutcome
 from core.conversation_agent.service import ConversationAgentService
+from core.conversation_agent.dispatcher import DeterministicDispatcher
+from core.conversation_agent.workflows import WorkflowRegistry
 
 
 class FakeConversationService:
@@ -50,10 +52,13 @@ class FakeInterfaceManager:
             yield chunk
 
 
-def build_service(items=(), im=None, gateway=None, registry=None):
+def build_service(items=(), im=None, gateway=None, registry=None, workflow_registry=None):
     conversation = FakeConversationService()
     im = im or FakeInterfaceManager()
     registry = registry or OperationRegistry()
+    dispatcher = DeterministicDispatcher(
+        workflows={name: name for name in workflow_registry.names()}
+    ) if workflow_registry is not None else None
     service = ConversationAgentService(
         interface_manager=im,
         conversation_builder=lambda db, access, pm: conversation,
@@ -61,6 +66,8 @@ def build_service(items=(), im=None, gateway=None, registry=None):
         session_factory=lambda: contextlib.nullcontext(None),
         orchestration_gateway=gateway,
         registry=registry,
+        workflow_registry=workflow_registry,
+        dispatcher=dispatcher,
         readiness_probe=lambda p, m: True,
     )
     return service, conversation, im, registry
@@ -92,6 +99,31 @@ def _payload(**overrides):
 
 def _parse(chunks):
     return [json.loads(chunk[len("data: "):].strip()) for chunk in chunks]
+
+
+def test_registered_workflow_executes_and_persists_without_model():
+    workflows = WorkflowRegistry()
+    calls = []
+    workflows.register(
+        "provider_operational_report",
+        "Read-only provider status report",
+        lambda: calls.append("called") or "Provider report: 2 providers",
+    )
+    service, conversation, im, _ = build_service(workflow_registry=workflows)
+    parsed = _parse(run(_collect(service, _payload(
+        message="/workflow provider_operational_report",
+        provider_id=None,
+        model=None,
+    ))))
+    final = parsed[-1]
+    assert final["type"] == "final"
+    assert final["data"]["status"] == "completed"
+    assert final["data"]["content"] == "Provider report: 2 providers"
+    assert final["data"]["provenance"]["mode"] == "deterministic_workflow"
+    assert calls == ["called"]
+    assert conversation.prepared == [(1, "/workflow provider_operational_report")]
+    assert conversation.assistant == [(1, "Provider report: 2 providers", "workflow:provider_operational_report")]
+    assert im.received == []
 
 
 def test_event_ordering_and_final():
