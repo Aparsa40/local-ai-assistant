@@ -39,6 +39,7 @@ from core.conversation_agent.operations import OperationRegistry
 from core.conversation_agent.orchestration_gateway import OrchestrationGateway
 from core.conversation_agent.context_approvals import ConversationContextApprovalCoordinator
 from core.conversation_agent.service import ConversationAgentService
+from core.conversation_agent.workflows import build_default_workflow_registry
 from core.interface_manager import InterfaceManager, InterfaceManagerError
 from core.provider_intelligence import (
     create_offline_intelligence_report,
@@ -140,14 +141,19 @@ def build_conversation_agent_service() -> ConversationAgentService:
     # Resolved lazily: the orchestration factory is defined later in this module,
     # after the eagerly-built composition root below.
     gateway = OrchestrationGateway(lambda db: build_orchestration_service(db), storage_manager.session)
+    workflow_registry = build_default_workflow_registry(storage_manager.session)
     return ConversationAgentService(
         interface_manager=interface_manager,
         conversation_builder=conversations,
         context_builder=context,
         session_factory=storage_manager.session,
         orchestration_gateway=gateway,
-        dispatcher=DeterministicDispatcher(orchestration_available=True),
+        dispatcher=DeterministicDispatcher(
+            orchestration_available=True,
+            workflows={name: name for name in workflow_registry.names()},
+        ),
         registry=conversation_agent_registry,
+        workflow_registry=workflow_registry,
         readiness_probe=local_readiness_probe,
         fallback_order=(),
     )
